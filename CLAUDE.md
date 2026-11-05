@@ -3,96 +3,96 @@
 הקובץ הזה נקרא אוטומטית בכל שיחה חדשה עם Claude Code. הוא מסכם את החזון, הארכיטקטורה, כללי העבודה והסטטוס.
 
 ## החזון
-P1 AI הוא **מוצר SaaS לבעלי חנויות אונליין** שעובד כמו צוות של מומחי CRO, חוויית משתמש, מכירות ושירות לקוחות.
-בעל העסק מכניס את כתובת החנות — והמערכת מתחילה לעבוד עבורו. מודל עסקי עתידי: מנוי חודשי.
-
-### 6 היכולות המרכזיות
-1. **AI Website Auditor** — סוכן שמבקר באתר בדפדפן אמיתי: מוצרים, עגלה, קופה, ניווט, מובייל, מהירות, אמינות, UX.
-2. **Invisible Customer** — סימולציית לקוחות: חשדן, מחפש מחיר, מתלבט, ממהר, חוקר. כל אחד מתעד מה הפריע לו לקנות.
-3. **Conversion Intelligence** — למה לקוחות נוטשים, נקודות חיכוך, דירוג לפי חומרה והשפעה משוערת. בהמשך: נתוני חנות אמיתיים.
-4. **AI Customer Support** — צ'אט מבוסס Claude שעונה ללקוחות רק ממידע מאומת על העסק. אין מידע אמין → לא ממציא.
-5. **AI Fix Engine** — הסבר תיקון לכל בעיה, לפני/אחרי, ובהמשך ביצוע שינויים באתר **רק אחרי אישור מפורש** של בעל העסק.
-6. **Business Dashboard** — ציון בריאות, בדיקות אחרונות, בעיות, המלצות, משימות, מגמות, שיפורים שבוצעו.
+P1 AI היא **חברת SaaS** לבעלי חנויות אונליין: מערכת שעובדת כמו צוות מומחי CRO, UX, QA, מכירות ושירות לקוחות.
+בעל העסק מכניס כתובת — סוכן דפדפן אמיתי בודק את החנות, Claude מנתח את הראיות, ובעל העסק מקבל דוח, תוכנית פעולה ומעקב שיפור.
+יעד: מוצר ברמה בינלאומית שאפשר להציג למשקיעים ולמכור כמנוי חודשי. אנחנו עובדים כ-CTO + צוות (Full-Stack, AI Architect, Product Designer, PM, QA, CRO).
 
 ## כללי עבודה (חובה)
-1. **עובדים רק במאגר P1.** אסור לגעת בפרויקט EYES STUDIO או בכל מאגר אחר. לא יוצרים פרויקט נוסף.
-2. **אין הדמיות ואין נתונים מזויפים.** לא בונים כפתור/מסך שלא עובד. יכולת שלא מחוברת מוצגת כ"לא מחוברת" + מה בדיוק חסר.
-3. **הפרדת מקורות מידע — חובה בכל פיצ'ר.** לכל ממצא יש `source`:
-   - `measured` — נבדק בפועל בדפדפן אמיתי
-   - `simulation` — סימולציית לקוח (כרגע מבוססת כללים על נתונים שנמדדו)
-   - `store_data` — נתונים אמיתיים מחיבור לחנות (עתידי)
-   - `ai` — השערה/המלצה של מודל AI (עתידי)
-   הממשק מציג תגית מקור ליד כל מידע. **הציון מחושב רק מ-`measured`.** הערכות השפעה הן איכותיות (גבוהה/בינונית/נמוכה) — לא אחוזים מומצאים.
-4. **לא מציגים תשובת AI מדומה כאילו Claude ענה.** בלי מפתח — העוזר מושבת ומסביר למה.
-5. **מסבירים למשתמש בעברית פשוטה** — המשתמש מתחיל בפיתוח.
-6. **כותבים קוד, מריצים ובודקים בפועל**: `pytest` + הרצת השרת + מעבר בדפדפן (מחשב ומובייל) לפני שאומרים "עובד".
-7. **commits מסודרים** ודחיפה ל-GitHub (ענף `claude/p1-ai-initial-setup-2jx3ei`) בסוף כל שלב.
-8. **לפני פעולה שדורשת הרשאות, תשלום או שינוי חיצוני — מבקשים אישור.** לא מבקשים מפתח API אם אפשר להתקדם בלעדיו.
-9. מפתחות API לעולם לא בקוד או ב-git — רק `.env` (ב-`.gitignore`).
-10. **בטיחות הבדיקה:** הסוכן לעולם לא ממלא פרטים אישיים ולא מבצע הזמנה — עוצר בכניסה לקופה. בדיקה דורשת אישור שהמשתמש בעלים/מורשה. חסימת כתובות פנימיות (SSRF) בכל בקשה של הדפדפן.
+1. **רק מאגר P1.** אסור לגעת ב-EYES STUDIO או במאגר אחר. לא יוצרים פרויקט נוסף. לא מוחקים יכולות עובדות.
+2. **אין הדמיות ואין נתוני דמו שמתחזים לאמת.** כפתור שלא עובד לא נבנה. יכולת לא מחוברת מוצגת "לא מחוברת" + מה חסר.
+3. **הפרדת מקורות מידע — חובה בכל פיצ'ר.** `findings.source`:
+   `measured` (נבדק בדפדפן) · `simulation` (לקוח מדומה) · `store_data` (חיבור לחנות — עתידי) · `ai` (השערת Claude).
+   הממשק וה-PDF מציגים תגית מקור. **הציון מחושב רק מ-`measured`.** אסור להמציא אחוזי המרה/נטישה/שיפור — השפעה = high/medium/low.
+4. **לא מציגים תשובת AI מדומה כאילו Claude ענה.** בלי `ANTHROPIC_API_KEY`: `ai_status=not_configured`, והממשק אומר זאת. (Claude מדומה קיים רק בתוך `tests/`.)
+5. **עברית פשוטה למשתמש** (מתחיל בפיתוח). ממשק דו-לשוני he/en.
+6. **מריצים ובודקים בפועל לפני "עובד"**: `pytest` + `npm run typecheck` + שרת + מעבר בדפדפן במחשב ובמובייל.
+7. **commits מסודרים** ודחיפה לענף `claude/p1-ai-initial-setup-2jx3ei` בסוף כל שלב.
+8. **פעולה שדורשת הרשאות, תשלום או שינוי חיצוני — רק באישור המשתמש.** לא מבקשים מפתח API אם אפשר להתקדם בלעדיו.
+9. סודות רק ב-`.env` (ב-`.gitignore`) או במשתני סביבה בשרת. לעולם לא בקוד, בלוגים או בדפדפן.
+10. **בטיחות הסוכן:** לא ממלא פרטים, לא משלם, לא מזמין — עוצר בכניסה לקופה. דורש אישור בעלות/הרשאה. HostGuard חוסם כתובות פנימיות בכל בקשה (SSRF), כולל הפניות.
 
 ## ארכיטקטורה
 ```
-דפדפן (SPA בעברית, ES modules, בלי build)  ──JSON──►  FastAPI
-                                                        ├── audit/        ← מנוע הבדיקות (Playwright + Chromium)
-                                                        │    collector.py   מבקר באתר ומתעד עובדות + צילומי מסך (רק מודד)
-                                                        │    rules.py       עובדות → ממצאים (source=measured) + צעדי תיקון
-                                                        │    personas.py    5 לקוחות מדומים (source=simulation, מבוסס כללים)
-                                                        │    scoring.py     ציון כללי + ציון לכל קטגוריה (קטגוריה שלא נבדקה = null)
-                                                        │    runner.py      הרצה ברקע (asyncio), התקדמות חיה, שמירה
-                                                        │    browser.py     הפעלת Chromium + HostGuard (SSRF)
-                                                        ├── research/     ← בדיקת HTML מהירה (httpx) — משמשת גם את rules
-                                                        ├── agent.py      ← עוזר Claude עם כלים (מושבת בלי מפתח)
-                                                        └── db.py         ← SQLite
+Browser SPA (vanilla ES modules + JSDoc/TypeScript check, i18n he/en, RTL/LTR)
+        │ JSON + session cookie (HttpOnly, SameSite=Lax)
+        ▼
+FastAPI (app/main.py) ── middleware: request-id, JSON logs, CSRF origin check, security headers (CSP)
+  ├── saas/        auth.py (scrypt, sessions, rate limit) · plans.py (מסלולים + מכסות) · billing.py (ממשק לספק תשלומים — לא מחובר)
+  ├── audit/       P1 Browser Agent
+  │     collector.py  Playwright/Chromium: בית → אמון → קישורים → מוצר → סל → עגלה → קופה (עצירה) → חיפוש → iPhone
+  │                   יומן פעולות חי (audit_events), צילומי מסך, טקסט עמודים כראיה, מגבלות משאבים
+  │     rules.py      עובדות → ממצאים measured (+ שיוך שקוף לחלקי הדוח RULE_CATEGORY)
+  │     scoring.py    שיטת ציון מוגדרת (methodology(): penalty, weights, cap) — רק measured
+  │     personas.py   סימולציית לקוחות מבוססת כללים (simulation)
+  │     compare.py    Before/After דטרמיניסטי בין בדיקות
+  │     runner.py     תור עבודות מתמיד ב-DB + worker (בתוך השרת או `python -m app.worker`) + שלב AI
+  ├── intelligence/ P1 Intelligence (Claude, צד שרת בלבד)
+  │     client.py     AsyncAnthropic עם base_url מפורש, fallbacks, טיפול בשגיאות, חישוב עלות לפי מחירון
+  │     evidence.py   חבילת ראיות: צעדים, ממצאים, עובדות, טקסט, צילומי מסך (vision)
+  │     analyst.py    סיכום מנהלים, ai_findings (עם confidence + evidence_refs), הצעות ניסוח, תוכנית פעולה, פרשנות השוואה
+  │     personas_ai.py 5 סוכני לקוח (Claude): מחיר, חושש, ממהר, לא מבין יתרונות, הגיע מפרסומת בטלפון
+  ├── report/      data.py (הרכבת דוח משותף) · pdf.py (PDF ע"י Chromium, פונטים מוטמעים)
+  ├── agent.py     עוזר צ'אט עם כלי analyze_website
+  └── db.py        SQLite + מיגרציות (PRAGMA user_version). כל נתון עם account_id; כל שאילתת משתמש מסוננת לפיו
 ```
-- **מסלול הבדיקה (collector):** עמוד בית (מחשב) → דפי אמון/מדיניות → מציאת מוצר (כולל כניסה לקטגוריה) → הוספה לסל (כולל בחירת מידה) → עגלה → קופה (בלי למלא) → חיפוש → מובייל (iPhone 13, כולל "כפתור קנייה במסך הראשון").
-- **טבלאות:** `sites`, `audits` (status, progress, score, category_scores, facts), `journey_steps`, `findings` (source, severity, impact, fix_steps, evidence, status), `screenshots` (קבצים ב-`data/screenshots/<audit>/`), `persona_results`, וגם `conversations`, `messages`, `research_reports`.
-- **מוכנות לחיבורים עתידיים:** `findings.source` כבר תומך ב-`store_data`/`ai`; `/api/integrations` מציג את המצב האמיתי של כל חיבור. חיבור חדש = מודול ב-`app/integrations/<name>.py` שמייצר ממצאים עם המקור המתאים.
-- **Claude (כשיהיה מפתח):** `claude-opus-5-5`, thinking אדפטיבי, `effort: medium`, `fallbacks: "default"`. היסטוריית שיחה append-only.
+- **מודל:** `claude-opus-5-5`, thinking אדפטיבי, structured outputs (JSON schema), `fallbacks: "default"`; ניתוח `effort=medium`, סוכני לקוח `effort=low`. כל קריאה נרשמת ב-`ai_runs` עם טוקנים ועלות.
+- **ai_status של בדיקה:** pending → running → done / partial / failed / not_configured / quota_exceeded. כשל AI לא מכשיל את הבדיקה.
+- **חלקי הדוח (CATEGORIES):** conversion · checkout · trust · ux_mobile · technical. משקלים 25/25/20/15/15. קנסות 30/15/7/3. ממצא קריטי → תקרה 49. חלק שלא נבדק = null.
+- **מסלולים (plans.py):** free (1 אתר, 10 בדיקות, 3 ניתוחי AI), pro (5/100/50), agency (25/500/300). נאכף בשרת (HTTP 402).
+- **המשתמש הראשון** שנרשם = מנהל פלטפורמה ומקבל נתונים ישנים (לפני חשבונות).
 
 ## API עיקרי
-| Method | Path | מה עושה |
+| | Path | |
 |---|---|---|
-| GET | `/api/status` | מה מוכן ומה חסר |
-| POST | `/api/audits` | התחלת בדיקה `{url, confirm_permission: true}` → 202 |
-| GET | `/api/audits`, `/api/audits/{id}` | רשימה / דוח מלא (steps, findings, personas, screenshots) |
-| DELETE | `/api/audits/{id}` | מחיקה כולל צילומי מסך |
-| GET | `/api/screenshots/{id}` | קובץ צילום מסך |
-| PATCH | `/api/findings/{id}` | סטטוס משימה: open / in_progress / done / dismissed |
-| GET | `/api/dashboard?site_id=` | נתוני לוח הבקרה (רק מבדיקות אמיתיות) |
-| GET | `/api/tasks`, `/api/integrations` | משימות / מצב חיבורים |
-| * | `/api/conversations…`, `/api/research…` | עוזר AI ובדיקת HTML מהירה |
+| auth | `POST /api/auth/register · login · logout`, `GET /api/auth/me`, `GET /api/auth/config` | ציבורי |
+| audits | `POST /api/audits` (202, דורש `confirm_permission`) · `GET /api/audits` · `GET/DELETE /api/audits/{id}` | |
+| live | `GET /api/audits/{id}/events?after=` | יומן פעולות + התקדמות |
+| AI | `POST /api/audits/{id}/analyze` | הרצה חוזרת של ניתוח AI |
+| report | `GET /api/audits/{id}/report.pdf` · `GET /api/audits/{id}/compare?base=` · `GET /api/methodology` | |
+| work | `PATCH /api/findings/{id}` · `GET /api/tasks` · `GET /api/dashboard` | |
+| saas | `GET /api/account` · `PATCH /api/me` · `GET /api/admin/overview` · `PATCH /api/admin/accounts/{id}` | admin = מנהל פלטפורמה |
+| other | `GET /api/status · /api/integrations · /api/screenshots/{id} · /api/health`, צ'אט: `/api/conversations…` | |
 
 ## פקודות
 ```bash
-python3 -m venv .venv && . .venv/bin/activate
-pip install -r requirements.txt
-python -m playwright install chromium     # במחשב מקומי. בסביבת הענן יש דפדפן מותקן ב-/opt/pw-browsers
+python3 -m venv .venv && . .venv/bin/activate && pip install -r requirements.txt
+python -m playwright install chromium     # במחשב מקומי (בענן: /opt/pw-browsers)
+npm install                               # TypeScript לבדיקת טיפוסים
 uvicorn app.main:app --reload --port 8000 # http://localhost:8000
-python -m pytest -q                       # כולל מסע רכישה מלא מול חנות בדיקה מקומית (tests/fixtures)
+python -m pytest -q                       # כולל מסעות רכישה מלאים מול חנויות בדיקה מקומיות + בדיקת טיפוסים
+npm run typecheck
 ```
 משתני סביבה: `ANTHROPIC_API_KEY`, `P1_MODEL`, `P1_DB_PATH`, `P1_DATA_DIR`, `P1_CHROMIUM_PATH`, `P1_MAX_CONCURRENT_AUDITS`,
-`P1_DEV_ALLOW_PRIVATE_TARGETS=1` (**פיתוח בלבד** — מאפשר לבדוק את חנות הבדיקה המקומית).
+`P1_RUN_WORKER` (0 = worker בתהליך נפרד), `P1_COOKIE_SECURE=1` (בייצור), `P1_ALLOW_SIGNUP`, `P1_LOG_LEVEL`,
+`P1_DEV_ALLOW_PRIVATE_TARGETS=1` (**פיתוח בלבד** — מאפשר לבדוק את חנויות הבדיקה המקומיות).
 
-## תוכנית פיתוח בשלבים
-- **שלב 1 — בסיס (הושלם):** שרת, צ'אט, שמירת שיחות, בדיקת HTML.
-- **שלב 2 — MVP של Auditor (הושלם):** סריקה בדפדפן אמיתי, מסע רכישה, צילומי מסך, ממצאים + תיקונים, לקוחות מדומים (כללים), ציון, לוח בקרה, משימות, עיצוב פרימיום RTL + מובייל.
-- **שלב 3 — שכבת AI (דורש ANTHROPIC_API_KEY):** Claude מנתח צילומי מסך (source=ai, מסומן כהשערה), לקוחות מדומים שמגיבים לצילומים, סיכום מנהלים, עוזר שמכיר את הדוחות.
-- **שלב 4 — חשבונות ו-SaaS:** משתמשים והתחברות, ארגונים, אימות בעלות על אתר (DNS/meta tag), בדיקות מתוזמנות, תור עבודות (worker נפרד), Postgres, אחסון צילומים בענן, תשלומים (Stripe).
-- **שלב 5 — נתוני חנות:** Shopify / WooCommerce / GA4 → משפך אמיתי ונטישה אמיתית (source=store_data).
-- **שלב 6 — שירות לקוחות AI:** בסיס ידע מאומת על העסק, וידג'ט לאתר / וואטסאפ, "לא יודע" כשאין מקור.
-- **שלב 7 — Fix Engine מתקדם:** הצעות קוד/תוכן, תצוגת לפני/אחרי, ביצוע שינויים דרך API של החנות רק אחרי אישור מפורש.
+## תוכנית פיתוח
+- ✅ **שלב 1** בסיס · ✅ **שלב 2** MVP Auditor
+- ✅ **שלב 3 (נוכחי):** מסלול מקצה לקצה — URL → דפדפן → מסע לקוח → ראיות → Claude → דוח 5 חלקים → PDF → היסטוריה + Before/After;
+  יומן פעולות חי; SaaS (משתמשים, חשבונות, מכסות, עלויות AI, אדמין, תור עבודות); עיצוב v2; he/en; בדיקת טיפוסים.
+- **שלב 4 — לפני לקוחות ראשונים:** Postgres + worker נפרד + Redis (תור/הגבלות), אחסון צילומים ב-S3, אימות בעלות על אתר (meta tag/DNS),
+  איפוס סיסמה ואימות אימייל, הזמנת חברי צוות, תרגום טקסטי הכללים לאנגלית, Sentry/OTel, פריסה (Docker), גיבויים.
+- **שלב 5 — סוכן מתקדם:** סוכני הלקוח מנווטים בעצמם בדפדפן (Claude + Playwright tools), כמה מוצרים/קטגוריות, שידור חי של הדפדפן.
+- **שלב 6 — P1 Monitor:** בדיקות מתוזמנות + התראות על בעיות חדשות.
+- **שלב 7 — P1 Shopify Integration / Conversion AI:** OAuth, הזמנות, עגלות נטושות, משפך אמיתי (source=store_data).
+- **שלב 8 — P1 Support AI:** בסיס ידע מאומת, וידג'ט/וואטסאפ, "לא יודע" כשאין מקור.
+- **שלב 9 — P1 Fix AI:** הצעות קוד/עיצוב, תצוגה מקדימה, פרסום רק באישור בעל האתר.
+- **גבייה:** לממש `BillingProvider` (Stripe/Paddle/ספק ישראלי) + webhook שמעדכן `accounts.plan/subscription_status`.
 
-## סטטוס נוכחי
-עובד ונבדק: בדיקה בדפדפן אמיתי, מסע רכישה עד הקופה, צילומי מסך מחשב+טלפון, ~40 כללי ממצאים, 5 לקוחות מדומים, ציון לפי קטגוריה,
-לוח בקרה, מגמה (מ-2 בדיקות), משימות עם סטטוס, בדיקה חוזרת, דף חיבורים אמיתי. 26 בדיקות אוטומטיות.
-
-חסר / ידוע:
-- **אין התחברות משתמשים — אסור לחשוף לאינטרנט במצב הנוכחי.**
-- בדיקות רצות בתוך תהליך השרת (asyncio). בייצור צריך worker ותור.
-- זיהוי מוצר/עגלה/קופה מבוסס היוריסטיקות (Shopify/WooCommerce/תבניות נפוצות). אתרים לא סטנדרטיים עלולים לקבל "לא נמצא" — וזה מוצג בכנות.
-- לא נבדקה עדיין חנות אמיתית מהאינטרנט: סביבת הענן חוסמת רוב האתרים. נבדק מול pypi.org (אמיתי, לא חנות) ומול חנות בדיקה מקומית.
-
-## הערות לסביבת הענן של Claude Code
-גישת הרשת מוגבלת לרשימת דומיינים (example.com, חנויות Shopify וכו' חסומים; pypi.org פתוח). זו מגבלת סביבת הפיתוח בלבד.
-Chromium מותקן ב-`/opt/pw-browsers/chromium` ו-`config.chromium_path()` מזהה אותו אוטומטית.
+## סטטוס וידוע
+- נבדק: 37 בדיקות אוטומטיות (כולל Claude מדומה בבדיקות בלבד, PDF, הפרדת חשבונות, מכסות, CSRF, מיגרציה), typecheck, מעבר ידני מלא בדפדפן.
+- **ניתוח Claude אמיתי טרם הורץ** — אין מפתח בסביבה. הצינור נבדק מקצה לקצה עם Claude מדומה בבדיקות.
+- טקסטי הממצאים מהכללים בעברית בלבד (ה-AI עונה בשפת המשתמש).
+- SQLite + worker בתוך תהליך השרת — מתאים לפיילוט, לא לסקייל.
+- סביבת הענן חוסמת רוב האתרים → נבדק מול pypi.org וחנויות בדיקה מקומיות (`tests/fixtures`).
+- `data-backup-v1/` = גיבוי נתוני פיתוח ישנים (לא ב-git).
