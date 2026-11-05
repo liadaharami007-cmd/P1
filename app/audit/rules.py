@@ -6,6 +6,8 @@
 """
 from __future__ import annotations
 
+import re
+
 from typing import Any
 
 # חמשת חלקי הדוח (הסדר כאן = הסדר בתצוגה)
@@ -38,6 +40,10 @@ RULE_CATEGORY = {
     "atc_missing": "checkout", "atc_failed": "checkout", "atc_no_feedback": "checkout", "cart_unreachable": "checkout",
     "cart_empty_after_add": "checkout", "no_checkout_button": "checkout", "checkout_failed": "checkout",
     "forced_login": "checkout", "long_checkout": "checkout", "payment_methods_hidden": "checkout",
+    "unclear_headline": "conversion", "weak_value_prop": "conversion", "atc_not_prominent": "conversion",
+    "shipping_unclear": "checkout", "too_many_steps": "checkout",
+    "agent_trust_thin_policy": "trust", "agent_no_business_details": "trust", "agent_price_hidden_costs": "checkout",
+    "agent_info_missing": "conversion", "agent_mobile_landing": "ux_mobile",
 }
 _HTML_CATEGORY = {"SEO": "technical", "תוכן": "conversion", "מובייל": "ux_mobile", "המרות": "conversion",
                   "שיווק": "technical", "נגישות": "ux_mobile", "מהירות": "technical", "אמון": "trust",
@@ -285,6 +291,76 @@ def evaluate(facts: dict, steps: list[dict]) -> list[dict]:
                       f"הכתובת הסופית: {facts.get('final_url')}",
                       "הדפדפן מציג 'לא מאובטח' — לקוחות לא ישאירו פרטי אשראי.",
                       ["התקינו תעודת SSL והפנו את כל התנועה ל-https"], ev("home")))
+
+    # ---------------- Conversion Intelligence: מסר, הצעת ערך, בולטות כפתור, בהירות משלוח
+    from ..fixstudio.catalog import find_usps
+    ex = facts.get("page_excerpts") or {}
+    h1s = (home.get("html") or {}).get("h1") or []
+    head = (prod or {}).get("h1") if prod else None
+    main_h1 = (h1s[0] if h1s else "") or ""
+    generic = re.compile(r"^(ברוכים\s+הבאים|welcome|home|דף\s+הבית|shop|store|חנות)\b", re.I)
+    if h1s and (len(main_h1.split()) <= 2 or generic.search(main_h1.strip())):
+        out.append(_f("unclear_headline", "conversion", "medium", "high", "הכותרת הראשית לא מסבירה מה מוכרים ולמה",
+                      f"הכותרת הראשית בעמוד הבית: \"{main_h1[:80]}\" — {len(main_h1.split())} מילים, בלי תועלת ללקוח.",
+                      "למבקר יש שניות ספורות להבין אם הגיע למקום הנכון. כותרת כללית מעלה את שיעור היציאה המיידית.",
+                      ["כותרת = מה אתם מוכרים + התועלת המרכזית", "שורת משנה עם 2 יתרונות קונקרטיים"], ev("home", h1=main_h1)))
+    if not find_usps([ex.get("home", ""), ex.get("product", "")]):
+        out.append(_f("weak_value_prop", "conversion", "medium", "high", "לא נמצאה הצעת ערך ברורה",
+                      "בטקסט של עמוד הבית ועמוד המוצר לא זוהו יתרונות קונקרטיים (משלוח חינם, החזרות, אחריות, ייצור, חומרים, זמני משלוח, כמות לקוחות).",
+                      "בלי סיבה ברורה לקנות דווקא כאן — הלקוח משווה רק לפי מחיר או עוזב.",
+                      ["לנסח 3 יתרונות קונקרטיים ומדידים", "להציג אותם ליד הכותרת וליד כפתור הקנייה"], ev("product" if prod else "home")))
+    prom = facts.get("atc_prominence")
+    if prom and (prom["height"] < 40 or prom["width"] < 120 or (prom.get("bg_vs_page") or 99) < 1.6 or (prom.get("text_contrast") or 99) < 3):
+        out.append(_f("atc_not_prominent", "conversion", "medium", "high", "כפתור הקנייה לא בולט מספיק",
+                      f"גודל {prom['width']}×{prom['height']}px, ניגודיות טקסט {prom.get('text_contrast')}:1, ניגודיות רקע מול העמוד {prom.get('bg_vs_page')}:1.",
+                      "כפתור קטן או בצבע שנבלע ברקע — העין לא מוצאת אותו, במיוחד בטלפון.",
+                      ["צבע מלא בניגודיות גבוהה", "גובה 48px לפחות", "טקסט פעולה ברור"], ev("product", prominence=prom)))
+    cart = facts.get("cart") or {}
+    if cart.get("reached") and not cart.get("empty") and not cart.get("mentions_shipping_cost") and not (prod or {}).get("mentions_shipping"):
+        out.append(_f("shipping_unclear", "checkout", "medium", "high", "עלות המשלוח לא מופיעה עד הקופה",
+                      "גם בעמוד המוצר וגם בעגלה לא הוזכרו משלוח או עלותו.",
+                      "עלויות שמתגלות רק בקופה הן סיבה מוכרת לנטישת עגלות.",
+                      ["להציג עלות/סף משלוח חינם בעגלה", "להוסיף מחשבון משלוח או טקסט קבוע"], ev("cart")))
+
+    # ---------------- ממצאים שסוכני הלקוח מדדו בגלישה שלהם (measured — פעולות אמיתיות)
+    ag = facts.get("agents") or {}
+    tr = (ag.get("trust") or {}).get("metrics") or {}
+    for key, label in (("returns", "החזרות"), ("shipping", "משלוחים")):
+        pg = (tr.get("policy_pages") or {}).get(key) or {}
+        if pg.get("opened") and (pg.get("words", 0) < 40 or not pg.get("has_numbers")):
+            out.append(_f("agent_trust_thin_policy", "trust", "medium", "high", f"עמוד ה{label} לא נותן תשובות ברורות",
+                          f"סוכן האמון פתח את העמוד ({pg.get('url')}): {pg.get('words')} מילים, "
+                          f"{'בלי' if not pg.get('has_numbers') else 'עם'} מספרים קונקרטיים (ימים/עלות).",
+                          "לקוח חושש שבודק את המדיניות ולא מוצא תשובה — לא יסתכן.",
+                          ["לכתוב מספרים מדויקים: כמה ימים, כמה עולה, מי משלם", "שאלות ותשובות קצרות במקום טקסט משפטי"],
+                          {"page_url": pg.get("url"), "agent": "trust"}))
+            break
+    if tr and tr.get("business_details") is False:
+        out.append(_f("agent_no_business_details", "trust", "low", "medium", "פרטי העסק לא מופיעים",
+                      "סוכן האמון לא מצא בעמוד הבית ח.פ / עוסק מורשה או כתובת.",
+                      "פרטי עסק גלויים הם סימן אמינות בסיסי לקונים שלא מכירים את החנות.",
+                      ["להוסיף שם עסק, ח.פ וכתובת בפוטר"], {"agent": "trust"}))
+    fb = (ag.get("fast_buyer") or {}).get("metrics") or {}
+    if fb.get("reached_checkout") and fb.get("clicks", 0) > 4:
+        out.append(_f("too_many_steps", "checkout", "medium", "high", f"נדרשו {fb['clicks']} לחיצות מעמוד הבית לקופה",
+                      f"הקונה המהיר הגיע לקופה אחרי {fb['clicks']} לחיצות ({fb.get('seconds')} שנ').",
+                      "כל שלב נוסף בדרך לקופה הוא הזדמנות לעזוב.",
+                      ["קישורי מוצרים ישירות מעמוד הבית", "מגירת עגלה עם כפתור 'לקופה' אחרי ההוספה"], {"agent": "fast_buyer"}))
+    cf = (ag.get("confused") or {}).get("metrics") or {}
+    if cf and not cf.get("specs") and not cf.get("faq"):
+        out.append(_f("agent_info_missing", "conversion", "medium", "medium", "חסר מידע שעוזר להבין את המוצר",
+                      f"הקונה המבולבל פתח {cf.get('toggles_opened', 0)} לשוניות ולא מצא מפרט/מידות או שאלות נפוצות "
+                      f"({cf.get('words')} מילים בעמוד).",
+                      "לקוח שלא מבין מה הוא מקבל — לא קונה, או קונה ומחזיר.",
+                      ["להוסיף מפרט / מידות / חומרים", "להוסיף 4–6 שאלות נפוצות לעמוד המוצר"], {"agent": "confused"}))
+    ma = (ag.get("mobile_ad") or {}).get("metrics") or {}
+    fold = ma.get("above_fold") or {}
+    if fold and (not fold.get("price") or not fold.get("h1")):
+        miss = [x for x, k in (("הכותרת", "h1"), ("המחיר", "price")) if not fold.get(k)]
+        out.append(_f("agent_mobile_landing", "ux_mobile", "medium", "high", f"בנחיתה מפרסומת בטלפון {' ו'.join(miss)} לא במסך הראשון",
+                      "סוכן 'הגיע מפרסומת' נחת בעמוד המוצר במסך iPhone ובדק מה נראה בלי לגלול.",
+                      "מבקר מפרסומת מחליט תוך שניות. אם הוא לא רואה מה זה וכמה זה עולה — הוא חוזר לפיד.",
+                      ["להקטין את הגלריה במסך הראשון", "כותרת + מחיר + כפתור בגובה המסך הראשון"], {"agent": "mobile_ad"}))
 
     # ---------------- קישורים שבורים (בקשה אמיתית לכל קישור)
     links = facts.get("links") or {}

@@ -98,7 +98,7 @@ PAGE_FACTS_JS = r"""
     has_search: searchInput, nav_links: navLinks,
     links: [...document.querySelectorAll('a[href]')].slice(0, 1500).map(a => ({href: a.href, text: (a.innerText || a.getAttribute('aria-label') || '').trim().slice(0, 80)})),
     text: (document.body ? document.body.innerText : '').slice(0, 60000),
-  };
+      };
 }
 """
 
@@ -126,7 +126,26 @@ PRODUCT_FACTS_JS = r"""
     has_table: !!document.querySelector('table, dl'),
     selects: document.querySelectorAll('form select').length,
     text: (document.body ? document.body.innerText : '').slice(0, 60000),
+    main_text: (() => { const b = document.body ? document.body.cloneNode(true) : null; if (!b) return '';
+  b.querySelectorAll('header, footer, nav, script, style, noscript, [role=navigation], [role=banner], [role=contentinfo]').forEach((n) => n.remove());
+  return b.innerText || b.textContent || ''; })().slice(0, 60000),
   };
+}
+"""
+
+MAIN_TEXT_JS = "() => " + """(() => { const b = document.body ? document.body.cloneNode(true) : null; if (!b) return '';   b.querySelectorAll('header, footer, nav, script, style, noscript, [role=navigation], [role=banner], [role=contentinfo]').forEach((n) => n.remove());   return b.innerText || b.textContent || ''; })()"""
+
+
+ATC_PROMINENCE_JS = r"""
+(el) => {
+  const lum = (c) => { const m = (c || '').match(/[\d.]+/g); if (!m) return null; const [r, g, b] = m.slice(0, 3).map(Number).map((v) => { v /= 255; return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); }); return 0.2126 * r + 0.7152 * g + 0.0722 * b; };
+  const alpha = (c) => { const m = (c || '').match(/rgba\([^)]*,\s*([\d.]+)\)/); return m ? Number(m[1]) : 1; };
+  const bgOf = (n) => { while (n && n !== document.documentElement) { const c = getComputedStyle(n).backgroundColor; if (c && alpha(c) > 0.1 && c !== 'transparent') return c; n = n.parentElement; } return 'rgb(255,255,255)'; };
+  const s = getComputedStyle(el), r = el.getBoundingClientRect();
+  const btnBg = bgOf(el), pageBg = bgOf(el.parentElement);
+  const ratio = (a, b) => { const x = lum(a), y = lum(b); if (x == null || y == null) return null; return Math.round(((Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05)) * 100) / 100; };
+  return { width: Math.round(r.width), height: Math.round(r.height), font_px: parseFloat(s.fontSize),
+           text_contrast: ratio(s.color, btnBg), bg_vs_page: ratio(btnBg, pageBg), bg: btnBg };
 }
 """
 
@@ -142,8 +161,13 @@ class Step:
     screenshot_id: str | None = None
 
 
+class StoppedByUser(Exception):
+    pass
+
+
 @dataclass
 class Collected:
+    stopped: bool = False
     facts: dict = field(default_factory=dict)
     steps: list[Step] = field(default_factory=list)
     screenshots: list[dict] = field(default_factory=list)
@@ -153,7 +177,7 @@ class Collector:
     def __init__(self, start_url: str, shot_dir: Path, *, allow_private: bool = False,
                  progress: ProgressCb | None = None,
                  save_screenshot: Callable[[str, str, str | None, str], str] | None = None,
-                 on_event: EventCb | None = None):
+                 on_event: EventCb | None = None, should_stop: Callable[[], bool] | None = None):
         self.start_url = start_url
         self.origin = f"{urlparse(start_url).scheme}://{urlparse(start_url).netloc}"
         self.host = urlparse(start_url).hostname
@@ -168,6 +192,7 @@ class Collector:
         self.failed_requests: list[str] = []
         self.cart_signals: list[str] = []
         self.on_event = on_event
+        self.should_stop = should_stop or (lambda: False)
         self.navigations = 0
         self._logged_steps = 0
         self.excerpts: dict[str, str] = {}
@@ -257,6 +282,8 @@ class Collector:
             pass
 
     async def _goto(self, page: Page, url: str) -> tuple[bool, str, int]:
+        if self.should_stop():
+            raise StoppedByUser()
         if self.navigations >= MAX_NAVIGATIONS:
             return False, "הגענו למגבלת מעברי העמוד לבדיקה אחת", 0
         self.navigations += 1
@@ -283,6 +310,13 @@ class Collector:
 
     # ------------------------------------------------------------ הרצה
     async def run(self) -> Collected:
+        try:
+            return await self._run()
+        except StoppedByUser:
+            self.out.stopped = True
+            return self.out
+
+    async def _run(self) -> Collected:
         f = self.out.facts
         f["start_url"] = self.start_url
         f["blocked_hosts"] = self.guard.blocked
@@ -451,7 +485,8 @@ class Collector:
                 continue
             is_product, data = await self._looks_like_product(page)
             if is_product:
-                text = data.pop("text")
+                data.pop("text")
+                text = data.pop("main_text")  # בלי כותרת/תפריט/פוטר — כדי שקישור "משלוחים" בפוטר לא ייחשב מידע בעמוד
                 low = text.lower()
                 self.out.facts["product"] = {
                     **data, "url": page.url, "load_ms": ms,
@@ -516,12 +551,18 @@ class Collector:
                     opts = await sel.locator("option").all()
                     for o in opts[1:]:
                         v = await o.get_attribute("value")
-                        if v and not await o.is_disabled():
-                            await sel.select_option(v)
+                        label = ((await o.text_content()) or "").strip()
+                        if (v or label) and not await o.is_disabled():
+                            await (sel.select_option(v) if v else sel.select_option(label=label))
+                            v = v or label
                             await self._log("select", f"בוחר אפשרות חובה: {(await o.text_content() or v).strip()[:40]}", page.url)
                             break
             except PWError:
                 pass
+        try:  # בולטות הכפתור: גודל וניגודיות צבעים מחושבים מהעיצוב האמיתי
+            self.out.facts["atc_prominence"] = await atc.evaluate(ATC_PROMINENCE_JS)
+        except PWError:
+            pass
         url_before = page.url
         signals_before = len(self.cart_signals)
         t = time.perf_counter()
@@ -574,7 +615,7 @@ class Collector:
                 return
         st.duration_ms = int((time.perf_counter() - t) * 1000)
         st.page_url = page.url
-        text = (await page.evaluate("() => document.body ? document.body.innerText : ''"))[:30000]
+        text = (await page.evaluate(MAIN_TEXT_JS))[:30000]
         empty = bool(EMPTY_CART_RE.search(text))
         st.screenshot_id = await self._shot(page, "cart", "desktop")
         await self._excerpt(page, "cart")

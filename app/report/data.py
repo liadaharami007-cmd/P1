@@ -38,9 +38,10 @@ def assemble(db: Database, audit: dict) -> dict:
         **{k: v for k, v in audit.items() if k != "facts"},
         "facts": {k: v for k, v in (audit.get("facts") or {}).items() if k != "page_excerpts"},
         "steps": db.get_steps(aid),
+        "agents": db.get_agent_runs(aid),
         "findings": findings,
         "personas": db.get_personas(aid),
-        "screenshots": db.list_screenshots(aid),
+        "screenshots": [x for x in db.list_screenshots(aid) if not x["label"].startswith(("fix-", "agent:"))],
         "ai": {
             "status": audit.get("ai_status"),
             "analysis": analysis["result"] if analysis and analysis["status"] == "done" else None,
