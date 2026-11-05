@@ -9,7 +9,7 @@ import asyncio
 from typing import Any
 
 from . import evidence
-from .client import IntelligenceError, Usage, structured_call
+from .client import IntelligenceError, Usage
 
 PERSONAS: dict[str, dict] = {
     "price_seeker": {"name": "מחפש המחיר המשתלם", "devices": ("desktop",),
@@ -49,20 +49,20 @@ SYSTEM_TMPL = """אתה סוכן סימולציה של P1 AI שמגלם לקוח
 {lang_line}"""
 
 
-async def run_one(client: Any, key: str, audit: dict, steps: list[dict], findings: list[dict],
+async def run_one(engine: Any, key: str, audit: dict, steps: list[dict], findings: list[dict],
                   screenshots: list[dict], lang: str = "he") -> tuple[dict, Usage]:
     p = PERSONAS[key]
     content = evidence.build(audit, steps, findings, screenshots, None, max_images=4, devices=p["devices"])
     content.append({"type": "text", "text": "דווח על החוויה שלך באתר הזה במבנה המבוקש."})
-    return await structured_call(client, system=SYSTEM_TMPL.format(brief=p["brief"], lang_line="Write all text values in English." if lang == "en" else "כתוב בעברית."), content=content,
+    return await engine.structured(system=SYSTEM_TMPL.format(brief=p["brief"], lang_line="Write all text values in English." if lang == "en" else "כתוב בעברית."), content=content,
                                  schema=SCHEMA, effort="low", max_tokens=8000)
 
 
-async def run_all(client: Any, audit: dict, steps: list[dict], findings: list[dict], screenshots: list[dict],
+async def run_all(engine: Any, audit: dict, steps: list[dict], findings: list[dict], screenshots: list[dict],
                   lang: str = "he") -> dict[str, tuple[dict | None, Usage | None, str | None]]:
     async def safe(key):
         try:
-            data, usage = await run_one(client, key, audit, steps, findings, screenshots, lang)
+            data, usage = await run_one(engine, key, audit, steps, findings, screenshots, lang)
             return key, (data, usage, None)
         except IntelligenceError as e:
             return key, (None, None, e.message)

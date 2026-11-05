@@ -42,6 +42,8 @@ class Usage:
 
     @property
     def cost_usd(self) -> float:
+        if self.model.startswith("ollama:"):
+            return 0.0  # מודל מקומי — בלי עלות API
         p = PRICING.get(self.model, PRICING["claude-opus-5-5"])
         return round((self.input_tokens * p["in"] + self.output_tokens * p["out"]
                       + self.cache_read * p["cache_read"] + self.cache_write * p["cache_write"]) / 1_000_000, 6)

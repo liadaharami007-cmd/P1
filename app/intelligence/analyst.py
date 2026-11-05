@@ -10,7 +10,7 @@ from __future__ import annotations
 from typing import Any
 
 from . import evidence
-from .client import Usage, structured_call
+from .client import Usage
 
 CATS = ["conversion", "checkout", "trust", "ux_mobile", "technical"]
 SEV = ["critical", "high", "medium", "low"]
@@ -61,11 +61,11 @@ SYSTEM = """אתה P1 Intelligence — מומחה בכיר ל-CRO, חוויית 
 LANG_LINE = {"he": "כתוב את כל הטקסטים בעברית.", "en": "Write all text values in English (the evidence may be in Hebrew)."}
 
 
-async def analyze(client: Any, audit: dict, steps: list[dict], findings: list[dict], screenshots: list[dict],
+async def analyze(engine: Any, audit: dict, steps: list[dict], findings: list[dict], screenshots: list[dict],
                   comparison: dict | None, lang: str = "he") -> tuple[dict, Usage]:
     content = evidence.build(audit, steps, findings, screenshots, comparison)
     content.append({"type": "text", "text": "נתח את הראיות והחזר את הדוח במבנה המבוקש."})
-    return await structured_call(client, system=SYSTEM + "\n" + LANG_LINE.get(lang, LANG_LINE["he"]), content=content, schema=SCHEMA, effort="medium")
+    return await engine.structured(system=SYSTEM + "\n" + LANG_LINE.get(lang, LANG_LINE["he"]), content=content, schema=SCHEMA, effort="medium")
 
 
 def to_findings(result: dict) -> list[dict]:
