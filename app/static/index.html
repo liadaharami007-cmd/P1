@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="he" dir="rtl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>P1 AI</title>
+  <link rel="stylesheet" href="/static/app.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">P1 <span>AI</span></div>
+    <nav class="tabs">
+      <button class="tab active" data-view="chat">צ'אט</button>
+      <button class="tab" data-view="research">חקירת אתר</button>
+    </nav>
+    <div id="status" class="status"></div>
+  </header>
+
+  <div id="banner" class="banner" hidden></div>
+
+  <main>
+    <!-- צ'אט -->
+    <section id="view-chat" class="view">
+      <aside class="sidebar">
+        <button id="new-conv" class="primary">+ שיחה חדשה</button>
+        <ul id="conv-list" class="conv-list"></ul>
+      </aside>
+      <div class="chat">
+        <div id="messages" class="messages">
+          <div class="empty">
+            <h2>שלום! אני P1 AI</h2>
+            <p>שאלו אותי על העסק שלכם, או בקשו: <em>"תבדוק את האתר example.co.il ותגיד לי מה פוגע במכירות"</em></p>
+          </div>
+        </div>
+        <form id="chat-form" class="composer">
+          <textarea id="chat-input" rows="2" placeholder="כתבו הודעה… (Enter לשליחה, Shift+Enter לשורה חדשה)"></textarea>
+          <button id="chat-send" class="primary" type="submit">שלח</button>
+        </form>
+      </div>
+    </section>
+
+    <!-- חקירת אתר -->
+    <section id="view-research" class="view" hidden>
+      <div class="research">
+        <form id="research-form" class="research-form">
+          <input id="research-url" type="text" inputmode="url" placeholder="כתובת אתר, למשל example.co.il" required>
+          <button class="primary" type="submit">בדוק אתר</button>
+        </form>
+        <p class="hint">הבדיקה מורידה את האתר האמיתי ובודקת מהירות, SEO, מובייל, יצירת קשר, כפתורי פעולה, כלי מדידה וקישורים שבורים. עובדת גם בלי מפתח AI.</p>
+        <div id="report"></div>
+        <h3>בדיקות קודמות</h3>
+        <ul id="report-list" class="report-list"></ul>
+      </div>
+    </section>
+  </main>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>
