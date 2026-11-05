@@ -1,0 +1,3 @@
+<!doctype html><html lang="he" dir="rtl"><head><meta charset="utf-8"><title>חיפוש</title></head><body><h1>תוצאות חיפוש</h1><div id="r"></div>
+<script>const q = new URLSearchParams(location.search).get('q')||''; const all=['חולצה כחולה','כובע אדום'];
+const hits = all.filter(n => q && n.includes(q)); document.getElementById('r').innerHTML = hits.length ? hits.map(h => '<a href="/products/blue-shirt">'+h+'</a>').join('') : 'לא נמצאו תוצאות';</script></body></html>

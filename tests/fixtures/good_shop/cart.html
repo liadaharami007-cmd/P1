@@ -1,0 +1,4 @@
+<!doctype html><html lang="he" dir="rtl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>סל קניות</title></head>
+<body><h1>סל הקניות</h1><div id="items"></div><p>משלוח: חינם מעל 200 ש"ח</p>
+<script>const c = JSON.parse(localStorage.getItem('cart')||'[]');
+document.getElementById('items').innerHTML = c.length ? c.map(i => '<div>'+i.name+' ('+i.size+')</div>').join('') + '<a href="/checkout"><button>מעבר לקופה</button></a>' : '<p>סל הקניות שלך ריק</p>';</script></body></html>
