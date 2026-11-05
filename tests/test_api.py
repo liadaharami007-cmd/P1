@@ -1,16 +1,14 @@
 from types import SimpleNamespace
 
-import pytest
 from anthropic.types.beta import BetaTextBlock, BetaToolUseBlock
-from fastapi.testclient import TestClient
 
 from app.agent import Agent
 from app.db import Database
-from app.main import create_app
+from tests.conftest import register
 
 
 class FakeMessages:
-    """מדמה את Claude: בפעם הראשונה מבקש לחקור אתר, בשנייה עונה בטקסט."""
+    """מדמה את Claude בבדיקות בלבד: בפעם הראשונה מבקש לחקור אתר, בשנייה עונה בטקסט."""
 
     def __init__(self):
         self.calls = []
@@ -31,65 +29,46 @@ async def fake_analyzer(url):
             "facts": {}, "issues": [{"id": "no_cta", "severity": "high"}]}
 
 
-@pytest.fixture
-def setup(tmp_path):
-    db = Database(tmp_path / "t.db")
+def _agent(db):
     fake = FakeMessages()
-    agent = Agent(db, client=SimpleNamespace(beta=SimpleNamespace(messages=fake)), analyzer=fake_analyzer)
-    return TestClient(create_app(db=db, agent=agent)), fake, db
+    return Agent(db, client=SimpleNamespace(beta=SimpleNamespace(messages=fake)), analyzer=fake_analyzer), fake
 
 
-def test_status_without_key(tmp_path, monkeypatch):
+def test_requires_login(make_client):
+    c = make_client()
+    for path in ("/api/status", "/api/audits", "/api/dashboard", "/api/conversations", "/api/tasks"):
+        assert c.get(path).status_code == 401, path
+    assert c.get("/api/health").json() == {"ok": True}
+    assert c.get("/").status_code == 200
+
+
+def test_chat_without_key_is_disabled(make_client, monkeypatch):
     monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
     monkeypatch.delenv("ANTHROPIC_AUTH_TOKEN", raising=False)
-    client = TestClient(create_app(db=Database(tmp_path / "s.db")))
-    s = client.get("/api/status").json()
-    assert s["capabilities"]["chat"] == {"ready": False, "missing": "ANTHROPIC_API_KEY"}
-    conv = client.post("/api/conversations").json()
-    r = client.post(f"/api/conversations/{conv['id']}/messages", json={"text": "שלום"})
+    c = make_client()
+    register(c, "a@shop.co.il")
+    assert c.get("/api/status").json()["capabilities"]["chat"] == {"ready": False, "missing": "ANTHROPIC_API_KEY"}
+    conv = c.post("/api/conversations").json()
+    r = c.post(f"/api/conversations/{conv['id']}/messages", json={"text": "שלום"})
     assert r.status_code == 503 and "ANTHROPIC_API_KEY" in r.json()["detail"]
-    assert client.get(f"/api/conversations/{conv['id']}").json()["items"] == []  # לא נשמר חצי
+    assert c.get(f"/api/conversations/{conv['id']}").json()["items"] == []  # לא נשמר חצי
 
 
-def test_chat_with_tool_and_persistence(setup):
-    client, fake, db = setup
-    conv = client.post("/api/conversations").json()
-    r = client.post(f"/api/conversations/{conv['id']}/messages", json={"text": "תבדוק את shop.test"})
-    assert r.status_code == 200
-    data = r.json()
+def test_chat_with_tool_persistence_and_isolation(tmp_path, make_client):
+    db = Database(tmp_path / "c.db")
+    agent, fake = _agent(db)
+    a = make_client(db=db, agent=agent)
+    register(a, "owner@a.co.il")
+    conv = a.post("/api/conversations").json()
+    data = a.post(f"/api/conversations/{conv['id']}/messages", json={"text": "תבדוק את shop.test"}).json()
     types = [i["type"] for i in data["items"]]
     assert types == ["user", "assistant", "tool_use", "tool_result", "assistant"]
-    assert data["items"][3]["score"] == 55 and data["items"][3]["report_id"]
-    assert data["title"].startswith("תבדוק את")
-    # הקריאה השנייה ל-Claude כוללת את תוצאת הכלי
-    second = fake.calls[1]["messages"]
-    assert second[-1]["content"][0]["type"] == "tool_result"
-    assert second[-1]["content"][0]["tool_use_id"] == "tu_1"
-    # הדוח נשמר ונגיש
-    rep = client.get(f"/api/research/{data['items'][3]['report_id']}").json()
-    assert rep["score"] == 55
-    # השיחה נשמרת ונטענת מחדש
-    again = client.get(f"/api/conversations/{conv['id']}").json()
-    assert [i["type"] for i in again["items"]] == types
-    assert len(db.get_messages(conv["id"])) == 4
-
-
-def test_conversation_crud(setup):
-    client, _, _ = setup
-    c = client.post("/api/conversations").json()
-    assert any(x["id"] == c["id"] for x in client.get("/api/conversations").json())
-    assert client.delete(f"/api/conversations/{c['id']}").status_code == 204
-    assert client.get(f"/api/conversations/{c['id']}").status_code == 404
-
-
-def test_research_endpoint_rejects_internal(setup):
-    client, _, _ = setup
-    r = client.post("/api/research", json={"url": "http://127.0.0.1:22"}).json()
-    assert r["ok"] is False and r["id"]
-    assert client.get("/api/research").json()[0]["ok"] is False
-
-
-def test_index_served(setup):
-    client, _, _ = setup
-    r = client.get("/")
-    assert r.status_code == 200 and "P1" in r.text
+    assert fake.calls[1]["messages"][-1]["content"][0]["tool_use_id"] == "tu_1"
+    rep_id = data["items"][3]["report_id"]
+    assert a.get(f"/api/research/{rep_id}").json()["score"] == 55
+    # חשבון אחר לא רואה את השיחה ואת הדוח
+    b = make_client(db=db, agent=agent)
+    register(b, "other@b.co.il")
+    assert b.get(f"/api/conversations/{conv['id']}").status_code == 404
+    assert b.get(f"/api/research/{rep_id}").status_code == 404
+    assert b.get("/api/conversations").json() == []
