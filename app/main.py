@@ -1,35 +1,45 @@
 """שרת P1 AI — FastAPI.
 
 הפעלה:  uvicorn app.main:app --reload
+כל נקודת API (חוץ מהרשמה/התחברות/בריאות) דורשת משתמש מחובר, וכל נתון מסונן לפי החשבון שלו.
 """
 from __future__ import annotations
 
+import asyncio
 import importlib.util
+import os
+import time
+import uuid
 from contextlib import asynccontextmanager
 from pathlib import Path
+from urllib.parse import urlparse
 
-from fastapi import FastAPI, HTTPException
-from fastapi.responses import FileResponse
+from fastapi import Depends, FastAPI, HTTPException, Request, Response
+from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 from . import config
 from .agent import Agent, AgentError, to_display
-from .audit.rules import CATEGORIES
+from .audit import compare as compare_mod
+from .audit import scoring
+from .audit.rules import CATEGORIES, CATEGORIES_EN
 from .audit.runner import AuditRunner
 from .db import Database
-from .research.analyzer import analyze_url
+from .intelligence.client import configured as ai_configured
+from .logging_setup import log, setup as setup_logging
+from .report.data import assemble
+from .saas import auth, billing, plans
+from .saas.auth import Ctx, current, require_admin
 
 STATIC = config.ROOT / "app" / "static"
 FINDING_STATUSES = {"open", "in_progress", "done", "dismissed"}
+RUN_WORKER = os.environ.get("P1_RUN_WORKER", "1") == "1"
 
 
+# ---------------------------------------------------------------- סכמות קלט
 class MessageIn(BaseModel):
     text: str = Field(min_length=1, max_length=20000)
-
-
-class ResearchIn(BaseModel):
-    url: str = Field(min_length=1, max_length=2000)
 
 
 class AuditIn(BaseModel):
@@ -41,6 +51,27 @@ class FindingStatusIn(BaseModel):
     status: str
 
 
+class RegisterIn(BaseModel):
+    email: str = Field(max_length=254)
+    password: str = Field(max_length=200)
+    name: str | None = Field(default=None, max_length=100)
+    business_name: str | None = Field(default=None, max_length=120)
+    locale: str = "he"
+
+
+class LoginIn(BaseModel):
+    email: str = Field(max_length=254)
+    password: str = Field(max_length=200)
+
+
+class MeIn(BaseModel):
+    locale: str
+
+
+class PlanIn(BaseModel):
+    plan: str
+
+
 def browser_available() -> tuple[bool, str | None]:
     if importlib.util.find_spec("playwright") is None:
         return False, "חבילת playwright לא מותקנת (pip install -r requirements.txt)"
@@ -50,211 +81,364 @@ def browser_available() -> tuple[bool, str | None]:
     return True, None
 
 
-def integrations(agent_ready: bool) -> list[dict]:
-    """מצב החיבורים החיצוניים — אמת בלבד. אף חיבור לא מוצג כמחובר אם הוא לא."""
+def integrations(ai_ready: bool) -> list[dict]:
+    """מצב החיבורים — אמת בלבד."""
     return [
-        {"id": "claude", "name": "Claude API (Anthropic)", "status": "connected" if agent_ready else "not_connected",
-         "powers": "צ'אט העוזר, ובהמשך: ניתוח AI של צילומי מסך, לקוחות מדומים מבוססי AI, שירות לקוחות",
-         "requires": "ANTHROPIC_API_KEY בקובץ .env"},
+        {"id": "claude", "name": "Claude API (Anthropic)", "status": "connected" if ai_ready else "not_connected",
+         "powers": "P1 Intelligence: ניתוח ראיות, 5 סוכני לקוח מדומים, תוכנית פעולה, הצעות ניסוח, עוזר AI",
+         "requires": "ANTHROPIC_API_KEY בקובץ .env בשרת"},
         {"id": "shopify", "name": "Shopify", "status": "planned",
-         "powers": "נתוני מכירות, עגלות נטושות, מוצרים — התנהגות לקוחות אמיתית",
-         "requires": "אפליקציית Shopify (Client ID + Secret) והתקנה בחנות"},
+         "powers": "הזמנות, עגלות נטושות ומוצרים — משפך המרה אמיתי", "requires": "אפליקציית Shopify (OAuth) והתקנה בחנות"},
         {"id": "woocommerce", "name": "WooCommerce", "status": "planned",
-         "powers": "הזמנות, מוצרים ולקוחות מחנות וורדפרס",
-         "requires": "מפתחות REST API של WooCommerce (Consumer Key + Secret)"},
+         "powers": "הזמנות, מוצרים ולקוחות מחנות וורדפרס", "requires": "מפתחות REST API של WooCommerce"},
         {"id": "ga4", "name": "Google Analytics 4", "status": "planned",
-         "powers": "משפך המרה אמיתי, מקורות תנועה, נקודות נטישה",
-         "requires": "פרויקט Google Cloud עם OAuth והרשאת קריאה לנכס GA4"},
-        {"id": "pagespeed", "name": "Google PageSpeed", "status": "planned",
-         "powers": "מדדי Core Web Vitals של משתמשים אמיתיים (CrUX)",
-         "requires": "מפתח API של Google (חינמי)"},
-        {"id": "support", "name": "שירות לקוחות (וואטסאפ / צ'אט באתר)", "status": "planned",
-         "powers": "בוט שעונה ללקוחות על בסיס מידע מאומת על העסק",
-         "requires": "Claude API + WhatsApp Business API או הטמעת וידג'ט באתר"},
+         "powers": "מקורות תנועה ונקודות נטישה אמיתיות", "requires": "OAuth של Google והרשאת קריאה לנכס GA4"},
+        {"id": "pagespeed", "name": "Google PageSpeed / CrUX", "status": "planned",
+         "powers": "מדדי מהירות של משתמשים אמיתיים", "requires": "מפתח API של Google (חינמי)"},
+        {"id": "billing", "name": "ספק תשלומים", "status": "connected" if billing.get_provider().configured() else "planned",
+         "powers": "מנויים חודשיים וגבייה", "requires": "בחירת ספק (Stripe / Paddle / ספק ישראלי) והגדרת webhook"},
     ]
 
 
-def create_app(db: Database | None = None, agent: Agent | None = None,
-               runner: AuditRunner | None = None) -> FastAPI:
+def create_app(db: Database | None = None, agent: Agent | None = None, runner: AuditRunner | None = None) -> FastAPI:
+    setup_logging()
     database = db or Database(config.DB_PATH)
+    the_runner = runner or AuditRunner(database, allow_private=config.DEV_ALLOW_PRIVATE_TARGETS)
 
     @asynccontextmanager
     async def lifespan(_app: FastAPI):
         database.fail_stale_audits()
+        database.purge_expired_sessions()
+        task = asyncio.create_task(the_runner.worker()) if RUN_WORKER else None
         yield
+        the_runner.stop()
+        if task:
+            task.cancel()
 
-    app = FastAPI(title="P1 AI", version="0.2.0", lifespan=lifespan)
+    app = FastAPI(title="P1 AI", version="0.3.0", lifespan=lifespan, docs_url=None, redoc_url=None)
     app.state.db = database
     app.state.agent = agent or Agent(database)
-    app.state.runner = runner or AuditRunner(database, allow_private=config.DEV_ALLOW_PRIVATE_TARGETS)
+    app.state.runner = the_runner
 
+    # ---------------------------------------------------------------- middleware
+    @app.middleware("http")
+    async def security_and_logging(request: Request, call_next):
+        rid = uuid.uuid4().hex[:12]
+        t = time.perf_counter()
+        # הגנת CSRF: בקשות משנות-מצב חייבות להגיע מאותו מקור
+        if request.method in ("POST", "PUT", "PATCH", "DELETE") and request.url.path.startswith("/api/"):
+            origin = request.headers.get("origin")
+            if origin and urlparse(origin).netloc != request.headers.get("host"):
+                return JSONResponse({"detail": "בקשה ממקור לא מורשה"}, status_code=403)
+        try:
+            response = await call_next(request)
+        except Exception:  # noqa: BLE001
+            log.exception("unhandled error", extra={"request_id": rid, "path": request.url.path})
+            response = JSONResponse({"detail": "שגיאה פנימית בשרת", "request_id": rid}, status_code=500)
+        response.headers["X-Request-ID"] = rid
+        response.headers["X-Content-Type-Options"] = "nosniff"
+        response.headers["X-Frame-Options"] = "DENY"
+        response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+        response.headers["Content-Security-Policy"] = (
+            "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; "
+            "font-src 'self'; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'")
+        if request.url.path.startswith("/api/"):
+            log.info("request", extra={"request_id": rid, "method": request.method, "path": request.url.path,
+                                       "status": response.status_code, "ms": int((time.perf_counter() - t) * 1000)})
+        return response
+
+    # ---------------------------------------------------------------- בריאות + אימות
+    @app.get("/api/health")
+    def health():
+        return {"ok": True}
+
+    @app.get("/api/auth/config")
+    def auth_config():
+        return {"signup_allowed": auth.ALLOW_SIGNUP, "has_users": database.count_users() > 0}
+
+    @app.post("/api/auth/register", status_code=201)
+    def register(body: RegisterIn, request: Request, response: Response):
+        if not auth.ALLOW_SIGNUP:
+            raise HTTPException(403, "ההרשמה סגורה")
+        if not auth.signup_limiter.hit(auth.client_ip(request)):
+            raise HTTPException(429, "יותר מדי ניסיונות הרשמה. נסו שוב מאוחר יותר")
+        email = body.email.strip().lower()
+        auth.validate_credentials(email, body.password)
+        if database.get_user_by_email(email):
+            raise HTTPException(409, "כבר קיים משתמש עם האימייל הזה")
+        first = database.count_users() == 0
+        user, acc = database.create_user_with_account(
+            email, auth.hash_password(body.password), (body.name or "").strip() or None,
+            (body.business_name or "").strip() or email.split("@")[1], locale=body.locale if body.locale in ("he", "en") else "he",
+            is_admin=first)
+        if first:  # המשתמש הראשון = בעל הפלטפורמה, ומקבל נתונים שנוצרו לפני מערכת החשבונות
+            database.adopt_orphan_data(acc["id"])
+        auth.start_session(database, response, user["id"], acc["id"], request)
+        log.info("user registered", extra={"user_id": user["id"], "account_id": acc["id"]})
+        return {"ok": True}
+
+    @app.post("/api/auth/login")
+    def login(body: LoginIn, request: Request, response: Response):
+        email = body.email.strip().lower()
+        if not auth.login_limiter.hit(f"{auth.client_ip(request)}|{email}"):
+            raise HTTPException(429, "יותר מדי ניסיונות התחברות. נסו שוב בעוד 15 דקות")
+        user = database.get_user_by_email(email)
+        if not user or not auth.verify_password(body.password, user["password_hash"]):
+            raise HTTPException(401, "אימייל או סיסמה שגויים")
+        m = database.primary_membership(user["id"])
+        if not m:
+            raise HTTPException(403, "למשתמש אין חשבון פעיל")
+        database.touch_login(user["id"])
+        auth.start_session(database, response, user["id"], m["account_id"], request)
+        return {"ok": True}
+
+    @app.post("/api/auth/logout")
+    def logout(request: Request, response: Response):
+        auth.end_session(database, request, response)
+        return {"ok": True}
+
+    @app.get("/api/auth/me")
+    def me(ctx: Ctx = Depends(current)):
+        return {"user": ctx.user, "account": {k: ctx.account[k] for k in ("id", "name", "plan", "subscription_status")},
+                "role": ctx.role}
+
+    @app.patch("/api/me")
+    def update_me(body: MeIn, ctx: Ctx = Depends(current)):
+        if body.locale not in ("he", "en"):
+            raise HTTPException(400, "שפה לא נתמכת")
+        database.set_user_locale(ctx.user_id, body.locale)
+        return {"locale": body.locale}
+
+    # ---------------------------------------------------------------- מצב המערכת
     @app.get("/api/status")
-    def status():
-        """מה עובד ומה חסר — כדי שהממשק לא יציג יכולת שלא קיימת."""
-        ai_ready = app.state.agent.ready
+    def status(ctx: Ctx = Depends(current)):
+        ai_ready = ai_configured() or app.state.agent.ready
         b_ok, b_missing = browser_available()
         return {
             "model": config.MODEL,
             "capabilities": {
                 "browser_audit": {"ready": b_ok, "missing": b_missing},
-                "customer_simulation": {"ready": b_ok, "missing": b_missing, "mode": "rules"},
-                "chat": {"ready": ai_ready, "missing": None if ai_ready else "ANTHROPIC_API_KEY"},
+                "ai_analysis": {"ready": ai_ready, "missing": None if ai_ready else "ANTHROPIC_API_KEY"},
+                "rules_simulation": {"ready": b_ok, "missing": b_missing},
+                "chat": {"ready": app.state.agent.ready, "missing": None if app.state.agent.ready else "ANTHROPIC_API_KEY"},
                 "store_data": {"ready": False, "missing": "חיבור Shopify / WooCommerce (טרם נבנה)"},
-                "conversation_storage": {"ready": True, "missing": None},
+                "billing": {"ready": billing.get_provider().configured(), "missing": "ספק תשלומים"},
             },
-            "categories": CATEGORIES,
+            "categories": CATEGORIES, "categories_en": CATEGORIES_EN,
         }
 
-    @app.get("/api/integrations")
-    def get_integrations():
-        return integrations(app.state.agent.ready)
+    @app.get("/api/methodology")
+    def methodology(ctx: Ctx = Depends(current)):
+        from .audit.rules import RULE_CATEGORY
+        return {**scoring.methodology(), "rule_category": RULE_CATEGORY}
 
-    # ---------- בדיקות אתר (Audits) ----------
+    @app.get("/api/integrations")
+    def get_integrations(ctx: Ctx = Depends(current)):
+        return integrations(ai_configured() or app.state.agent.ready)
+
+    @app.get("/api/account")
+    def account(ctx: Ctx = Depends(current)):
+        usage = database.usage(ctx.account_id)
+        return {"account": ctx.account, "role": ctx.role, "plan": plans.plan_of(ctx.account), "plans": plans.PLANS,
+                "usage": usage, "billing": {"provider": billing.get_provider().name,
+                                            "configured": billing.get_provider().configured()}}
+
+    # ---------------------------------------------------------------- בדיקות
+    def _audit_or_404(audit_id: str, ctx: Ctx) -> dict:
+        a = database.get_audit(audit_id, ctx.account_id)
+        if not a:
+            raise HTTPException(404, "הבדיקה לא נמצאה")
+        return a
+
     @app.post("/api/audits", status_code=202)
-    async def start_audit(body: AuditIn):
+    async def start_audit(body: AuditIn, ctx: Ctx = Depends(current)):
         if not body.confirm_permission:
             raise HTTPException(400, "יש לאשר שאתם הבעלים של האתר או שיש לכם הרשאה לבדוק אותו")
         ok, missing = browser_available()
         if not ok:
             raise HTTPException(503, missing)
         try:
-            return app.state.runner.start(body.url)
+            audit = the_runner.enqueue(body.url, ctx.account, ctx.user_id)
+        except plans.QuotaError as e:
+            raise HTTPException(402, e.message)
         except ValueError as e:
             raise HTTPException(400, str(e))
+        log.info("audit queued", extra={"audit_id": audit["id"], "account_id": ctx.account_id})
+        return audit
 
     @app.get("/api/audits")
-    def list_audits(site_id: str | None = None):
-        return app.state.db.list_audits(site_id)
+    def list_audits(site_id: str | None = None, ctx: Ctx = Depends(current)):
+        return database.list_audits(ctx.account_id, site_id)
 
     @app.get("/api/audits/{audit_id}")
-    def get_audit(audit_id: str):
-        db_ = app.state.db
-        audit = db_.get_audit(audit_id)
-        if not audit:
-            raise HTTPException(404, "הבדיקה לא נמצאה")
-        return {**audit, "steps": db_.get_steps(audit_id), "findings": db_.get_findings(audit_id),
-                "personas": db_.get_personas(audit_id), "screenshots": db_.list_screenshots(audit_id)}
+    def get_audit(audit_id: str, ctx: Ctx = Depends(current)):
+        return assemble(database, _audit_or_404(audit_id, ctx))
+
+    @app.get("/api/audits/{audit_id}/events")
+    def audit_events(audit_id: str, after: int = 0, ctx: Ctx = Depends(current)):
+        a = _audit_or_404(audit_id, ctx)
+        return {"status": a["status"], "ai_status": a.get("ai_status"), "started_at": a.get("started_at"),
+                "finished_at": a.get("finished_at"), "error": a.get("error"), "start_url": a["start_url"],
+                "progress": a.get("progress") or [], "events": database.get_events(audit_id, after)}
+
+    @app.post("/api/audits/{audit_id}/analyze", status_code=202)
+    async def reanalyze(audit_id: str, ctx: Ctx = Depends(current)):
+        a = _audit_or_404(audit_id, ctx)
+        if a["status"] != "done":
+            raise HTTPException(409, "אפשר לנתח רק בדיקה שהסתיימה")
+        if a.get("ai_status") == "running":
+            raise HTTPException(409, "ניתוח AI כבר רץ")
+        if not ai_configured():
+            raise HTTPException(503, "Claude לא מחובר — חסר ANTHROPIC_API_KEY בשרת")
+        database.update_audit(audit_id, ai_status="running")
+        t = asyncio.create_task(the_runner.run_ai(audit_id))
+        the_runner._tasks.add(t)
+        t.add_done_callback(the_runner._tasks.discard)
+        return {"ai_status": "running"}
+
+    @app.get("/api/audits/{audit_id}/compare")
+    def compare_audits(audit_id: str, base: str | None = None, ctx: Ctx = Depends(current)):
+        after = _audit_or_404(audit_id, ctx)
+        before = database.get_audit(base, ctx.account_id) if base else database.previous_done_audit(after)
+        if not before or before["site_id"] != after["site_id"]:
+            raise HTTPException(404, "אין בדיקה קודמת של אותו אתר להשוואה")
+        return compare_mod.compare(before, database.get_findings(before["id"]), after, database.get_findings(after["id"]))
+
+    @app.get("/api/audits/{audit_id}/report.pdf")
+    async def report_pdf(audit_id: str, ctx: Ctx = Depends(current)):
+        from .report.pdf import render_pdf
+        a = _audit_or_404(audit_id, ctx)
+        if a["status"] != "done":
+            raise HTTPException(409, "הדוח זמין רק לבדיקה שהסתיימה")
+        pdf = await render_pdf(assemble(database, a), database.list_screenshots(audit_id, with_paths=True))
+        name = (urlparse(a["start_url"]).hostname or "site").replace(".", "-")
+        return Response(pdf, media_type="application/pdf",
+                        headers={"Content-Disposition": f'attachment; filename="p1-report-{name}-{a["id"][:8]}.pdf"'})
 
     @app.delete("/api/audits/{audit_id}", status_code=204)
-    def delete_audit(audit_id: str):
-        audit = app.state.db.get_audit(audit_id)
-        if not audit:
-            raise HTTPException(404, "הבדיקה לא נמצאה")
-        if audit["status"] in ("queued", "running"):
+    def delete_audit(audit_id: str, ctx: Ctx = Depends(current)):
+        a = _audit_or_404(audit_id, ctx)
+        if a["status"] in ("queued", "running") or a.get("ai_status") == "running":
             raise HTTPException(409, "אי אפשר למחוק בדיקה שעדיין רצה")
-        app.state.runner.delete(audit_id)
+        the_runner.delete(audit_id)
 
     @app.get("/api/screenshots/{shot_id}")
-    def get_screenshot(shot_id: str):
-        shot = app.state.db.get_screenshot(shot_id)
+    def get_screenshot(shot_id: str, ctx: Ctx = Depends(current)):
+        shot = database.get_screenshot(shot_id, ctx.account_id)
         if not shot or not Path(shot["path"]).exists():
             raise HTTPException(404, "צילום המסך לא נמצא")
-        return FileResponse(shot["path"], media_type="image/jpeg",
-                            headers={"Cache-Control": "private, max-age=86400"})
+        return FileResponse(shot["path"], media_type="image/jpeg", headers={"Cache-Control": "private, max-age=86400"})
 
     @app.patch("/api/findings/{finding_id}")
-    def update_finding(finding_id: str, body: FindingStatusIn):
+    def update_finding(finding_id: str, body: FindingStatusIn, ctx: Ctx = Depends(current)):
         if body.status not in FINDING_STATUSES:
             raise HTTPException(400, "סטטוס לא חוקי")
-        if not app.state.db.update_finding_status(finding_id, body.status):
+        if not database.update_finding_status(finding_id, body.status, ctx.account_id):
             raise HTTPException(404, "הממצא לא נמצא")
         return {"id": finding_id, "status": body.status}
 
     @app.get("/api/tasks")
-    def tasks():
-        """כל הממצאים מהבדיקה האחרונה של כל אתר — לניהול משימות תיקון."""
-        return app.state.db.list_open_findings(500)
+    def tasks(ctx: Ctx = Depends(current)):
+        return database.list_task_findings(ctx.account_id)
 
     @app.get("/api/dashboard")
-    def dashboard(site_id: str | None = None):
-        db_ = app.state.db
-        sites = db_.list_sites()
+    def dashboard(site_id: str | None = None, ctx: Ctx = Depends(current)):
+        sites = database.list_sites(ctx.account_id)
+        usage = database.usage(ctx.account_id)
         if not sites:
-            return {"sites": [], "site": None}
-        site = next((s for s in sites if s["id"] == site_id), None)
-        all_audits = db_.list_audits(None, 200)
-        if not site:  # ברירת מחדל: האתר של הבדיקה האחרונה
-            site = next((s for s in sites if all_audits and s["id"] == all_audits[0]["site_id"]), sites[0])
+            return {"sites": [], "site": None, "usage": usage, "plan": plans.plan_of(ctx.account)}
+        all_audits = database.list_audits(ctx.account_id, None, 200)
+        site = next((s for s in sites if s["id"] == site_id), None) or \
+            next((s for s in sites if all_audits and s["id"] == all_audits[0]["site_id"]), sites[0])
         audits = [a for a in all_audits if a["site_id"] == site["id"]]
         done = [a for a in audits if a["status"] == "done"]
-        latest = db_.get_audit(done[0]["id"]) if done else None
-        findings = db_.get_findings(latest["id"]) if latest else []
-        personas = db_.get_personas(latest["id"]) if latest else []
-        sev_counts = {s: 0 for s in ("critical", "high", "medium", "low")}
-        status_counts = {s: 0 for s in FINDING_STATUSES}
-        for f in findings:
-            status_counts[f["status"]] += 1
+        latest = database.get_audit(done[0]["id"], ctx.account_id) if done else None
+        findings = database.get_findings(latest["id"]) if latest else []
+        measured = [f for f in findings if f["source"] == "measured"]
+        sev = {s: 0 for s in ("critical", "high", "medium", "low")}
+        st = {s: 0 for s in FINDING_STATUSES}
+        for f in measured:
+            st[f["status"]] += 1
             if f["status"] in ("open", "in_progress"):
-                sev_counts[f["severity"]] += 1
+                sev[f["severity"]] += 1
         order = {"critical": 0, "high": 1, "medium": 2, "low": 3}
-        impact = {"high": 0, "medium": 1, "low": 2}
-        top = sorted([f for f in findings if f["status"] in ("open", "in_progress")],
-                     key=lambda f: (order[f["severity"]], impact[f["impact"]]))[:6]
+        imp = {"high": 0, "medium": 1, "low": 2}
+        top = sorted([f for f in measured if f["status"] in ("open", "in_progress")],
+                     key=lambda f: (order[f["severity"]], imp[f["impact"]]))[:6]
+        report = assemble(database, latest) if latest else None
         return {
-            "sites": sites, "site": site,
-            "latest": {k: latest[k] for k in ("id", "score", "category_scores", "finished_at", "start_url")} if latest else None,
+            "sites": sites, "site": site, "usage": usage, "plan": plans.plan_of(ctx.account),
+            "latest": {k: latest[k] for k in ("id", "score", "category_scores", "finished_at", "start_url", "ai_status")} if latest else None,
             "running": [a for a in audits if a["status"] in ("queued", "running")],
-            "trend": [{"id": a["id"], "score": a["score"], "at": a["finished_at"]} for a in reversed(done)],
-            "severity_counts": sev_counts, "status_counts": status_counts,
-            "top_findings": top, "personas": personas,
+            "trend": [{"id": a["id"], "score": a["score"], "categories": a["category_scores"], "at": a["finished_at"]}
+                      for a in reversed(done)],
+            "severity_counts": sev, "status_counts": st, "top_findings": top,
+            "ai_summary": (report["ai"]["analysis"] or {}).get("executive_summary") if report else None,
+            "ai_personas": [{"key": p["key"], "name": p["name"], "verdict": (p["result"] or {}).get("verdict")}
+                            for p in report["ai"]["personas"]] if report else [],
+            "rule_personas": database.get_personas(latest["id"]) if latest else [],
+            "comparison": report["comparison"] if report else None,
             "recent_audits": audits[:8],
         }
 
-    # ---------- שיחות (עוזר AI) ----------
+    # ---------------------------------------------------------------- ניהול פלטפורמה
+    @app.get("/api/admin/overview")
+    def admin_overview(ctx: Ctx = Depends(require_admin)):
+        return {**database.admin_overview(), "plans": plans.PLANS}
+
+    @app.patch("/api/admin/accounts/{account_id}")
+    def admin_set_plan(account_id: str, body: PlanIn, ctx: Ctx = Depends(require_admin)):
+        if body.plan not in plans.PLANS:
+            raise HTTPException(400, "מסלול לא קיים")
+        if not database.get_account(account_id):
+            raise HTTPException(404, "החשבון לא נמצא")
+        database.update_account(account_id, plan=body.plan)
+        log.info("plan changed by admin", extra={"account_id": account_id, "user_id": ctx.user_id})
+        return {"id": account_id, "plan": body.plan}
+
+    # ---------------------------------------------------------------- עוזר AI (צ'אט)
     @app.get("/api/conversations")
-    def list_conversations():
-        return app.state.db.list_conversations()
+    def list_conversations(ctx: Ctx = Depends(current)):
+        return database.list_conversations(ctx.account_id)
 
     @app.post("/api/conversations", status_code=201)
-    def create_conversation():
-        return app.state.db.create_conversation()
+    def create_conversation(ctx: Ctx = Depends(current)):
+        return database.create_conversation(ctx.account_id, ctx.user_id)
 
     @app.get("/api/conversations/{conv_id}")
-    def get_conversation(conv_id: str):
-        conv = app.state.db.get_conversation(conv_id)
+    def get_conversation(conv_id: str, ctx: Ctx = Depends(current)):
+        conv = database.get_conversation(conv_id, ctx.account_id)
         if not conv:
             raise HTTPException(404, "השיחה לא נמצאה")
-        return {**conv, "items": to_display(app.state.db.get_messages(conv_id))}
+        return {**conv, "items": to_display(database.get_messages(conv_id))}
 
     @app.delete("/api/conversations/{conv_id}", status_code=204)
-    def delete_conversation(conv_id: str):
-        if not app.state.db.delete_conversation(conv_id):
+    def delete_conversation(conv_id: str, ctx: Ctx = Depends(current)):
+        if not database.delete_conversation(conv_id, ctx.account_id):
             raise HTTPException(404, "השיחה לא נמצאה")
 
     @app.post("/api/conversations/{conv_id}/messages")
-    async def send_message(conv_id: str, body: MessageIn):
-        conv = app.state.db.get_conversation(conv_id)
-        if not conv:
+    async def send_message(conv_id: str, body: MessageIn, ctx: Ctx = Depends(current)):
+        if not database.get_conversation(conv_id, ctx.account_id):
             raise HTTPException(404, "השיחה לא נמצאה")
         try:
-            notice = await app.state.agent.send(conv_id, body.text)
+            notice = await app.state.agent.send(conv_id, body.text, ctx.account_id)
         except AgentError as e:
             raise HTTPException(e.status, e.message)
-        conv = app.state.db.get_conversation(conv_id)
-        return {**conv, "notice": notice, "items": to_display(app.state.db.get_messages(conv_id))}
-
-    # ---------- בדיקת HTML מהירה (בשימוש כלי הצ'אט) ----------
-    @app.post("/api/research")
-    async def research(body: ResearchIn):
-        report = await analyze_url(body.url)
-        report["id"] = app.state.db.save_report(report)
-        return report
-
-    @app.get("/api/research")
-    def list_research():
-        return app.state.db.list_reports()
+        conv = database.get_conversation(conv_id, ctx.account_id)
+        return {**conv, "notice": notice, "items": to_display(database.get_messages(conv_id))}
 
     @app.get("/api/research/{report_id}")
-    def get_research(report_id: str):
-        rep = app.state.db.get_report(report_id)
+    def get_research(report_id: str, ctx: Ctx = Depends(current)):
+        rep = database.get_report(report_id, ctx.account_id)
         if not rep:
             raise HTTPException(404, "הדוח לא נמצא")
         return rep
 
-    # ---------- ממשק ----------
+    # ---------------------------------------------------------------- ממשק
     @app.get("/")
     def index():
-        return FileResponse(STATIC / "index.html")
+        return FileResponse(STATIC / "index.html", headers={"Cache-Control": "no-cache"})
 
     app.mount("/static", StaticFiles(directory=STATIC), name="static")
     return app
