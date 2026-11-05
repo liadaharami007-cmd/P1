@@ -87,17 +87,18 @@ class Agent:
                     "חסר מפתח API של Anthropic. הוסיפו ANTHROPIC_API_KEY לקובץ .env והפעילו מחדש את השרת.",
                     status=503,
                 )
-            self._client = anthropic.AsyncAnthropic()
+            from .intelligence.client import BASE_URL
+            self._client = anthropic.AsyncAnthropic(base_url=BASE_URL)
         return self._client
 
-    async def _run_tool(self, name: str, tool_input: dict, conv_id: str) -> tuple[str, bool]:
+    async def _run_tool(self, name: str, tool_input: dict, conv_id: str, account_id: str | None = None) -> tuple[str, bool]:
         if name != "analyze_website":
             return f"Unknown tool: {name}", True
         url = tool_input.get("url") if isinstance(tool_input, dict) else None
         if not isinstance(url, str) or not url.strip():
             return "Missing 'url' parameter", True
         report = await self.analyzer(url)
-        report_id = self.db.save_report(report, conversation_id=conv_id)
+        report_id = self.db.save_report(report, conversation_id=conv_id, account_id=account_id)
         payload = {"report_id": report_id, **report}
         return json.dumps(payload, ensure_ascii=False), not report.get("ok", False)
 
@@ -127,7 +128,7 @@ class Agent:
         except anthropic.APIConnectionError:
             raise AgentError("אין חיבור לשרתי Anthropic. בדקו חיבור לאינטרנט.", 502)
 
-    async def send(self, conv_id: str, user_text: str) -> str | None:
+    async def send(self, conv_id: str, user_text: str, account_id: str | None = None) -> str | None:
         """שולח הודעת משתמש, מריץ את הלולאה ושומר הכול.
 
         מחזיר הודעת הערה למשתמש (או None), וזורק AgentError על כשל.
@@ -145,6 +146,10 @@ class Agent:
         notice: str | None = None
         for _ in range(config.MAX_AGENT_STEPS):
             response = await self._call_claude(history + pending)
+            from .intelligence.client import usage_of
+            u = usage_of(response, config.MODEL)
+            if u.input_tokens or u.output_tokens:
+                self.db.record_ai_run(audit_id=None, account_id=account_id, kind="chat", status="done", usage=u)
             content = [_block_to_dict(b) for b in response.content]
             pending.append({"role": "assistant", "content": content})
 
@@ -166,7 +171,7 @@ class Agent:
 
             results = []
             for tu in tool_uses:
-                text, is_error = await self._run_tool(tu.name, tu.input, conv_id)
+                text, is_error = await self._run_tool(tu.name, tu.input, conv_id, account_id)
                 results.append({"type": "tool_result", "tool_use_id": tu.id, "content": text, "is_error": is_error})
             pending.append({"role": "user", "content": results})
             flush()
