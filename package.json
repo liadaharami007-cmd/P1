@@ -1,0 +1,11 @@
+{
+  "name": "p1-ai-web",
+  "private": true,
+  "description": "P1 AI web client — JavaScript with TypeScript type checking (JSDoc), no build step",
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "devDependencies": {
+    "typescript": "5.9.3"
+  }
+}
