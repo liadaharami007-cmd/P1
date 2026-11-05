@@ -23,6 +23,20 @@ _load_dotenv()
 MODEL = os.environ.get("P1_MODEL", "claude-opus-5-5")
 DB_PATH = Path(os.environ.get("P1_DB_PATH", ROOT / "data" / "p1.db"))
 MAX_AGENT_STEPS = int(os.environ.get("P1_MAX_AGENT_STEPS", "8"))
+DATA_DIR = Path(os.environ.get("P1_DATA_DIR", ROOT / "data"))
+SCREENSHOT_DIR = DATA_DIR / "screenshots"
+# לפיתוח בלבד: מאפשר לבדוק אתרים ברשת המקומית (למשל חנות הבדיקה). לעולם לא בייצור.
+DEV_ALLOW_PRIVATE_TARGETS = os.environ.get("P1_DEV_ALLOW_PRIVATE_TARGETS") == "1"
+MAX_CONCURRENT_AUDITS = int(os.environ.get("P1_MAX_CONCURRENT_AUDITS", "2"))
+
+
+def chromium_path() -> str | None:
+    """נתיב לדפדפן Chromium. אם לא הוגדר — Playwright ישתמש בדפדפן שהוא התקין בעצמו."""
+    explicit = os.environ.get("P1_CHROMIUM_PATH")
+    if explicit:
+        return explicit
+    preinstalled = Path("/opt/pw-browsers/chromium")  # סביבת הענן של Claude Code
+    return str(preinstalled) if preinstalled.exists() else None
 
 
 def anthropic_configured() -> bool:
