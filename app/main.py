@@ -72,6 +72,20 @@ class PlanIn(BaseModel):
     plan: str
 
 
+class FixStatusIn(BaseModel):
+    status: str
+
+
+class SiteIn(BaseModel):
+    url: str = Field(min_length=1, max_length=2000)
+    confirm_permission: bool = False
+
+
+class MonitorIn(BaseModel):
+    frequency: str
+    enabled: bool = True
+
+
 def browser_available() -> tuple[bool, str | None]:
     if importlib.util.find_spec("playwright") is None:
         return False, "חבילת playwright לא מותקנת (pip install -r requirements.txt)"
@@ -108,6 +122,7 @@ def create_app(db: Database | None = None, agent: Agent | None = None, runner: A
     @asynccontextmanager
     async def lifespan(_app: FastAPI):
         database.fail_stale_audits()
+        database.interrupt_running_agents()
         database.purge_expired_sessions()
         task = asyncio.create_task(the_runner.worker()) if RUN_WORKER else None
         yield
@@ -139,9 +154,13 @@ def create_app(db: Database | None = None, agent: Agent | None = None, runner: A
         response.headers["X-Content-Type-Options"] = "nosniff"
         response.headers["X-Frame-Options"] = "DENY"
         response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
-        response.headers["Content-Security-Policy"] = (
-            "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; "
-            "font-src 'self'; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'")
+        if request.url.path.startswith("/demo-store"):  # חנות הדמו: דפים פשוטים עם סקריפטים פנימיים, בלי גישה ל-API
+            response.headers["Content-Security-Policy"] = ("default-src 'self'; script-src 'self' 'unsafe-inline'; "
+                                                           "style-src 'self' 'unsafe-inline'; img-src 'self' data:; frame-ancestors 'none'")
+        else:
+            response.headers["Content-Security-Policy"] = (
+                "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; "
+                "font-src 'self'; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'")
         if request.url.path.startswith("/api/"):
             log.info("request", extra={"request_id": rid, "method": request.method, "path": request.url.path,
                                        "status": response.status_code, "ms": int((time.perf_counter() - t) * 1000)})
@@ -214,11 +233,16 @@ def create_app(db: Database | None = None, agent: Agent | None = None, runner: A
     def status(ctx: Ctx = Depends(current)):
         ai_ready = ai_configured() or app.state.agent.ready
         b_ok, b_missing = browser_available()
+        from .intelligence import engines
+        eng = engines.status()
         return {
             "model": config.MODEL,
+            "engines": eng,
             "capabilities": {
                 "browser_audit": {"ready": b_ok, "missing": b_missing},
-                "ai_analysis": {"ready": ai_ready, "missing": None if ai_ready else "ANTHROPIC_API_KEY"},
+                "ai_analysis": {"ready": eng["active"] != "rules", "engine": eng["active"],
+                                "missing": None if eng["active"] != "rules" else "ANTHROPIC_API_KEY / Ollama"},
+                "customer_agents": {"ready": b_ok, "engine": "rules", "missing": b_missing},
                 "rules_simulation": {"ready": b_ok, "missing": b_missing},
                 "chat": {"ready": app.state.agent.ready, "missing": None if app.state.agent.ready else "ANTHROPIC_API_KEY"},
                 "store_data": {"ready": False, "missing": "חיבור Shopify / WooCommerce (טרם נבנה)"},
@@ -231,6 +255,11 @@ def create_app(db: Database | None = None, agent: Agent | None = None, runner: A
     def methodology(ctx: Ctx = Depends(current)):
         from .audit.rules import RULE_CATEGORY
         return {**scoring.methodology(), "rule_category": RULE_CATEGORY}
+
+    @app.get("/api/engines")
+    def get_engines(ctx: Ctx = Depends(current)):
+        from .intelligence import engines
+        return engines.status()
 
     @app.get("/api/integrations")
     def get_integrations(ctx: Ctx = Depends(current)):
@@ -288,8 +317,9 @@ def create_app(db: Database | None = None, agent: Agent | None = None, runner: A
             raise HTTPException(409, "אפשר לנתח רק בדיקה שהסתיימה")
         if a.get("ai_status") == "running":
             raise HTTPException(409, "ניתוח AI כבר רץ")
-        if not ai_configured():
-            raise HTTPException(503, "Claude לא מחובר — חסר ANTHROPIC_API_KEY בשרת")
+        from .intelligence import engines
+        if engines.status()["active"] == "rules":
+            raise HTTPException(503, "אין מנוע AI מחובר (Claude / Ollama) — מנוע הכללים כבר הופעל בבדיקה")
         database.update_audit(audit_id, ai_status="running")
         t = asyncio.create_task(the_runner.run_ai(audit_id))
         the_runner._tasks.add(t)
@@ -364,7 +394,7 @@ def create_app(db: Database | None = None, agent: Agent | None = None, runner: A
         order = {"critical": 0, "high": 1, "medium": 2, "low": 3}
         imp = {"high": 0, "medium": 1, "low": 2}
         top = sorted([f for f in measured if f["status"] in ("open", "in_progress")],
-                     key=lambda f: (order[f["severity"]], imp[f["impact"]]))[:6]
+                     key=lambda f: (f.get("priority") or 999, order[f["severity"]], imp[f["impact"]]))[:6]
         report = assemble(database, latest) if latest else None
         return {
             "sites": sites, "site": site, "usage": usage, "plan": plans.plan_of(ctx.account),
@@ -377,9 +407,177 @@ def create_app(db: Database | None = None, agent: Agent | None = None, runner: A
             "ai_personas": [{"key": p["key"], "name": p["name"], "verdict": (p["result"] or {}).get("verdict")}
                             for p in report["ai"]["personas"]] if report else [],
             "rule_personas": database.get_personas(latest["id"]) if latest else [],
+            "agents": [{"agent": r["agent"], "status": r["status"], "verdict": r["verdict"], "engine": r["engine"],
+                        "issues": sum(1 for o in (r["result"] or {}).get("observations", []) if o["type"] == "issue")}
+                       for r in database.get_agent_runs(latest["id"])] if latest else [],
+            "is_demo": bool(site.get("is_demo")),
             "comparison": report["comparison"] if report else None,
             "recent_audits": audits[:8],
         }
+
+    # ---------------------------------------------------------------- שליטה בבדיקה: עצירה וחידוש
+    @app.post("/api/audits/{audit_id}/stop")
+    def stop_audit(audit_id: str, ctx: Ctx = Depends(current)):
+        a = _audit_or_404(audit_id, ctx)
+        if a["status"] not in ("queued", "running") and not any(r["status"] == "running" for r in database.get_agent_runs(audit_id)):
+            raise HTTPException(409, "הבדיקה לא רצה כרגע")
+        if a["status"] == "queued":
+            database.update_audit(audit_id, status="stopped", error="נעצר לפני שהתחיל")
+        database.update_audit(audit_id, cancel_requested=1)
+        database.add_event(audit_id, "info", "התקבלה בקשת עצירה מהמשתמש")
+        return {"ok": True}
+
+    @app.post("/api/audits/{audit_id}/resume", status_code=202)
+    async def resume_audit(audit_id: str, ctx: Ctx = Depends(current)):
+        a = _audit_or_404(audit_id, ctx)
+        runs = database.get_agent_runs(audit_id)
+        if a["status"] != "done" or not any(r["status"] in ("interrupted", "failed", "queued") for r in runs):
+            raise HTTPException(409, "אין סוכנים לחידוש בבדיקה הזו")
+        t = asyncio.create_task(the_runner.resume_agents(audit_id))
+        the_runner._tasks.add(t)
+        t.add_done_callback(the_runner._tasks.discard)
+        return {"ok": True}
+
+    # ---------------------------------------------------------------- Live Mission Control (SSE)
+    @app.get("/api/audits/{audit_id}/stream")
+    async def stream(audit_id: str, request: Request, after: int = 0, ctx: Ctx = Depends(current)):
+        """שידור חי של מצב הבדיקה: אירועים חדשים, סוכנים, התקדמות. רק נתונים אמיתיים מהמסד."""
+        import json as _json
+        from fastapi.responses import StreamingResponse
+        _audit_or_404(audit_id, ctx)
+
+        async def gen():
+            last = after
+            idle_done = 0
+            while not await request.is_disconnected():
+                a = database.get_audit(audit_id, ctx.account_id)
+                evs = database.get_events(audit_id, last, 200)
+                if evs:
+                    last = evs[-1]["id"]
+                runs = database.get_agent_runs(audit_id)
+                payload = {"status": a["status"], "ai_status": a.get("ai_status"), "started_at": a.get("started_at"),
+                           "finished_at": a.get("finished_at"), "error": a.get("error"), "progress": a.get("progress") or [],
+                           "start_url": a["start_url"], "score": a.get("score"),
+                           "agents": [{k: r[k] for k in ("agent", "engine", "status", "actions", "current_url", "last_action",
+                                                       "last_screenshot_id", "verdict", "error", "started_at", "finished_at")} for r in runs],
+                           "events": evs}
+                yield f"id: {last}\ndata: {_json.dumps(payload, ensure_ascii=False)}\n\n"
+                settled = a["status"] in ("done", "failed", "stopped") and a.get("ai_status") not in ("pending", "running") \
+                    and not any(r["status"] in ("running", "queued") for r in runs)
+                idle_done = idle_done + 1 if settled else 0
+                if idle_done >= 2:
+                    yield "event: end\ndata: {}\n\n"
+                    return
+                await asyncio.sleep(0.8)
+        return StreamingResponse(gen(), media_type="text/event-stream",
+                                 headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
+
+    # ---------------------------------------------------------------- Fix Studio
+    @app.get("/api/audits/{audit_id}/fixes")
+    def audit_fixes(audit_id: str, ctx: Ctx = Depends(current)):
+        from .fixstudio import service
+        a = _audit_or_404(audit_id, ctx)
+        if a["status"] != "done":
+            raise HTTPException(409, "Fix Studio זמין אחרי שהבדיקה מסתיימת")
+        return {"audit": {k: a[k] for k in ("id", "site_url", "site_name", "start_url", "score", "finished_at", "is_demo")},
+                "fixes": service.list_fixes(database, a), "screenshots": database.list_screenshots(audit_id)}
+
+    @app.post("/api/findings/{finding_id}/preview")
+    async def fix_preview(finding_id: str, ctx: Ctx = Depends(current)):
+        from .fixstudio import service
+        f = database.get_finding(finding_id, ctx.account_id)
+        if not f:
+            raise HTTPException(404, "הממצא לא נמצא")
+        a = database.get_audit(f["audit_id"], ctx.account_id)
+        a["_allow_private"] = bool(a.get("is_demo"))
+        return await service.make_preview(database, a, f)
+
+    @app.patch("/api/findings/{finding_id}/fix")
+    def fix_status(finding_id: str, body: FixStatusIn, ctx: Ctx = Depends(current)):
+        from .fixstudio.service import FIX_STATUSES
+        if body.status not in FIX_STATUSES:
+            raise HTTPException(400, "סטטוס לא חוקי")
+        if not database.set_fix_status(finding_id, body.status, ctx.account_id):
+            raise HTTPException(404, "הממצא לא נמצא")
+        return {"id": finding_id, "fix_status": body.status}
+
+    # ---------------------------------------------------------------- אתרים + Smart Monitor + התראות
+    @app.get("/api/sites")
+    def sites(ctx: Ctx = Depends(current)):
+        return {"sites": database.sites_overview(ctx.account_id), "plan": plans.plan_of(ctx.account)}
+
+    @app.post("/api/sites", status_code=201)
+    def add_site(body: SiteIn, ctx: Ctx = Depends(current)):
+        from .research.analyzer import assert_public_host, normalize_url
+        if not body.confirm_permission:
+            raise HTTPException(400, "יש לאשר שאתם הבעלים של האתר או שיש לכם הרשאה לבדוק אותו")
+        try:
+            url = normalize_url(body.url)
+            if not config.DEV_ALLOW_PRIVATE_TARGETS:
+                assert_public_host(url)
+        except ValueError as e:
+            raise HTTPException(400, str(e))
+        p = urlparse(url)
+        origin = f"{p.scheme}://{p.netloc}".lower()
+        if not database.find_site(ctx.account_id, origin):
+            usage = database.usage(ctx.account_id)
+            if usage["sites"] >= plans.plan_of(ctx.account)["sites"]:
+                raise HTTPException(402, f"המסלול {plans.plan_of(ctx.account)['name']} מאפשר עד {plans.plan_of(ctx.account)['sites']} אתרים")
+        site = database.get_or_create_site(origin, ctx.account_id)
+        database.authorize_site(site["id"], ctx.user_id)
+        return database.get_site(site["id"], ctx.account_id)
+
+    @app.put("/api/sites/{site_id}/monitor")
+    def set_monitor(site_id: str, body: MonitorIn, ctx: Ctx = Depends(current)):
+        from . import monitor as mon
+        site = database.get_site(site_id, ctx.account_id)
+        if not site:
+            raise HTTPException(404, "האתר לא נמצא")
+        allowed = plans.plan_of(ctx.account)["monitor"]
+        if body.frequency not in mon.FREQ_DAYS:
+            raise HTTPException(400, "תדירות לא חוקית")
+        if body.frequency not in allowed:
+            raise HTTPException(402, f"התדירות הזו לא כלולה במסלול. זמין: {', '.join(allowed)}")
+        database.upsert_monitor(site_id, ctx.account_id, body.frequency, body.enabled, mon.next_run(body.frequency))
+        return database.get_monitor(site_id)
+
+    @app.get("/api/sites/{site_id}/progress")
+    def site_progress(site_id: str, ctx: Ctx = Depends(current)):
+        site = database.get_site(site_id, ctx.account_id)
+        if not site:
+            raise HTTPException(404, "האתר לא נמצא")
+        hist = database.site_history(site_id)
+        notes = [n for n in database.list_notifications(ctx.account_id, 200) if n["site_id"] == site_id]
+        first, last = (hist[0], hist[-1]) if hist else (None, None)
+        return {"site": site, "monitor": database.get_monitor(site_id), "history": hist, "changes": notes,
+                "summary": {"audits": len(hist), "first_score": first and first["score"], "last_score": last and last["score"],
+                            "delta": (last["score"] - first["score"]) if hist and first["score"] is not None and last["score"] is not None else None,
+                            "fixed": sum(len((n["data"] or {}).get("rule_ids", [])) for n in notes if n["kind"] == "fixed_issues"),
+                            "new": sum(len((n["data"] or {}).get("rule_ids", [])) for n in notes if n["kind"] == "new_issues")}}
+
+    @app.get("/api/notifications")
+    def notifications(ctx: Ctx = Depends(current)):
+        items = database.list_notifications(ctx.account_id)
+        return {"items": items, "unread": sum(1 for n in items if not n["read_at"])}
+
+    @app.post("/api/notifications/read")
+    def notifications_read(ctx: Ctx = Depends(current)):
+        database.mark_notifications_read(ctx.account_id)
+        return {"ok": True}
+
+    # ---------------------------------------------------------------- Demo Experience
+    @app.post("/api/demo/start", status_code=202)
+    def demo_start(request: Request, ctx: Ctx = Depends(current)):
+        """בדיקה אמיתית של חנות הדמו של P1 (מסומנת כדמו בכל מקום)."""
+        url = str(request.base_url).rstrip("/") + "/demo-store/"
+        try:
+            return the_runner.enqueue(url, ctx.account, ctx.user_id, demo=True)
+        except plans.QuotaError as e:
+            raise HTTPException(402, e.message)
+
+    @app.post("/demo-store/cart/add")
+    def demo_cart_add():
+        return {"ok": True}
 
     # ---------------------------------------------------------------- ניהול פלטפורמה
     @app.get("/api/admin/overview")
@@ -440,6 +638,7 @@ def create_app(db: Database | None = None, agent: Agent | None = None, runner: A
     def index():
         return FileResponse(STATIC / "index.html", headers={"Cache-Control": "no-cache"})
 
+    app.mount("/demo-store", StaticFiles(directory=STATIC / "demo-store", html=True), name="demo-store")
     app.mount("/static", StaticFiles(directory=STATIC), name="static")
     return app
 
