@@ -3,41 +3,23 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <title>P1 AI — מרכז ההמרות של החנות שלך</title>
-  <meta name="description" content="P1 AI בודק את החנות שלכם בדפדפן אמיתי, מוצא מה עוצר לקוחות מלקנות ומסביר איך לתקן.">
-  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='8' fill='%235b4cf0'/><text x='16' y='22' font-size='15' font-family='Arial' font-weight='700' fill='white' text-anchor='middle'>P1</text></svg>">
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Heebo:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <title>P1 AI</title>
+  <meta name="description" content="P1 AI tests your online store in a real browser, finds what stops customers from buying, and explains how to fix it.">
+  <meta name="theme-color" content="#0e0d22">
+  <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
+  <link rel="preload" href="/static/fonts/heebo-hebrew-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="/static/fonts/inter-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="stylesheet" href="/static/css/app.css">
 </head>
 <body>
-  <div class="shell">
-    <aside class="sidebar" aria-label="ניווט ראשי">
-      <a class="logo" href="#/"><span class="logo-mark">P1</span><span class="logo-text">P1 AI</span></a>
-      <nav class="nav" id="nav"></nav>
-      <div class="sidebar-foot" id="system-status"></div>
-    </aside>
-
-    <div class="main">
-      <header class="topbar">
-        <a class="logo logo-mobile" href="#/"><span class="logo-mark">P1</span><span class="logo-text">P1 AI</span></a>
-        <h1 class="page-title" id="page-title"></h1>
-        <div class="topbar-actions" id="topbar-actions"></div>
-      </header>
-      <main id="view" class="view" tabindex="-1"></main>
-    </div>
-  </div>
-
-  <nav class="bottom-nav" id="bottom-nav" aria-label="ניווט"></nav>
-
+  <div id="root"></div>
   <dialog id="lightbox" class="lightbox">
-    <button class="lightbox-close" aria-label="סגור" data-close>✕</button>
+    <button class="lightbox-close" aria-label="Close" data-close>✕</button>
     <img id="lightbox-img" alt="">
     <p id="lightbox-caption"></p>
   </dialog>
-  <div id="toast" class="toast" role="status" aria-live="polite"></div>
-
+  <dialog id="modal" class="modal"><div class="modal-body" id="modal-body"></div></dialog>
+  <div id="toasts" class="toasts" role="status" aria-live="polite"></div>
   <script type="module" src="/static/js/app.js"></script>
 </body>
 </html>
