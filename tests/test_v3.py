@@ -78,6 +78,18 @@ def test_monitor_tick_queues_due_audits_and_reschedules(tmp_path):
     assert monitor.tick(db, runner) == []  # לא רץ שוב לפני הזמן
 
 
+def test_monitor_keeps_path_and_demo_flag(tmp_path):
+    db = Database(tmp_path / "md.db")
+    runner = AuditRunner(db, shot_root=tmp_path / "s")  # בלי allow_private — כמו בייצור
+    first = runner.enqueue("http://localhost:8000/demo-store/", None, None, demo=True)
+    db.update_audit(first["id"], status="done")
+    past = (datetime.now(timezone.utc) - timedelta(minutes=1)).isoformat()
+    db.upsert_monitor(first["site_id"], None, "weekly", True, past)
+    created = monitor.tick(db, runner)
+    a = db.get_audit(created[0], any_account=True)
+    assert a["start_url"] == "http://localhost:8000/demo-store/" and a["trigger"] == "monitor" and a["is_demo"] == 1
+
+
 def test_change_notifications(tmp_path):
     db = Database(tmp_path / "n.db")
     site = db.get_or_create_site("https://shop.test", "acc")

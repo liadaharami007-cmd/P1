@@ -67,7 +67,7 @@ class AuditRunner:
             self.db.authorize_site(site["id"], user_id)  # המשתמש אישר בעלות/הרשאה
         if demo:
             self.db.mark_demo_site(site["id"])
-        audit = self.db.create_audit(site["id"], url, account_id, user_id, trigger="demo" if demo else trigger)
+        audit = self.db.create_audit(site["id"], url, account_id, user_id, trigger="demo" if demo and trigger == "manual" else trigger)
         self.db.add_event(audit["id"], "info", "הבדיקה נכנסה לתור")
         self._wake.set()
         return audit

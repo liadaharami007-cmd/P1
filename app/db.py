@@ -867,7 +867,8 @@ class Database:
     def due_monitors(self, now: str) -> list[dict]:
         with self._conn() as c:
             return [dict(r) for r in c.execute(
-                "SELECT m.*, s.url AS site_url FROM monitors m JOIN sites s ON s.id = m.site_id "
+                "SELECT m.*, s.url AS site_url, s.is_demo, (SELECT a.start_url FROM audits a WHERE a.site_id = s.id "
+                "ORDER BY a.created_at DESC LIMIT 1) AS last_start_url FROM monitors m JOIN sites s ON s.id = m.site_id "
                 "WHERE m.enabled = 1 AND m.next_run_at <= ?", (now,))]
 
     def monitor_ran(self, site_id: str, audit_id: str | None, next_run_at: str) -> None:

@@ -25,7 +25,9 @@ def tick(db: Database, runner) -> list[str]:
     for m in db.due_monitors(now().isoformat()):
         account = db.get_account(m["account_id"]) if m["account_id"] else None
         try:
-            audit = runner.enqueue(m["site_url"], account, None, trigger="monitor")
+            # אותה כתובת כמו הבדיקה האחרונה (כולל נתיב), וחנות הדמו נשארת מסומנת כדמו
+            audit = runner.enqueue(m.get("last_start_url") or m["site_url"], account, None, trigger="monitor",
+                                   demo=bool(m.get("is_demo")))
             created.append(audit["id"])
             db.monitor_ran(m["site_id"], audit["id"], next_run(m["frequency"]))
             log.info("monitor audit queued", extra={"audit_id": audit["id"]})
