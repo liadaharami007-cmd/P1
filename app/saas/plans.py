@@ -3,11 +3,11 @@ from __future__ import annotations
 
 PLANS: dict[str, dict] = {
     "free": {"name": "Free", "sites": 1, "audits_per_month": 10, "ai_analyses_per_month": 3,
-             "concurrent_audits": 1, "members": 1, "pdf": True},
+             "concurrent_audits": 1, "members": 1, "pdf": True, "monitor": ["monthly"]},
     "pro": {"name": "Pro", "sites": 5, "audits_per_month": 100, "ai_analyses_per_month": 50,
-            "concurrent_audits": 2, "members": 3, "pdf": True},
+            "concurrent_audits": 2, "members": 3, "pdf": True, "monitor": ["weekly", "monthly"]},
     "agency": {"name": "Agency", "sites": 25, "audits_per_month": 500, "ai_analyses_per_month": 300,
-               "concurrent_audits": 3, "members": 10, "pdf": True},
+               "concurrent_audits": 3, "members": 10, "pdf": True, "monitor": ["daily", "weekly", "monthly"]},
 }
 
 

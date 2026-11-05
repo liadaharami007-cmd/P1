@@ -15,7 +15,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Iterator
 
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3
 
 SCHEMA = """
 -- ===== חשבונות ומשתמשים (SaaS) =====
@@ -188,7 +188,68 @@ CREATE TABLE IF NOT EXISTS ai_runs (
 );
 CREATE INDEX IF NOT EXISTS idx_ai_runs_audit ON ai_runs(audit_id);
 CREATE INDEX IF NOT EXISTS idx_ai_runs_account ON ai_runs(account_id, created_at);
+
+-- ===== v3: סוכני לקוח, Fix Studio, Smart Monitor, התראות =====
+CREATE TABLE IF NOT EXISTS agent_runs (
+    id TEXT PRIMARY KEY,
+    audit_id TEXT NOT NULL REFERENCES audits(id) ON DELETE CASCADE,
+    agent TEXT NOT NULL,               -- trust / fast_buyer / price / confused / mobile_ad
+    engine TEXT NOT NULL,              -- rules (מסלול מבוסס כללים) / model:<name> בעתיד
+    status TEXT NOT NULL,              -- queued / running / done / failed / interrupted / skipped
+    started_at TEXT, finished_at TEXT,
+    actions INTEGER NOT NULL DEFAULT 0,
+    current_url TEXT, last_action TEXT, last_screenshot_id TEXT,
+    verdict TEXT, result_json TEXT, error TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_agent_runs_audit ON agent_runs(audit_id);
+CREATE TABLE IF NOT EXISTS fix_previews (
+    id TEXT PRIMARY KEY,
+    finding_id TEXT NOT NULL REFERENCES findings(id) ON DELETE CASCADE,
+    audit_id TEXT NOT NULL,
+    account_id TEXT,
+    status TEXT NOT NULL,              -- running / done / failed / unsupported
+    device TEXT NOT NULL,
+    page_url TEXT,
+    before_shot TEXT, after_shot TEXT,
+    applied_json TEXT,                 -- אילו שינויים הוחלו בפועל בעותק המבודד
+    error TEXT,
+    created_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_fix_previews_finding ON fix_previews(finding_id, created_at);
+CREATE TABLE IF NOT EXISTS monitors (
+    id TEXT PRIMARY KEY,
+    site_id TEXT NOT NULL REFERENCES sites(id) ON DELETE CASCADE,
+    account_id TEXT,
+    frequency TEXT NOT NULL,           -- daily / weekly / monthly
+    enabled INTEGER NOT NULL DEFAULT 1,
+    next_run_at TEXT NOT NULL,
+    last_run_at TEXT,
+    last_audit_id TEXT,
+    created_at TEXT NOT NULL,
+    UNIQUE (site_id)
+);
+CREATE TABLE IF NOT EXISTS notifications (
+    id TEXT PRIMARY KEY,
+    account_id TEXT,
+    site_id TEXT,
+    audit_id TEXT,
+    kind TEXT NOT NULL,                -- new_issues / fixed_issues / score_change / audit_failed / monitor_skipped
+    title TEXT NOT NULL,
+    body TEXT NOT NULL,
+    data_json TEXT,
+    created_at TEXT NOT NULL,
+    read_at TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_notifications_account ON notifications(account_id, created_at);
 """
+
+# עמודות שנוספו בגרסאות מאוחרות לטבלאות קיימות (מיגרציה בטוחה: ADD COLUMN אם חסר)
+ADDED_COLUMNS = {
+    "audit_events": {"agent": "TEXT"},
+    "findings": {"fix_status": "TEXT NOT NULL DEFAULT 'proposed'", "priority": "INTEGER"},
+    "sites": {"authorized_by": "TEXT", "authorized_at": "TEXT", "is_demo": "INTEGER NOT NULL DEFAULT 0"},
+    "audits": {"trigger": "TEXT NOT NULL DEFAULT 'manual'", "cancel_requested": "INTEGER NOT NULL DEFAULT 0"},
+}
 
 
 def _now() -> str:
@@ -232,7 +293,19 @@ class Database:
             conn.execute("PRAGMA foreign_keys = OFF")
             if has_tables and version < 2:
                 _migrate_v1(conn)
+            existing = {r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+            for table, cols in ADDED_COLUMNS.items():
+                if table in existing:
+                    have = _cols(conn, table)
+                    for col, typ in cols.items():
+                        if col not in have:
+                            conn.execute(f"ALTER TABLE {table} ADD COLUMN {col} {typ}")
             conn.executescript(SCHEMA)
+            for table, cols in ADDED_COLUMNS.items():  # טבלאות חדשות לגמרי נוצרו עכשיו בלי העמודות
+                have = _cols(conn, table)
+                for col, typ in cols.items():
+                    if col not in have:
+                        conn.execute(f"ALTER TABLE {table} ADD COLUMN {col} {typ}")
             conn.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
             conn.execute("PRAGMA journal_mode = WAL")
             conn.commit()
@@ -493,12 +566,13 @@ class Database:
         with self._conn() as c:
             c.execute("UPDATE sites SET name = ? WHERE id = ? AND name IS NULL", (name, site_id))
 
-    def create_audit(self, site_id: str, start_url: str, account_id: str | None = None, created_by: str | None = None) -> dict:
+    def create_audit(self, site_id: str, start_url: str, account_id: str | None = None, created_by: str | None = None,
+                     trigger: str = "manual") -> dict:
         audit = {"id": uuid.uuid4().hex, "site_id": site_id, "start_url": start_url, "status": "queued",
-                 "account_id": account_id, "created_at": _now()}
+                 "account_id": account_id, "created_at": _now(), "trigger": trigger}
         with self._conn() as c:
-            c.execute("INSERT INTO audits (id, site_id, account_id, created_by, start_url, status, created_at) "
-                      "VALUES (?, ?, ?, ?, ?, 'queued', ?)", (audit["id"], site_id, account_id, created_by, start_url, audit["created_at"]))
+            c.execute("INSERT INTO audits (id, site_id, account_id, created_by, start_url, status, created_at, \"trigger\") "
+                      "VALUES (?, ?, ?, ?, ?, 'queued', ?, ?)", (audit["id"], site_id, account_id, created_by, start_url, audit["created_at"], trigger))
         return audit
 
     def claim_next_queued(self) -> dict | None:
@@ -539,7 +613,7 @@ class Database:
         return d
 
     def get_audit(self, audit_id: str, account_id: str | None = None, *, any_account: bool = False) -> dict | None:
-        q = ("SELECT a.*, s.url AS site_url, s.name AS site_name FROM audits a JOIN sites s ON s.id = a.site_id WHERE a.id = ?")
+        q = ("SELECT a.*, s.url AS site_url, s.name AS site_name, s.is_demo FROM audits a JOIN sites s ON s.id = a.site_id WHERE a.id = ?")
         args: tuple = (audit_id,)
         if not any_account:
             q += " AND a.account_id IS ?"
@@ -550,7 +624,7 @@ class Database:
 
     def list_audits(self, account_id: str | None = None, site_id: str | None = None, limit: int = 50) -> list[dict]:
         q = ("SELECT a.id, a.site_id, a.start_url, a.status, a.score, a.category_scores_json, a.error, a.ai_status, "
-             "a.created_at, a.started_at, a.finished_at, s.url AS site_url, s.name AS site_name, "
+             "a.created_at, a.started_at, a.finished_at, a.\"trigger\", s.url AS site_url, s.name AS site_name, s.is_demo, "
              "(SELECT COUNT(*) FROM findings f WHERE f.audit_id = a.id AND f.source = 'measured') AS finding_count "
              "FROM audits a JOIN sites s ON s.id = a.site_id WHERE a.account_id IS ?")
         args: tuple = (account_id,)
@@ -576,15 +650,15 @@ class Database:
 
     # ---------- יומן פעולות חי ----------
     def add_event(self, audit_id: str, kind: str, message: str, page_url: str | None = None,
-                  screenshot_id: str | None = None, ref: str | None = None) -> None:
+                  screenshot_id: str | None = None, ref: str | None = None, agent: str | None = None) -> None:
         with self._conn() as c:
-            c.execute("INSERT INTO audit_events (audit_id, at, kind, message, page_url, screenshot_id, ref) VALUES (?, ?, ?, ?, ?, ?, ?)",
-                      (audit_id, _now(), kind, message[:500], page_url, screenshot_id, ref))
+            c.execute("INSERT INTO audit_events (audit_id, at, kind, message, page_url, screenshot_id, ref, agent) "
+                      "VALUES (?, ?, ?, ?, ?, ?, ?, ?)", (audit_id, _now(), kind, message[:500], page_url, screenshot_id, ref, agent))
 
     def get_events(self, audit_id: str, after_id: int = 0, limit: int = 500) -> list[dict]:
         with self._conn() as c:
             return [dict(r) for r in c.execute(
-                "SELECT id, at, kind, message, page_url, screenshot_id, ref FROM audit_events WHERE audit_id = ? AND id > ? "
+                "SELECT id, at, kind, message, page_url, screenshot_id, ref, agent FROM audit_events WHERE audit_id = ? AND id > ? "
                 "ORDER BY id LIMIT ?", (audit_id, after_id, limit))]
 
     # ---------- צילומי מסך ----------
@@ -676,3 +750,155 @@ class Database:
                              "WHERE audit_id = ? ORDER BY id", (audit_id,)).fetchall()
         return [{"persona": r["persona"], "verdict": r["verdict"], "blockers": json.loads(r["blockers_json"]),
                  "positives": json.loads(r["positives_json"])} for r in rows]
+
+    # ================================================================ Fix Studio
+    def set_fix_status(self, finding_id: str, status: str, account_id: str | None) -> bool:
+        with self._conn() as c:
+            return c.execute("UPDATE findings SET fix_status = ? WHERE id = ? AND audit_id IN "
+                             "(SELECT id FROM audits WHERE account_id IS ?)", (status, finding_id, account_id)).rowcount > 0
+
+    def get_finding(self, finding_id: str, account_id: str | None) -> dict | None:
+        with self._conn() as c:
+            row = c.execute("SELECT f.* FROM findings f JOIN audits a ON a.id = f.audit_id WHERE f.id = ? AND a.account_id IS ?",
+                            (finding_id, account_id)).fetchone()
+        return self._finding_row(row) if row else None
+
+    def set_priorities(self, ranked: list[tuple[str, int]]) -> None:
+        with self._conn() as c:
+            c.executemany("UPDATE findings SET priority = ? WHERE id = ?", [(p, fid) for fid, p in ranked])
+
+    def add_fix_preview(self, **row: Any) -> str:
+        pid = uuid.uuid4().hex
+        with self._conn() as c:
+            c.execute("INSERT INTO fix_previews (id, finding_id, audit_id, account_id, status, device, page_url, before_shot, "
+                      "after_shot, applied_json, error, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                      (pid, row["finding_id"], row["audit_id"], row.get("account_id"), row["status"], row.get("device", "desktop"),
+                       row.get("page_url"), row.get("before_shot"), row.get("after_shot"),
+                       json.dumps(row.get("applied")) if row.get("applied") is not None else None, row.get("error"), _now()))
+        return pid
+
+    def latest_previews(self, audit_id: str) -> dict[str, dict]:
+        with self._conn() as c:
+            rows = c.execute("SELECT * FROM fix_previews WHERE audit_id = ? ORDER BY created_at", (audit_id,)).fetchall()
+        out: dict[str, dict] = {}
+        for r in rows:
+            d = dict(r)
+            d["applied"] = json.loads(d.pop("applied_json")) if d.get("applied_json") else None
+            out[d["finding_id"]] = d
+        return out
+
+    # ================================================================ סוכני לקוח
+    def create_agent_runs(self, audit_id: str, agents: list[str], engine: str) -> None:
+        with self._conn() as c:
+            for a in agents:
+                if not c.execute("SELECT 1 FROM agent_runs WHERE audit_id = ? AND agent = ?", (audit_id, a)).fetchone():
+                    c.execute("INSERT INTO agent_runs (id, audit_id, agent, engine, status) VALUES (?, ?, ?, ?, 'queued')",
+                              (uuid.uuid4().hex, audit_id, a, engine))
+
+    def update_agent_run(self, audit_id: str, agent: str, **fields: Any) -> None:
+        allowed = {"status", "started_at", "finished_at", "actions", "current_url", "last_action", "last_screenshot_id",
+                   "verdict", "result_json", "error"}
+        sets = [(k, v) for k, v in fields.items() if k in allowed]
+        if sets:
+            with self._conn() as c:
+                c.execute(f"UPDATE agent_runs SET {', '.join(k + ' = ?' for k, _ in sets)} WHERE audit_id = ? AND agent = ?",
+                          (*[v for _, v in sets], audit_id, agent))
+
+    def get_agent_runs(self, audit_id: str) -> list[dict]:
+        with self._conn() as c:
+            rows = c.execute("SELECT * FROM agent_runs WHERE audit_id = ? ORDER BY rowid", (audit_id,)).fetchall()
+        out = []
+        for r in rows:
+            d = dict(r)
+            d["result"] = json.loads(d.pop("result_json")) if d.get("result_json") else None
+            out.append(d)
+        return out
+
+    def interrupt_running_agents(self) -> int:
+        with self._conn() as c:
+            return c.execute("UPDATE agent_runs SET status = 'interrupted', error = 'השרת הופעל מחדש' "
+                             "WHERE status IN ('queued','running')").rowcount
+
+    def is_cancel_requested(self, audit_id: str) -> bool:
+        with self._conn() as c:
+            r = c.execute("SELECT cancel_requested FROM audits WHERE id = ?", (audit_id,)).fetchone()
+        return bool(r and r[0])
+
+    # ================================================================ אתרים מורשים + Smart Monitor + התראות
+    def authorize_site(self, site_id: str, user_id: str | None) -> None:
+        with self._conn() as c:
+            c.execute("UPDATE sites SET authorized_by = COALESCE(authorized_by, ?), authorized_at = COALESCE(authorized_at, ?) WHERE id = ?",
+                      (user_id, _now(), site_id))
+
+    def mark_demo_site(self, site_id: str) -> None:
+        with self._conn() as c:
+            c.execute("UPDATE sites SET is_demo = 1 WHERE id = ?", (site_id,))
+
+    def get_site(self, site_id: str, account_id: str | None) -> dict | None:
+        with self._conn() as c:
+            row = c.execute("SELECT * FROM sites WHERE id = ? AND account_id IS ?", (site_id, account_id)).fetchone()
+        return dict(row) if row else None
+
+    def sites_overview(self, account_id: str | None) -> list[dict]:
+        with self._conn() as c:
+            rows = c.execute("""
+              SELECT s.*, m.frequency AS monitor_frequency, m.enabled AS monitor_enabled, m.next_run_at AS monitor_next,
+                (SELECT COUNT(*) FROM audits a WHERE a.site_id = s.id) AS audits,
+                (SELECT a.score FROM audits a WHERE a.site_id = s.id AND a.status='done' ORDER BY a.created_at DESC LIMIT 1) AS last_score,
+                (SELECT a.finished_at FROM audits a WHERE a.site_id = s.id AND a.status='done' ORDER BY a.created_at DESC LIMIT 1) AS last_audit_at,
+                (SELECT a.id FROM audits a WHERE a.site_id = s.id AND a.status='done' ORDER BY a.created_at DESC LIMIT 1) AS last_audit_id
+              FROM sites s LEFT JOIN monitors m ON m.site_id = s.id WHERE s.account_id IS ? ORDER BY s.created_at DESC""", (account_id,)).fetchall()
+        return [dict(r) for r in rows]
+
+    def upsert_monitor(self, site_id: str, account_id: str | None, frequency: str, enabled: bool, next_run_at: str) -> None:
+        with self._conn() as c:
+            if c.execute("SELECT 1 FROM monitors WHERE site_id = ?", (site_id,)).fetchone():
+                c.execute("UPDATE monitors SET frequency = ?, enabled = ?, next_run_at = ? WHERE site_id = ?",
+                          (frequency, int(enabled), next_run_at, site_id))
+            else:
+                c.execute("INSERT INTO monitors (id, site_id, account_id, frequency, enabled, next_run_at, created_at) "
+                          "VALUES (?, ?, ?, ?, ?, ?, ?)", (uuid.uuid4().hex, site_id, account_id, frequency, int(enabled), next_run_at, _now()))
+
+    def get_monitor(self, site_id: str) -> dict | None:
+        with self._conn() as c:
+            row = c.execute("SELECT * FROM monitors WHERE site_id = ?", (site_id,)).fetchone()
+        return dict(row) if row else None
+
+    def due_monitors(self, now: str) -> list[dict]:
+        with self._conn() as c:
+            return [dict(r) for r in c.execute(
+                "SELECT m.*, s.url AS site_url FROM monitors m JOIN sites s ON s.id = m.site_id "
+                "WHERE m.enabled = 1 AND m.next_run_at <= ?", (now,))]
+
+    def monitor_ran(self, site_id: str, audit_id: str | None, next_run_at: str) -> None:
+        with self._conn() as c:
+            c.execute("UPDATE monitors SET last_run_at = ?, last_audit_id = COALESCE(?, last_audit_id), next_run_at = ? WHERE site_id = ?",
+                      (_now(), audit_id, next_run_at, site_id))
+
+    def add_notification(self, account_id: str | None, kind: str, title: str, body: str, site_id: str | None = None,
+                         audit_id: str | None = None, data: Any = None) -> None:
+        with self._conn() as c:
+            c.execute("INSERT INTO notifications (id, account_id, site_id, audit_id, kind, title, body, data_json, created_at) "
+                      "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)", (uuid.uuid4().hex, account_id, site_id, audit_id, kind, title, body,
+                                                             json.dumps(data, ensure_ascii=False) if data is not None else None, _now()))
+
+    def list_notifications(self, account_id: str | None, limit: int = 50) -> list[dict]:
+        with self._conn() as c:
+            rows = c.execute("SELECT * FROM notifications WHERE account_id IS ? ORDER BY created_at DESC LIMIT ?", (account_id, limit)).fetchall()
+        out = []
+        for r in rows:
+            d = dict(r)
+            d["data"] = json.loads(d.pop("data_json")) if d.get("data_json") else None
+            out.append(d)
+        return out
+
+    def mark_notifications_read(self, account_id: str | None) -> None:
+        with self._conn() as c:
+            c.execute("UPDATE notifications SET read_at = ? WHERE account_id IS ? AND read_at IS NULL", (_now(), account_id))
+
+    def site_history(self, site_id: str) -> list[dict]:
+        with self._conn() as c:
+            rows = c.execute("SELECT id, score, category_scores_json, finished_at, \"trigger\" FROM audits WHERE site_id = ? AND status = 'done' "
+                             "ORDER BY created_at", (site_id,)).fetchall()
+        return [{"id": r["id"], "score": r["score"], "categories": json.loads(r["category_scores_json"]) if r["category_scores_json"] else None,
+                 "at": r["finished_at"], "trigger": r["trigger"]} for r in rows]
