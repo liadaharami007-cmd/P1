@@ -117,7 +117,8 @@ CREATE TABLE IF NOT EXISTS audit_events (
     kind TEXT NOT NULL,                -- navigate / loaded / click / type / select / screenshot / step_* / error / ai / info
     message TEXT NOT NULL,
     page_url TEXT,
-    screenshot_id TEXT
+    screenshot_id TEXT,
+    ref TEXT                           -- מפתח השלב (home / product / ...) כשרלוונטי
 );
 CREATE INDEX IF NOT EXISTS idx_events_audit ON audit_events(audit_id, id);
 CREATE TABLE IF NOT EXISTS screenshots (
@@ -575,15 +576,15 @@ class Database:
 
     # ---------- יומן פעולות חי ----------
     def add_event(self, audit_id: str, kind: str, message: str, page_url: str | None = None,
-                  screenshot_id: str | None = None) -> None:
+                  screenshot_id: str | None = None, ref: str | None = None) -> None:
         with self._conn() as c:
-            c.execute("INSERT INTO audit_events (audit_id, at, kind, message, page_url, screenshot_id) VALUES (?, ?, ?, ?, ?, ?)",
-                      (audit_id, _now(), kind, message[:500], page_url, screenshot_id))
+            c.execute("INSERT INTO audit_events (audit_id, at, kind, message, page_url, screenshot_id, ref) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                      (audit_id, _now(), kind, message[:500], page_url, screenshot_id, ref))
 
     def get_events(self, audit_id: str, after_id: int = 0, limit: int = 500) -> list[dict]:
         with self._conn() as c:
             return [dict(r) for r in c.execute(
-                "SELECT id, at, kind, message, page_url, screenshot_id FROM audit_events WHERE audit_id = ? AND id > ? "
+                "SELECT id, at, kind, message, page_url, screenshot_id, ref FROM audit_events WHERE audit_id = ? AND id > ? "
                 "ORDER BY id LIMIT ?", (audit_id, after_id, limit))]
 
     # ---------- צילומי מסך ----------

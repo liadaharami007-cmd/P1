@@ -144,7 +144,7 @@ figcaption {{ font-size: 8.5pt; color: #777a8c; }} .page-break {{ break-before: 
 
 {comp_html}
 
-<h2 class="page-break">ממצאים שנבדקו בפועל ({len(measured)}) <span class="src src-m">נבדק בפועל</span></h2>
+<h2>ממצאים שנבדקו בפועל ({len(measured)}) <span class="src src-m">נבדק בפועל</span></h2>
 {''.join(finding(f) for f in measured) or '<p class="muted">לא נמצאו בעיות בבדיקות האוטומטיות.</p>'}
 
 {f'<h2>תובנות AI ({len(ai_f)}) <span class="src src-ai">השערת AI</span></h2>' + ''.join(finding(f) for f in ai_f) if ai_f else ''}
@@ -154,7 +154,7 @@ figcaption {{ font-size: 8.5pt; color: #777a8c; }} .page-break {{ break-before: 
 <p class="small muted">אלה לקוחות מדומים ולא נתוני התנהגות של לקוחות אמיתיים.</p>
 {personas_html}
 
-<h2 class="page-break">מסע הרכישה כפי שהדפדפן ביצע אותו</h2>
+<h2>מסע הרכישה כפי שהדפדפן ביצע אותו</h2>
 <table><tr><th>שלב</th><th>תוצאה</th><th>פירוט</th></tr>
 {''.join(f"<tr><td>{e(s['title'])}</td><td>{STEP[s['status']]}</td><td>{e(s['detail'] or '')}</td></tr>" for s in r['steps'])}</table>
 <p class="small muted">הבדיקה לא ממלאת פרטים אישיים ולא מבצעת הזמנה — היא עוצרת בכניסה לקופה.</p>

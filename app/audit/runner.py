@@ -106,8 +106,8 @@ class AuditRunner:
             progress.append({"key": key, "message": msg, "at": _now()})
             self.db.update_audit(audit_id, progress=progress)
 
-        async def on_event(kind: str, msg: str, page_url: str | None, shot: str | None):
-            self.db.add_event(audit_id, kind, msg, page_url, shot)
+        async def on_event(kind: str, msg: str, page_url: str | None, shot: str | None, ref: str | None = None):
+            self.db.add_event(audit_id, kind, msg, page_url, shot, ref)
 
         def save_shot(label: str, device: str, page_url: str | None, path: str) -> str:
             return self.db.add_screenshot(audit_id, label, device, page_url, path)

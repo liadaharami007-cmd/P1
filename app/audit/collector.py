@@ -27,7 +27,7 @@ from .browser import HostGuard, launch, new_context
 
 ProgressCb = Callable[[str, str], Awaitable[None]]
 # (kind, message, page_url, screenshot_id) — יומן פעולות חי של הסוכן
-EventCb = Callable[[str, str, str | None, str | None], Awaitable[None]]
+EventCb = Callable[[str, str, str | None, str | None, str | None], Awaitable[None]]
 
 MAX_NAVIGATIONS = 30        # הגבלת משאבים: מספר מעברי עמוד מקסימלי לבדיקה
 MAX_LINKS_TO_CHECK = 25     # קישורים פנימיים לבדיקת "קישור שבור"
@@ -171,20 +171,23 @@ class Collector:
         self.navigations = 0
         self._logged_steps = 0
         self.excerpts: dict[str, str] = {}
+        self._phase: str | None = None
 
     # ------------------------------------------------------------ עזר
     async def _report(self, key: str, msg: str):
+        self._phase = key
         if self.progress:
             await self.progress(key, msg)
 
-    async def _log(self, kind: str, message: str, url: str | None = None, shot: str | None = None):
+    async def _log(self, kind: str, message: str, url: str | None = None, shot: str | None = None,
+                   ref: str | None = None):
         if self.on_event:
-            await self.on_event(kind, message, url, shot)
+            await self.on_event(kind, message, url, shot, ref or self._phase)
 
     async def _flush_steps(self):
         """מתעד ביומן כל שלב שהסתיים מאז הקריאה הקודמת."""
         for st in self.out.steps[self._logged_steps:]:
-            await self._log(f"step_{st.status}", f"{st.title}: {st.detail}", st.page_url, st.screenshot_id)
+            await self._log(f"step_{st.status}", f"{st.title}: {st.detail}", st.page_url, st.screenshot_id, st.key)
         self._logged_steps = len(self.out.steps)
 
     async def _excerpt(self, page: Page, key: str):
@@ -208,7 +211,9 @@ class Collector:
             return None
         sid = self.save_screenshot(label, device, page.url, str(path)) if self.save_screenshot else None
         self.out.screenshots.append({"id": sid, "label": label, "device": device, "page_url": page.url, "path": str(path)})
-        await self._log("screenshot", f"צילום מסך: {label} ({'טלפון' if device == 'mobile' else 'מחשב'})", page.url, sid)
+        names = {"home": "עמוד הבית", "product": "עמוד מוצר", "after-add-to-cart": "אחרי הוספה לסל", "cart": "עגלה",
+                 "checkout": "קופה", "search": "תוצאות חיפוש"}
+        await self._log("screenshot", f"צילום מסך: {names.get(label, label)} ({'טלפון' if device == 'mobile' else 'מחשב'})", page.url, sid)
         return sid
 
     def _same_site(self, url: str) -> bool:
@@ -355,6 +360,7 @@ class Collector:
         return True
 
     async def _trust(self, links: list[dict]):
+        await self._report("trust", "בודק דפי אמון ומדיניות…")
         st = self._step("trust", "דפי אמון ומדיניות")
         found: dict[str, str | None] = {}
         for key, rx in TRUST_LINKS.items():
@@ -633,6 +639,7 @@ class Collector:
 
     async def _search(self, page: Page):
         st = self._step("search", "חיפוש באתר")
+        self._phase = "search"
         if not self.out.facts["home"].get("has_search"):
             st.status, st.detail = "warning", "לא נמצאה תיבת חיפוש בעמוד הבית"
             self.out.facts["search"] = {"available": False}
