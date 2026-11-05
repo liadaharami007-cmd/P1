@@ -112,4 +112,5 @@ def test_migration_from_v1_schema(tmp_path):
     user, acc = db.create_user_with_account("o@o.co", "x", None, "Old")
     assert db.adopt_orphan_data(acc["id"]) >= 2
     assert db.get_audit("a1", acc["id"])["site_url"] == "https://old.co.il"
-    assert sqlite3.connect(path).execute("PRAGMA user_version").fetchone()[0] == 2
+    from app.db import SCHEMA_VERSION
+    assert sqlite3.connect(path).execute("PRAGMA user_version").fetchone()[0] == SCHEMA_VERSION
