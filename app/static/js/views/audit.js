@@ -2,13 +2,13 @@
 // בדיקה בודדת: מצב חי (יומן פעולות + צילום אחרון) ← דוח מלא.
 import { refreshUsage, setTitle } from "../app.js";
 import { lang, t } from "../i18n.js";
+import { AGENT_META, agentName, missionControl } from "./mission.js";
 import {
   $, $$, animateRings, api, categoryBars, CATEGORIES, compareBars, delta, esc, evidenceThumb, fmtDate, fmtDuration,
   gradeLabel, hostOf, icon, openModal, scoreRing, sevBadge, srcBadge, STEP_ICON, stepBadge, toast,
 } from "../ui.js";
 
-const PHASES = ["home", "trust", "links", "product", "add_to_cart", "cart", "checkout", "search", "mobile"];
-const FEED_ICO = { navigate: "↗", loaded: "•", click: "◉", type: "⌨", select: "☰", screenshot: "▣", step_passed: "✓",
+const FEED_ICO = { navigate: "↗", loaded: "•", click: "◉", type: "⌨", select: "☰", screenshot: "▣", scroll: "↓", step_passed: "✓",
   step_failed: "✕", step_warning: "!", step_skipped: "–", error: "!", ai: "✦", info: "i", device: "▯" };
 const PERSONA_EMOJI = { price_seeker: "🏷️", wary_newcomer: "🧐", in_a_hurry: "⚡", unclear_benefits: "🤔", mobile_ad_visitor: "📱" };
 const RULE_PERSONA = { skeptic: ["🧐", "Skeptic", "הלקוח החשדן"], bargain: ["🏷️", "Bargain hunter", "מחפש המחיר"],
@@ -17,107 +17,31 @@ const VERDICT_CLS = { likely_buy: "st-passed", hesitant: "st-warning", likely_le
 
 /** @param {HTMLElement} view @param {{id: string}} params @param {any} app */
 export async function auditView(view, { id }, app) {
-  /** @type {any} */ let timer = null; /** @type {any} */ let clock = null; let alive = true;
-  let lastEvent = 0; let mode = "";
-
-  const live = async () => {
-    const ev = await api(`/api/audits/${id}/events?after=${lastEvent}`);
-    if (!alive) return;
-    if (ev.status === "done" || ev.status === "failed") { await report(); return; }
-    if (mode !== "live") { mode = "live"; renderLive(view, ev); clearInterval(clock); clock = setInterval(() => tick(view, ev), 1000); }
-    appendEvents(view, ev.events);
-    if (ev.events.length) lastEvent = ev.events[ev.events.length - 1].id;
-    updateLive(view, ev);
-    timer = setTimeout(live, 1200);
-  };
+  /** @type {any} */ let timer = null; let alive = true;
+  /** @type {(() => void) | null} */ let stopMc = null;
 
   const report = async () => {
-    clearInterval(clock);
     const a = await api(`/api/audits/${id}`);
     if (!alive) return;
-    if (a.status === "failed") { mode = "failed"; renderFailed(view, a); return; }
+    if (a.status === "failed" || a.status === "stopped") { renderFailed(view, a); return; }
     const keepTab = /** @type {HTMLElement|null} */ (view.querySelector(".tabs button.active"))?.dataset.tab;
-    mode = "report";
     renderReport(view, a, app, keepTab);
     if (a.ai_status === "running" || a.ai_status === "pending") timer = setTimeout(report, 3000);
     else refreshUsage();
   };
 
-  await live();
-  return () => { alive = false; clearTimeout(timer); clearInterval(clock); };
-}
-
-// ---------------------------------------------------------------- מצב חי
-/** @param {HTMLElement} view @param {any} ev */
-function renderLive(view, ev) {
-  setTitle(hostOf(ev.start_url));
-  view.innerHTML = `<div class="stack">
-    <div class="card"><div class="row" style="justify-content:space-between">
-      <div><div class="row"><span class="live-dot"></span><h2 style="font-size:16px">${ev.status === "queued" ? t("live.queued") : t("live.title")}</h2></div>
-        <div class="small muted ltr" style="margin-top:4px">${esc(ev.start_url)}</div></div>
-      <div class="row" style="gap:20px"><div><div class="tiny muted">${t("live.elapsed")}</div><div class="kpi-num num" id="elapsed">0:00</div></div></div></div>
-      <div class="phases" id="phases" style="margin-top:16px">${PHASES.map((p) => `<span class="phase" data-p="${p}">${t("phase." + p)}</span>`).join("")}
-        <span class="phase" data-p="ai">✦ ${t("live.ai")}</span></div></div>
-    <div class="live-grid">
-      <div class="card"><div class="card-head"><h3>${t("live.activity")}</h3><span class="tiny muted" id="ev-count"></span></div>
-        <div class="feed" id="feed"></div></div>
-      <div class="card"><div class="card-head"><h3>${t("live.latestShot")}</h3><span class="badge outline tiny" id="shot-label"></span></div>
-        <div class="live-shot" id="live-shot"><span class="muted small">${t("live.noShot")}</span></div>
-        <div class="small muted truncate ltr" style="margin-top:10px" id="cur-url"></div>
-        <p class="tiny muted" style="margin-top:10px">${t("live.safe")}</p></div>
-    </div></div>`;
-}
-
-/** @param {HTMLElement} view @param {any} ev */
-function tick(view, ev) {
-  const el = view.querySelector("#elapsed");
-  if (el && ev.started_at) el.textContent = fmtDuration(Date.now() - new Date(ev.started_at).getTime());
-}
-
-/** @param {HTMLElement} view @param {any[]} events */
-function appendEvents(view, events) {
-  const feed = /** @type {HTMLElement|null} */ (view.querySelector("#feed"));
-  if (!feed || !events.length) return;
-  const start = feed.dataset.t0 ? +feed.dataset.t0 : new Date(events[0].at).getTime();
-  feed.dataset.t0 = String(start);
-  feed.insertAdjacentHTML("beforeend", events.map((e) => feedItem(e, start)).join(""));
-  feed.scrollTop = feed.scrollHeight;
-  const shot = [...events].reverse().find((e) => e.kind === "screenshot" && e.screenshot_id) || [...events].reverse().find((e) => e.screenshot_id);
-  if (shot) {
-    /** @type {HTMLElement} */ (view.querySelector("#live-shot")).innerHTML = `<button class="tl-shot" style="width:100%;height:100%" data-shot="${shot.screenshot_id}" data-caption="${esc(shot.message)}"><img src="/api/screenshots/${shot.screenshot_id}" alt="${esc(shot.message)}"></button>`;
-    /** @type {HTMLElement} */ (view.querySelector("#shot-label")).textContent = shot.message.replace(/^[^:]+:\s*/, "");
-  }
-  const url = [...events].reverse().find((e) => e.page_url);
-  if (url) /** @type {HTMLElement} */ (view.querySelector("#cur-url")).textContent = url.page_url;
-  const phases = /** @type {HTMLElement} */ (view.querySelector("#phases"));
-  for (const e of events) {
-    if (e.kind.startsWith("step_") && e.ref) phases.querySelector(`[data-p="${e.ref}"]`)?.setAttribute("class", `phase ${e.kind.slice(5)}`);
-    if (e.kind === "ai") phases.querySelector('[data-p="ai"]')?.setAttribute("class", "phase active");
-  }
-  /** @type {HTMLElement} */ (view.querySelector("#ev-count")).textContent = String(feed.children.length);
-}
-
-/** @param {any} e @param {number} t0 */
-function feedItem(e, t0) {
-  const sec = Math.max(0, Math.round((new Date(e.at).getTime() - t0) / 1000));
-  return `<div class="feed-item"><span class="feed-time">+${fmtDuration(sec * 1000)}</span>
-    <span class="feed-ico k-${e.kind}">${/** @type {any} */ (FEED_ICO)[e.kind] || "•"}</span>
-    <span>${esc(e.message)}${e.page_url && e.kind === "navigate" ? `<span class="feed-url ltr">${esc(e.page_url)}</span>` : ""}</span></div>`;
-}
-
-/** @param {HTMLElement} view @param {any} ev */
-function updateLive(view, ev) {
-  const cur = ev.progress?.length ? ev.progress[ev.progress.length - 1].key : null;
-  $$(".phase", view).forEach((p) => {
-    if (p.dataset.p === cur && !/passed|failed|warning/.test(p.className)) p.classList.add("active");
-    else if (p.dataset.p !== cur) p.classList.remove("active");
-  });
+  const ev = await api(`/api/audits/${id}/events?after=999999999`);
+  const runs = (await api(`/api/audits/${id}`)).agents || [];
+  const busy = ev.status === "running" || ev.status === "queued" || runs.some((/** @type {any} */ r) => r.status === "running" || r.status === "queued");
+  if (busy) stopMc = missionControl(view, id, () => { stopMc = null; if (alive) report(); });
+  else await report();
+  return () => { alive = false; clearTimeout(timer); if (stopMc) stopMc(); };
 }
 
 function renderFailed(/** @type {HTMLElement} */ view, /** @type {any} */ a) {
   setTitle(hostOf(a.start_url));
   view.innerHTML = `<div class="card" style="max-width:720px"><div class="notice notice-error"><span class="ico">!</span><div>
-    <strong>${t("report.failed")}</strong><div class="ltr small">${esc(a.start_url)}</div><div>${esc(a.error || "")}</div></div></div>
+    <strong>${a.status === "stopped" ? t("mc.stopped") : t("report.failed")}</strong><div class="ltr small">${esc(a.start_url)}</div><div>${esc(a.error || "")}</div></div></div>
     <div class="row" style="margin-top:16px"><a class="btn" href="#/audits">${t("report.back")}</a>
     <button class="btn btn-ghost btn-danger" id="del">${icon("trash")} ${t("common.delete")}</button></div></div>`;
   /** @type {HTMLElement} */ (view.querySelector("#del")).onclick = () => del(a.id);
@@ -137,6 +61,8 @@ function renderReport(view, a, app, keepTab) {
   const canRunAi = aiReady && ["not_configured", "failed", "partial", "quota_exceeded"].includes(a.ai_status);
   setTitle(a.site_name || hostOf(a.site_url), `
     <a class="btn btn-sm" href="/api/audits/${a.id}/report.pdf" id="pdf">${icon("download")}<span class="btn-label">${t("report.pdf")}</span></a>
+    <a class="btn btn-sm btn-primary" href="#/fix/${a.id}">${icon("wand")}<span class="btn-label">${t("fix.title")}</span></a>
+    ${a.agents?.some((/** @type {any} */ r) => ["interrupted", "failed"].includes(r.status)) ? `<button class="btn btn-sm" id="resume">${icon("play")}<span class="btn-label">${t("mc.resume")}</span></button>` : ""}
     ${canRunAi ? `<button class="btn btn-sm" id="run-ai">${icon("sparkle")}<span class="btn-label">${t("report.runAi")}</span></button>` : ""}
     <button class="btn btn-sm" id="rerun">${icon("refresh")}<span class="btn-label">${t("report.rerun")}</span></button>
     <button class="icon-btn" id="del" aria-label="${t("common.delete")}">${icon("trash")}</button>`);
@@ -148,6 +74,7 @@ function renderReport(view, a, app, keepTab) {
   const focus = new URLSearchParams(location.hash.split("?")[1] || "").get("f");
   const tab = keepTab || (focus ? "findings" : "overview");
   const tabs = [["overview", t("report.tab.overview"), ""], ["findings", t("report.tab.findings"), measured.length + aiF.length],
+    ["agents", t("agents.tab"), (a.agents || []).filter((/** @type {any} */ r) => r.status === "done").length + "/" + (a.agents || []).length],
     ["journey", t("report.tab.journey"), `${passed}/${tested}`], ["customers", t("report.tab.customers"), ""],
     ["evidence", t("report.tab.evidence"), a.screenshots.length], ["data", t("report.tab.data"), ""]];
 
@@ -174,7 +101,8 @@ function renderReport(view, a, app, keepTab) {
       <div data-panel="journey" ${tab === "journey" ? "" : "hidden"}>${journeyTab(a)}</div>
       <div data-panel="customers" ${tab === "customers" ? "" : "hidden"}>${customersTab(a)}</div>
       <div data-panel="evidence" ${tab === "evidence" ? "" : "hidden"}>${evidenceTab(a)}</div>
-      <div data-panel="data" ${tab === "data" ? "" : "hidden"}>${dataTab(a)}</div></div>
+      <div data-panel="data" ${tab === "data" ? "" : "hidden"}>${dataTab(a)}</div>
+      <div data-panel="agents" ${tab === "agents" ? "" : "hidden"}>${agentsTab(a)}</div></div>
   </div>`;
   animateRings(view);
 
@@ -197,6 +125,12 @@ function renderReport(view, a, app, keepTab) {
   bindStatusSelects(view);
   $("#meth", view).onclick = () => methodology();
   $("#del").onclick = () => del(a.id);
+  $$("[data-agent-path]", view).forEach((b) => b.addEventListener("click", () => showAgentPath(a.id, b.dataset.agentPath)));
+  const resume = $("#resume");
+  if (resume) resume.onclick = async () => {
+    try { await api(`/api/audits/${a.id}/resume`, { method: "POST" }); location.reload(); }
+    catch (e) { toast(/** @type {Error} */ (e).message, "error"); }
+  };
   $("#pdf").onclick = () => toast(t("report.pdfPreparing"), "info");
   $("#rerun").onclick = async () => {
     if (!confirm(t("report.confirmRerun"))) return;
@@ -247,9 +181,15 @@ function bindStatusSelects(view) {
 /** @param {any} a */
 function overviewTab(a) {
   const an = a.ai.analysis;
+  const top = a.findings.filter((/** @type {any} */ f) => f.source === "measured" && f.priority && !["done", "dismissed"].includes(f.status))
+    .sort((/** @type {any} */ x, /** @type {any} */ y) => x.priority - y.priority).slice(0, 3);
+  const first = top.length ? `<div class="card prio-card"><div class="card-head"><div><h3>${t("prio.title")}</h3><div class="card-sub">${t("prio.sub")}</div></div>${srcBadge("measured")}</div>
+    <div class="prio-grid">${top.map((/** @type {any} */ f, /** @type {number} */ i) => `<div class="prio-item"><span class="prio-n">${i + 1}</span>
+      <div style="flex:1;min-width:0"><div style="font-weight:600">${esc(f.title)}</div><div class="row" style="margin-top:6px">${sevBadge(f.severity)}<span class="tiny muted">${t("impact." + f.impact)}</span></div>
+      <a class="btn btn-sm" style="margin-top:10px" href="#/fix/${a.id}?f=${f.id}">${icon("wand")} ${t("fix.open")}</a></div></div>`).join("")}</div></div>` : "";
   const plan = an?.action_plan?.length ? an.action_plan : a.action_plan_rules;
   const c = a.comparison;
-  return `<div class="stack">
+  return `<div class="stack">${first}
     ${an ? `<div class="grid g-main"><div class="card"><div class="card-head"><h3>${t("ai.summary")}</h3>${srcBadge("ai")}</div>
         <p style="white-space:pre-line">${esc(an.executive_summary)}</p><div class="divider"></div>
         <h5 class="small muted" style="margin-bottom:4px">${t("ai.readiness")}</h5><p>${esc(an.conversion_readiness)}</p></div>
@@ -297,7 +237,7 @@ export function findingCard(f, extraMeta = "") {
   const shot = f.evidence?.screenshot_id;
   const isAi = f.source === "ai";
   return `<details class="finding ${f.status === "done" ? "done" : ""}" data-fid="${f.id}" data-src="${f.source}" data-cat="${f.category}" data-sev="${f.severity}" data-st="${f.status}">
-    <summary>${icon("chevron", "chev")}<div style="flex:1;min-width:0"><div class="finding-title">${esc(f.title)}</div>
+    <summary>${icon("chevron", "chev")}${f.priority ? `<span class="fs-prio num" title="${t("fix.priority")}">${f.priority}</span>` : ""}<div style="flex:1;min-width:0"><div class="finding-title">${esc(f.title)}</div>
       <div class="finding-meta">${sevBadge(f.severity)}${srcBadge(f.source)}<span class="badge outline">${esc(CATEGORIES[f.category] || f.category)}</span>
         ${isAi ? `<span class="tiny muted">${t("conf." + f.evidence.confidence)}</span>` : `<span class="tiny muted">${t("impact." + f.impact)}</span>`}${extraMeta}</div></div></summary>
     <div class="finding-body"><div>
@@ -306,7 +246,8 @@ export function findingCard(f, extraMeta = "") {
       <h5>${t("find.impact")}</h5><p>${t("impact." + f.impact)} <span class="tiny muted">${t("find.impactNote")}</span></p>
       <h5>${t("find.fix")}</h5><ol>${f.fix_steps.map((/** @type {string} */ s) => `<li>${esc(s)}</li>`).join("")}</ol>
       ${isAi && f.evidence.refs?.length ? `<h5>${t("find.refs")}</h5><div class="row">${f.evidence.refs.map((/** @type {string} */ r) => `<span class="badge outline ltr">${esc(r)}</span>`).join("")}</div>` : ""}
-      <div class="row" style="margin-top:14px"><label class="small muted" for="st-${f.id}">${t("find.status")}:</label>
+      <div class="row" style="margin-top:14px"><a class="btn btn-sm btn-primary" href="#/fix/${f.audit_id}?f=${f.id}">${icon("wand")} ${t("fix.open")}</a>
+        <label class="small muted" for="st-${f.id}">${t("find.status")}:</label>
         <select class="input" id="st-${f.id}" data-status-for="${f.id}">${["open", "in_progress", "done", "dismissed"].map((k) => `<option value="${k}" ${k === f.status ? "selected" : ""}>${t("fstatus." + k)}</option>`).join("")}</select></div>
     </div><div>${shot ? `<h5>${t("find.evidence")}</h5>${evidenceThumb(shot, f.title)}<p class="tiny muted" style="margin-top:6px">${t("find.afterNote")}</p>` : ""}
       ${f.evidence?.page_url ? `<p class="tiny" style="margin-top:8px;overflow-wrap:anywhere"><a class="ltr" href="${esc(f.evidence.page_url)}" target="_blank" rel="noopener noreferrer">${esc(f.evidence.page_url)}</a></p>` : ""}</div>
@@ -321,6 +262,28 @@ function journeyTab(a) {
         <div class="tl-detail">${esc(s.detail)}</div>${s.page_url ? `<div class="tiny feed-url ltr">${esc(s.page_url)}</div>` : ""}</div>
       ${s.screenshot_id ? `<button class="tl-shot" data-shot="${s.screenshot_id}" data-caption="${esc(s.title)}"><img src="/api/screenshots/${s.screenshot_id}" alt="${esc(s.title)}" loading="lazy"></button>` : "<span></span>"}</div>`).join("")}</div></div>
     <div class="card"><div class="card-head"><h3>${t("journey.log")}</h3><span class="tiny muted" id="log-count"></span></div><div class="feed" id="log"><div class="skeleton" style="height:200px"></div></div></div></div>`;
+}
+
+/** @param {any} e @param {number} t0 */
+function feedItem(e, t0) {
+  const sec = Math.max(0, Math.round((new Date(e.at).getTime() - t0) / 1000));
+  const who = e.agent ? `<span class="agent-chip" title="${esc(agentName(e.agent))}">${/** @type {any} */ (AGENT_META)[e.agent]?.emoji || ""}</span>` : "";
+  return `<div class="feed-item"><span class="feed-time">+${fmtDuration(sec * 1000)}</span>
+    <span class="feed-ico k-${e.kind}">${/** @type {any} */ (FEED_ICO)[e.kind] || "•"}</span>
+    <span>${who}${esc(e.message)}${e.page_url && e.kind === "navigate" ? `<span class="feed-url ltr">${esc(e.page_url)}</span>` : ""}</span></div>`;
+}
+
+/** @param {string} auditId @param {string} agent */
+async function showAgentPath(auditId, agent) {
+  const ev = await api(`/api/audits/${auditId}/events`);
+  const list = ev.events.filter((/** @type {any} */ e) => e.agent === agent);
+  const t0 = list.length ? new Date(list[0].at).getTime() : 0;
+  const shots = list.filter((/** @type {any} */ e) => e.kind === "screenshot" && e.screenshot_id);
+  const caption = (/** @type {string} */ m) => m.split(": ").slice(1).join(": ") || m;
+  openModal(`<h3>${/** @type {any} */ (AGENT_META)[agent]?.emoji || ""} ${esc(agentName(agent))} · ${t("mc.openPath")}</h3>
+    ${shots.length ? `<div class="gallery" style="grid-template-columns:repeat(auto-fill,minmax(120px,1fr));margin-bottom:12px">${shots.map((/** @type {any} */ x) =>
+      `<button class="evidence" data-shot="${x.screenshot_id}" data-caption="${esc(x.message)}"><img src="/api/screenshots/${x.screenshot_id}" alt=""><span>${esc(caption(x.message))}</span></button>`).join("")}</div>` : ""}
+    <div class="feed" style="max-height:50vh">${list.map((/** @type {any} */ e) => feedItem(e, t0)).join("")}</div>`);
 }
 
 /** @param {HTMLElement} view @param {string} id */
@@ -387,4 +350,26 @@ function dataTab(a) {
   ];
   return `<div class="card"><div class="card-head"><h3>${t("report.tab.data")}</h3>${srcBadge("measured")}</div><div class="table-wrap">
     <table class="data"><tbody>${rows.map(([k, v]) => `<tr><td class="muted">${esc(k)}</td><td class="ltr" style="overflow-wrap:anywhere">${esc(v)}</td></tr>`).join("")}</tbody></table></div></div>`;
+}
+
+/** @param {any} a */
+function agentsTab(a) {
+  const runs = a.agents || [];
+  if (!runs.length) return `<div class="card empty">${t("cust.noAi")}</div>`;
+  const VCLS = { likely_buy: "st-passed", hesitant: "st-warning", likely_leave: "st-failed" };
+  return `<div class="notice notice-sim" style="margin-bottom:14px"><span class="ico">🧭</span><span>${t("agents.note")}</span></div>
+    <div class="agent-results">${runs.map((/** @type {any} */ r) => {
+      const res = r.result || {}, m = /** @type {any} */ (AGENT_META)[r.agent] || {};
+      const obs = res.observations || [];
+      return `<div class="card agent-result"><div class="row" style="justify-content:space-between">
+        <div class="row"><span class="agent-emoji">${m.emoji || "👤"}</span><div><h3 style="font-size:15px">${esc(agentName(r.agent))}</h3>
+          <div class="tiny muted">${t("agent.engine.rules")} · ${t("mc.actions")}: ${r.actions}</div></div></div>
+        <div class="row">${r.verdict ? `<span class="badge ${/** @type {any} */ (VCLS)[r.verdict]}">${t("verdict." + r.verdict)}</span>` : ""}
+          <span class="badge outline">${t("agent.status." + r.status)}</span></div></div>
+        ${r.error ? `<div class="notice notice-warn small" style="margin-top:10px"><span class="ico">!</span>${esc(r.error)}</div>` : ""}
+        <h5 class="small muted" style="margin:12px 0 6px">${t("agents.observations")}</h5>
+        <ul class="obs">${obs.map((/** @type {any} */ o) => `<li class="o-${o.type}"><span>${o.type === "ok" ? "✓" : o.type === "issue" ? "✕" : "i"}</span><span>${esc(o.text)}</span></li>`).join("") || "<li>—</li>"}</ul>
+        <details class="agent-metrics"><summary class="small muted">${t("agents.metrics")}</summary><pre class="ltr tiny">${esc(JSON.stringify(res.metrics || {}, null, 2))}</pre></details>
+        <button class="btn btn-sm btn-ghost" data-agent-path="${r.agent}" style="margin-top:8px">${t("mc.openPath")} →</button></div>`;
+    }).join("")}</div>`;
 }

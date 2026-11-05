@@ -11,27 +11,35 @@ import { assistantView } from "./views/assistant.js";
 import { integrationsView } from "./views/integrations.js";
 import { accountView } from "./views/account.js";
 import { adminView } from "./views/admin.js";
+import { fixStudioView } from "./views/fixstudio.js";
+import { sitesView } from "./views/sites.js";
+import { demoView } from "./views/demo.js";
 
 /** @typedef {{ status: any, me: any, account: any, cleanup: (() => void) | null }} AppState */
 /** @type {AppState} */
 export const app = { status: null, me: null, account: null, cleanup: null };
 
 const NAV = [
-  { path: "/", key: "overview", icon: "overview" },
-  { path: "/audits", key: "audits", icon: "audit" },
-  { path: "/tasks", key: "tasks", icon: "tasks" },
-  { path: "/assistant", key: "assistant", icon: "chat" },
-  { path: "/integrations", key: "integrations", icon: "plug", desktopOnly: true },
-  { path: "/account", key: "account", icon: "account" },
+  { path: "/", key: "overview", icon: "overview", group: "workspace" },
+  { path: "/sites", key: "sites", icon: "globe", group: "workspace" },
+  { path: "/audits", key: "audits", icon: "audit", group: "workspace" },
+  { path: "/fix", key: "fix", icon: "sparkle", group: "workspace", desktopOnly: true },
+  { path: "/tasks", key: "tasks", icon: "tasks", group: "workspace" },
+  { path: "/assistant", key: "assistant", icon: "chat", group: "workspace" },
+  { path: "/demo", key: "demo", icon: "play", group: "settings", desktopOnly: true },
+  { path: "/integrations", key: "integrations", icon: "plug", group: "settings", desktopOnly: true },
+  { path: "/account", key: "account", icon: "account", group: "settings" },
 ];
 
 function route() {
   const hash = location.hash.replace(/^#/, "").split("?")[0] || "/";
   const m = hash.match(/^\/audits\/([a-f0-9]+)$/);
   if (m) return { view: auditView, params: /** @type {any} */ ({ id: m[1] }), nav: "/audits" };
+  const fx = hash.match(/^\/fix(?:\/([a-f0-9]+))?$/);
+  if (fx) return { view: fixStudioView, params: /** @type {any} */ ({ id: fx[1] || null }), nav: "/fix" };
   /** @type {Record<string, Function>} */
   const table = { "/": dashboardView, "/audits": auditsView, "/tasks": tasksView, "/assistant": assistantView,
-    "/integrations": integrationsView, "/account": accountView, "/admin": adminView };
+    "/integrations": integrationsView, "/account": accountView, "/admin": adminView, "/sites": sitesView, "/demo": demoView };
   return { view: table[hash] || dashboardView, params: /** @type {any} */ ({}), nav: table[hash] ? hash : "/" };
 }
 
@@ -54,12 +62,15 @@ function shell() {
         <a class="logo logo-mobile" href="#/"><span class="logo-mark">P1</span></a>
         <h1 class="page-title truncate" id="page-title"></h1>
         <div class="topbar-actions" id="topbar-actions"></div>
+        <div class="notif-wrap"><button class="icon-btn" id="notif-btn" aria-label="${t("notif.title")}" aria-haspopup="true">${icon("bell")}<span class="notif-dot" id="notif-dot" hidden></span></button>
+          <div class="notif-panel" id="notif-panel" hidden></div></div>
       </header>
       <main id="view" class="view" tabindex="-1"></main>
     </div>
   </div>
   <nav class="bottom-nav" id="bottom-nav" aria-label="Main"></nav>`;
   $("#lang-btn").onclick = () => switchLang();
+  $("#notif-btn").onclick = (/** @type {Event} */ e) => { e.stopPropagation(); toggleNotifications(); };
   $("#logout-btn").onclick = async () => { await api("/api/auth/logout", { method: "POST" }); boot(); };
 }
 
@@ -67,10 +78,38 @@ function shell() {
 function renderNav(active) {
   const item = (/** @type {any} */ n, /** @type {boolean} */ short) =>
     `<a href="#${n.path}" class="${n.path === active ? "active" : ""}" ${n.path === active ? 'aria-current="page"' : ""}>${icon(n.icon)}<span>${t((short ? "nav.short." : "nav.") + n.key)}</span></a>`;
-  const admin = app.me.user.is_platform_admin ? `<div class="nav-label">P1</div>${item({ path: "/admin", key: "admin", icon: "admin" }, false)}` : "";
-  $("#nav").innerHTML = NAV.map((n) => item(n, false)).join("") + admin;
+  const admin = app.me.user.is_platform_admin ? item({ path: "/admin", key: "admin", icon: "admin" }, false) : "";
+  const group = (/** @type {string} */ g) => NAV.filter((n) => n.group === g).map((n) => item(n, false)).join("");
+  $("#nav").innerHTML = `<div class="nav-label">${t("nav.group.workspace")}</div>${group("workspace")}<div class="nav-label">${t("nav.group.settings")}</div>${group("settings")}${admin}`;
   $("#bottom-nav").innerHTML = NAV.filter((n) => !n.desktopOnly).map((n) => item(n, true)).join("");
 }
+
+async function refreshNotifications() {
+  try {
+    const n = await api("/api/notifications");
+    $("#notif-dot").hidden = !n.unread;
+    return n;
+  } catch { return { items: [], unread: 0 }; }
+}
+
+async function toggleNotifications() {
+  const panel = $("#notif-panel");
+  if (!panel.hidden) { panel.hidden = true; return; }
+  const n = await refreshNotifications();
+  const ICON = { new_issues: "✕", fixed_issues: "✓", score_change: "↕", first_audit: "★", monitor_skipped: "!", audit_failed: "!" };
+  panel.innerHTML = `<div class="row" style="justify-content:space-between;padding:10px 12px;border-bottom:1px solid var(--border)"><strong>${t("notif.title")}</strong>
+    ${n.unread ? `<button class="btn btn-ghost btn-sm" id="notif-read">${t("notif.markRead")}</button>` : ""}</div>
+    <div class="notif-list">${n.items.length ? n.items.map((/** @type {any} */ x) => `<a class="notif-item ${x.read_at ? "" : "unread"}" href="${x.audit_id ? `#/audits/${x.audit_id}` : "#/sites"}">
+      <span class="notif-ico k-${x.kind}">${/** @type {any} */ (ICON)[x.kind] || "•"}</span><span><strong>${esc(x.title)}</strong><br><span class="small muted">${esc(x.body)}</span>
+      <br><span class="tiny faint">${new Date(x.created_at).toLocaleString()}</span></span></a>`).join("") : `<div class="empty small">${t("notif.none")}</div>`}</div>`;
+  panel.hidden = false;
+  const btn = $("#notif-read");
+  if (btn) btn.onclick = async () => { await api("/api/notifications/read", { method: "POST" }); panel.hidden = true; refreshNotifications(); };
+}
+document.addEventListener("click", (e) => {
+  const p = document.getElementById("notif-panel");
+  if (p && !p.hidden && !/** @type {HTMLElement} */ (e.target).closest(".notif-wrap")) p.hidden = true;
+});
 
 export async function refreshUsage() {
   try {
@@ -144,6 +183,7 @@ export async function boot() {
   setCategories(app.status.categories, app.status.categories_en);
   shell();
   refreshUsage();
+  refreshNotifications();
   render();
 }
 

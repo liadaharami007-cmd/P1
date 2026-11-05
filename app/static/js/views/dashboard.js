@@ -1,12 +1,13 @@
 // @ts-check
 import { setTitle } from "../app.js";
 import { t } from "../i18n.js";
+import { agentName } from "./mission.js";
 import {
   animateRings, api, auditForm, bindAuditForm, categoryBars, CATEGORIES, compareBars, delta, esc, fmtDate, gradeLabel,
   hostOf, icon, lineChart, scoreRing, sevBadge, srcBadge,
 } from "../ui.js";
 
-const PERSONA_EMOJI = { price_seeker: "🏷️", wary_newcomer: "🧐", in_a_hurry: "⚡", unclear_benefits: "🤔", mobile_ad_visitor: "📱",
+const PERSONA_EMOJI = { trust: "🛡️", fast_buyer: "⚡", price: "🏷️", confused: "🤔", mobile_ad: "📱", price_seeker: "🏷️", wary_newcomer: "🧐", in_a_hurry: "⚡", unclear_benefits: "🤔", mobile_ad_visitor: "📱",
   skeptic: "🧐", bargain: "🏷️", hesitant: "🤔", rushed: "⚡", researcher: "🔬" };
 const VERDICT_CLS = { likely_buy: "st-passed", hesitant: "st-warning", likely_leave: "st-failed" };
 
@@ -28,14 +29,16 @@ export async function dashboardView(view, _p, app) {
   }
 
   const L = d.latest;
-  setTitle(d.site.name || hostOf(d.site.url), `<a class="btn btn-primary btn-sm" href="#/audits">${icon("plus")}<span class="btn-label">${t("common.newAudit")}</span></a>`);
+  setTitle((d.site.name || hostOf(d.site.url)) + (d.is_demo ? ` · ${t("demo.badge")}` : ""), `${L ? `<a class="btn btn-sm" href="#/fix/${L.id}">${icon("wand")}<span class="btn-label">${t("fix.title")}</span></a>` : ""}<a class="btn btn-primary btn-sm" href="#/audits">${icon("plus")}<span class="btn-label">${t("common.newAudit")}</span></a>`);
   const siteSwitch = d.sites.length > 1 ? `<select class="input" id="site-switch" aria-label="site">
       ${d.sites.map((/** @type {any} */ s) => `<option value="${s.id}" ${s.id === d.site.id ? "selected" : ""}>${esc(s.name || hostOf(s.url))}</option>`).join("")}</select>` : "";
   const running = d.running.length ? `<a class="notice notice-info" href="#/audits/${d.running[0].id}" style="text-decoration:none">
       <span class="live-dot" style="margin-top:6px"></span><span><strong>${t("dash.running")}</strong></span></a>` : "";
   const open = Object.values(d.severity_counts).reduce((/** @type {number} */ a, /** @type {number} */ b) => a + b, 0);
   const cmp = d.comparison;
-  const personas = d.ai_personas.length && d.ai_personas.some((/** @type {any} */ p) => p.verdict)
+  const personas = d.agents?.length ? d.agents.filter((/** @type {any} */ r) => r.verdict).map((/** @type {any} */ r) => ({ key: r.agent, name: agentName(r.agent),
+      verdict: r.verdict, src: "agent", issues: r.issues }))
+    : d.ai_personas.length && d.ai_personas.some((/** @type {any} */ p) => p.verdict)
     ? d.ai_personas.filter((/** @type {any} */ p) => p.verdict).map((/** @type {any} */ p) => ({ ...p, src: "ai" }))
     : d.rule_personas.map((/** @type {any} */ p) => ({ key: p.persona, name: t("cust.rulesTitle"), verdict: p.verdict, src: "simulation", first: p.blockers[0] }));
   const auditsPct = Math.min(100, Math.round(d.usage.audits / d.plan.audits_per_month * 100));
@@ -76,12 +79,13 @@ export async function dashboardView(view, _p, app) {
     <div class="grid g-main">
       <div class="card"><div class="card-head"><div><h2>${t("dash.top")}</h2><div class="card-sub">${t("dash.topSub")}</div></div></div>
         ${d.top_findings.length ? `<div class="list">${d.top_findings.map((/** @type {any} */ f) => `
-          <a class="list-item" href="#/audits/${L.id}?f=${f.id}"><div class="list-main"><div class="list-title">${esc(f.title)}</div>
+          <a class="list-item" href="#/fix/${L.id}?f=${f.id}">${f.priority ? `<span class="fs-prio num">${f.priority}</span>` : ""}<div class="list-main"><div class="list-title">${esc(f.title)}</div>
             <div class="finding-meta">${sevBadge(f.severity)}<span class="badge outline">${esc(CATEGORIES[f.category] || f.category)}</span><span class="tiny muted">${t("impact." + f.impact)}</span></div></div></a>`).join("")}</div>`
           : `<div class="empty"><h3>${t("dash.noOpen")}</h3></div>`}</div>
-      <div class="card"><div class="card-head"><div><h2>${t("dash.customers")}</h2></div>${srcBadge(personas[0]?.src === "ai" ? "ai" : "simulation")}</div>
+      <div class="card"><div class="card-head"><div><h2>${personas[0]?.src === "agent" ? t("mc.agents") : t("dash.customers")}</h2></div>${srcBadge(personas[0]?.src === "ai" ? "ai" : personas[0]?.src === "agent" ? "measured" : "simulation")}</div>
         <div class="list">${personas.map((/** @type {any} */ p) => `<div class="list-item"><span class="persona-avatar">${/** @type {any} */ (PERSONA_EMOJI)[p.key] || "👤"}</span>
-          <div class="list-main"><div class="list-title">${esc(p.src === "ai" ? p.name : (p.first || p.key))}</div></div>
+          <div class="list-main"><div class="list-title">${esc(p.src === "ai" || p.src === "agent" ? p.name : (p.first || p.key))}</div>
+            ${p.src === "agent" ? `<div class="tiny muted">${t("agent.engine.rules")} · ${p.issues} ✕</div>` : ""}</div>
           <span class="badge ${/** @type {any} */ (VERDICT_CLS)[p.verdict]}">${t("verdict." + p.verdict)}</span></div>`).join("")}</div></div>
     </div>`}
 
