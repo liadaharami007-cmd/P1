@@ -8,22 +8,46 @@ from __future__ import annotations
 
 from typing import Any
 
+# חמשת חלקי הדוח (הסדר כאן = הסדר בתצוגה)
 CATEGORIES = {
-    "journey": "מסע רכישה",
-    "trust": "אמון",
-    "speed": "מהירות",
-    "mobile": "מובייל",
-    "ux": "תוכן וחוויית משתמש",
-    "seo": "SEO ומדידה",
+    "conversion": "מוכנות להמרה",
+    "checkout": "חיכוך בתהליך הרכישה",
+    "trust": "אמון ואמינות",
+    "ux_mobile": "חוויית משתמש ומובייל",
+    "technical": "בעיות טכניות",
+}
+CATEGORIES_EN = {
+    "conversion": "Conversion Readiness",
+    "checkout": "Checkout Friction",
+    "trust": "Trust & Credibility",
+    "ux_mobile": "UX & Mobile Experience",
+    "technical": "Technical Issues",
 }
 
-_HTML_CATEGORY = {"SEO": "seo", "תוכן": "ux", "מובייל": "mobile", "המרות": "ux", "שיווק": "seo",
-                  "נגישות": "ux", "מהירות": "speed", "אמון": "trust", "זמינות": "journey"}
+# שיוך כל כלל לחלק בדוח — טבלה אחת שקופה (מוצגת גם במתודולוגיה)
+RULE_CATEGORY = {
+    "site_unreachable": "technical", "slow_lcp": "technical", "medium_lcp": "technical", "heavy_page": "technical",
+    "js_errors": "technical", "broken_resources": "technical", "broken_links": "technical", "no_product_schema": "technical",
+    "layout_shift": "ux_mobile", "entry_popup": "ux_mobile", "mobile_overflow": "ux_mobile",
+    "small_tap_targets": "ux_mobile", "mobile_atc_below_fold": "ux_mobile", "mobile_popup": "ux_mobile",
+    "no_viewport": "ux_mobile", "no_search": "ux_mobile", "search_broken": "ux_mobile",
+    "no_product_found": "conversion", "no_price": "conversion", "few_images": "conversion",
+    "no_shipping_info_pdp": "conversion", "thin_product_page": "conversion",
+    "no_reviews": "trust", "no_returns_info_pdp": "trust", "no_returns_policy": "trust", "no_shipping_policy": "trust",
+    "no_privacy_policy": "trust", "no_terms": "trust", "no_contact_page": "trust", "no_https": "trust",
+    "atc_missing": "checkout", "atc_failed": "checkout", "atc_no_feedback": "checkout", "cart_unreachable": "checkout",
+    "cart_empty_after_add": "checkout", "no_checkout_button": "checkout", "checkout_failed": "checkout",
+    "forced_login": "checkout", "long_checkout": "checkout", "payment_methods_hidden": "checkout",
+}
+_HTML_CATEGORY = {"SEO": "technical", "תוכן": "conversion", "מובייל": "ux_mobile", "המרות": "conversion",
+                  "שיווק": "technical", "נגישות": "ux_mobile", "מהירות": "technical", "אמון": "trust",
+                  "זמינות": "technical"}
 # בעיות HTML שמכוסות טוב יותר ע"י בדיקות הדפדפן
 _HTML_SKIP = {"no_viewport"}
 
 
 def _f(rule_id, category, severity, impact, title, detail, why, fix_steps, evidence=None) -> dict:
+    category = RULE_CATEGORY.get(rule_id, category)
     return {"rule_id": rule_id, "source": "measured", "category": category, "severity": severity,
             "impact": impact, "title": title, "detail": detail, "why_it_matters": why,
             "fix_steps": fix_steps, "evidence": evidence or {}}
@@ -262,6 +286,18 @@ def evaluate(facts: dict, steps: list[dict]) -> list[dict]:
                       "הדפדפן מציג 'לא מאובטח' — לקוחות לא ישאירו פרטי אשראי.",
                       ["התקינו תעודת SSL והפנו את כל התנועה ל-https"], ev("home")))
 
+    # ---------------- קישורים שבורים (בקשה אמיתית לכל קישור)
+    links = facts.get("links") or {}
+    if links.get("broken"):
+        b = links["broken"]
+        out.append(_f("broken_links", "technical", "high" if len(b) > 2 else "medium", "medium",
+                      f"{len(b)} קישורים שבורים באתר",
+                      f"מתוך {links['checked']} קישורים פנימיים שנבדקו: " + ", ".join(
+                          f"{x['url']} ({x['status'] or 'אין תגובה'})" for x in b[:4]),
+                      "לקוח שלוחץ ומגיע לעמוד שגיאה מאבד אמון — וגוגל מוריד את דירוג האתר.",
+                      ["תקנו את הקישורים או הפנו אותם (301) לעמוד הנכון", "הסירו קישורים לעמודים שנמחקו"],
+                      ev("links", broken=b[:10])))
+
     # ---------------- בדיקות HTML (מהחוקר הבסיסי, על ה-HTML שהדפדפן רינדר)
     existing = {f["rule_id"] for f in out}
     for issue in home.get("html_issues", []):
@@ -279,6 +315,10 @@ def evaluate(facts: dict, steps: list[dict]) -> list[dict]:
                       "חסרה תגית meta viewport.", "בטלפון האתר יוצג מוקטן וקשה לשימוש.",
                       ['הוסיפו <meta name="viewport" content="width=device-width, initial-scale=1">'], ev("mobile")))
 
+    for f in out:  # שיוך סופי לחלקי הדוח לפי הטבלה השקופה
+        f["category"] = RULE_CATEGORY.get(f["rule_id"], f["category"])
+        if f["category"] not in CATEGORIES:
+            f["category"] = "technical"
     order = {"critical": 0, "high": 1, "medium": 2, "low": 3}
     out.sort(key=lambda f: (order[f["severity"]], f["category"]))
     return out

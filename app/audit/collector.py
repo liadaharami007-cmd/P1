@@ -26,6 +26,12 @@ from ..research.analyzer import analyze_html
 from .browser import HostGuard, launch, new_context
 
 ProgressCb = Callable[[str, str], Awaitable[None]]
+# (kind, message, page_url, screenshot_id) — יומן פעולות חי של הסוכן
+EventCb = Callable[[str, str, str | None, str | None], Awaitable[None]]
+
+MAX_NAVIGATIONS = 30        # הגבלת משאבים: מספר מעברי עמוד מקסימלי לבדיקה
+MAX_LINKS_TO_CHECK = 25     # קישורים פנימיים לבדיקת "קישור שבור"
+EXCERPT_CHARS = 2500        # טקסט עמוד שנשמר כראיה לניתוח AI
 
 # ---------------------------------------------------------------- תבניות זיהוי
 PRODUCT_URL_RE = re.compile(r"/(products?|item|items|p|dp|מוצר|מוצרים|product-page)/[^/?#]{2,}", re.I)
@@ -146,7 +152,8 @@ class Collected:
 class Collector:
     def __init__(self, start_url: str, shot_dir: Path, *, allow_private: bool = False,
                  progress: ProgressCb | None = None,
-                 save_screenshot: Callable[[str, str, str | None, str], str] | None = None):
+                 save_screenshot: Callable[[str, str, str | None, str], str] | None = None,
+                 on_event: EventCb | None = None):
         self.start_url = start_url
         self.origin = f"{urlparse(start_url).scheme}://{urlparse(start_url).netloc}"
         self.host = urlparse(start_url).hostname
@@ -160,11 +167,32 @@ class Collector:
         self.unreachable: list[str] = []  # משאבים שלא נטענו (רשת/חסימה) — לא נחשבים באג של האתר
         self.failed_requests: list[str] = []
         self.cart_signals: list[str] = []
+        self.on_event = on_event
+        self.navigations = 0
+        self._logged_steps = 0
+        self.excerpts: dict[str, str] = {}
 
     # ------------------------------------------------------------ עזר
     async def _report(self, key: str, msg: str):
         if self.progress:
             await self.progress(key, msg)
+
+    async def _log(self, kind: str, message: str, url: str | None = None, shot: str | None = None):
+        if self.on_event:
+            await self.on_event(kind, message, url, shot)
+
+    async def _flush_steps(self):
+        """מתעד ביומן כל שלב שהסתיים מאז הקריאה הקודמת."""
+        for st in self.out.steps[self._logged_steps:]:
+            await self._log(f"step_{st.status}", f"{st.title}: {st.detail}", st.page_url, st.screenshot_id)
+        self._logged_steps = len(self.out.steps)
+
+    async def _excerpt(self, page: Page, key: str):
+        try:
+            txt = await page.evaluate("() => document.body ? document.body.innerText : ''")
+            self.excerpts[key] = re.sub(r"\s+", " ", txt)[:EXCERPT_CHARS]
+        except PWError:
+            pass
 
     def _step(self, key: str, title: str) -> Step:
         st = Step(key, title)
@@ -180,6 +208,7 @@ class Collector:
             return None
         sid = self.save_screenshot(label, device, page.url, str(path)) if self.save_screenshot else None
         self.out.screenshots.append({"id": sid, "label": label, "device": device, "page_url": page.url, "path": str(path)})
+        await self._log("screenshot", f"צילום מסך: {label} ({'טלפון' if device == 'mobile' else 'מחשב'})", page.url, sid)
         return sid
 
     def _same_site(self, url: str) -> bool:
@@ -223,20 +252,28 @@ class Collector:
             pass
 
     async def _goto(self, page: Page, url: str) -> tuple[bool, str, int]:
+        if self.navigations >= MAX_NAVIGATIONS:
+            return False, "הגענו למגבלת מעברי העמוד לבדיקה אחת", 0
+        self.navigations += 1
+        await self._log("navigate", "פותח עמוד", url)
         t = time.perf_counter()
         try:
             resp = await page.goto(url, wait_until="load")
         except PWTimeout:
+            await self._log("error", "הדף לא סיים להיטען תוך 45 שניות", url)
             return False, "הדף לא סיים להיטען תוך 45 שניות", int((time.perf_counter() - t) * 1000)
         except PWError as e:
             msg = str(e).split("\n")[0]
             if "ERR_BLOCKED_BY_CLIENT" in msg:
                 msg = "הכתובת חסומה (כתובת פנימית)"
+            await self._log("error", f"שגיאת טעינה: {msg[:150]}", url)
             return False, f"שגיאת טעינה: {msg[:200]}", int((time.perf_counter() - t) * 1000)
         await self._settle(page)
         ms = int((time.perf_counter() - t) * 1000)
         if resp is not None and resp.status >= 400:
+            await self._log("error", f"השרת החזיר שגיאה {resp.status}", url)
             return False, f"השרת החזיר שגיאה {resp.status}", ms
+        await self._log("loaded", f"העמוד נטען ({ms / 1000:.1f} שנ')", page.url)
         return True, "", ms
 
     # ------------------------------------------------------------ הרצה
@@ -252,21 +289,33 @@ class Collector:
                 page = await desktop.new_page()
                 self._watch(page)
                 ok = await self._home(page)
+                await self._flush_steps()
                 if ok:
+                    await self._excerpt(page, "home")
                     await self._trust(f["home"]["links"])
+                    await self._links(desktop, f["home"]["links"])
+                    await self._flush_steps()
                     product_url = await self._find_product(page)
                     if product_url:
+                        await self._excerpt(page, "product")
+                    await self._flush_steps()
+                    if product_url:
                         await self._add_to_cart(page)
+                        await self._flush_steps()
                         await self._cart_and_checkout(page)
                     else:
                         for key, title in (("add_to_cart", "הוספה לסל"), ("cart", "מעבר לסל"), ("checkout", "כניסה לקופה")):
                             st = self._step(key, title)
                             st.detail = "דולג — לא נמצא עמוד מוצר"
+                    await self._flush_steps()
                     await self._search(page)
+                    await self._flush_steps()
+                    await self._log("device", "עובר לבדיקה בטלפון (iPhone 13)")
                     mobile = await new_context(browser, self.guard, pw.devices["iPhone 13"] | {"locale": "he-IL"})
                     await mobile.add_init_script(PERF_INIT_SCRIPT)
                     await self._mobile(mobile, f.get("product", {}).get("url"))
                     await mobile.close()
+                    await self._flush_steps()
                 await desktop.close()
             finally:
                 await browser.close()
@@ -274,6 +323,8 @@ class Collector:
         f["js_errors"] = self.js_errors
         f["unreachable_resources"] = self.unreachable
         f["failed_requests"] = self.failed_requests
+        f["navigations"] = self.navigations
+        f["page_excerpts"] = self.excerpts
         # הטקסט המלא משמש רק לניתוח — לא שומרים אותו
         for k in ("home", "product", "mobile"):
             if k in f:
@@ -314,6 +365,40 @@ class Collector:
         st.status = "passed" if not missing else "warning"
         names = {"returns": "החזרות", "shipping": "משלוחים", "privacy": "פרטיות", "terms": "תקנון", "contact": "צור קשר"}
         st.detail = "נמצאו כל הקישורים החשובים" if not missing else "חסרים קישורים: " + ", ".join(names[m] for m in missing)
+
+    async def _links(self, ctx: BrowserContext, links: list[dict]):
+        """בדיקת קישורים שבורים: בקשה אמיתית לכל קישור פנימי (עד MAX_LINKS_TO_CHECK). לא עוקבים אחרי הפניות."""
+        st = self._step("links", "בדיקת קישורים פנימיים")
+        urls: list[str] = []
+        for l in links:
+            u = l["href"].split("#")[0]
+            if (u and u not in urls and self._same_site(u) and u.startswith(("http://", "https://"))
+                    and not re.search(r"logout|signout|add-to-cart|/cart/add|wp-admin|\?replytocom", u, re.I)):
+                urls.append(u)
+        urls = urls[:MAX_LINKS_TO_CHECK]
+        await self._report("links", f"בודק {len(urls)} קישורים פנימיים…")
+        sem = asyncio.Semaphore(5)
+
+        async def check(u: str) -> tuple[str, int | None, str | None]:
+            if not await self.guard.is_allowed(u):
+                return u, None, "blocked"
+            async with sem:
+                try:
+                    r = await ctx.request.get(u, max_redirects=0, timeout=12000)
+                    return u, r.status, None
+                except PWError as e:
+                    return u, None, str(e).splitlines()[0][:100]
+        results = await asyncio.gather(*(check(u) for u in urls))
+        broken = [{"url": u, "status": code, "error": err} for u, code, err in results
+                  if err != "blocked" and (code is None or code >= 400)]
+        self.out.facts["links"] = {"checked": len(urls), "broken": broken}
+        if not urls:
+            st.status, st.detail = "skipped", "לא נמצאו קישורים פנימיים לבדיקה"
+        elif broken:
+            st.status = "failed" if len(broken) > 2 else "warning"
+            st.detail = f"{len(broken)} מתוך {len(urls)} קישורים שבורים"
+        else:
+            st.status, st.detail = "passed", f"כל {len(urls)} הקישורים שנבדקו תקינים"
 
     def _product_candidates(self, links: list[dict]) -> tuple[list[str], list[str]]:
         products, categories, seen = [], [], set()
@@ -427,6 +512,7 @@ class Collector:
                         v = await o.get_attribute("value")
                         if v and not await o.is_disabled():
                             await sel.select_option(v)
+                            await self._log("select", f"בוחר אפשרות חובה: {(await o.text_content() or v).strip()[:40]}", page.url)
                             break
             except PWError:
                 pass
@@ -438,6 +524,8 @@ class Collector:
                 st.status, st.detail = "failed", "כפתור 'הוספה לסל' מושבת (אולי המוצר אזל או שחובה לבחור אפשרות)"
                 self.out.facts["add_to_cart"] = {"found": True, "clicked": False, "disabled": True}
                 return
+            label = ((await atc.text_content()) or (await atc.get_attribute("value")) or "").strip()[:40]
+            await self._log("click", f"לוחץ על \"{label or 'הוספה לסל'}\"", page.url)
             await atc.click(timeout=10000)
         except PWError as e:
             st.status, st.detail = "failed", f"הלחיצה על 'הוספה לסל' נכשלה: {str(e).splitlines()[0][:150]}"
@@ -483,6 +571,7 @@ class Collector:
         text = (await page.evaluate("() => document.body ? document.body.innerText : ''"))[:30000]
         empty = bool(EMPTY_CART_RE.search(text))
         st.screenshot_id = await self._shot(page, "cart", "desktop")
+        await self._excerpt(page, "cart")
         self.out.facts["cart"] = {"reached": True, "url": page.url, "empty": empty,
                                   "mentions_shipping_cost": bool(re.search(r"משלוח|shipping", text, re.I))}
         if empty:
@@ -512,6 +601,7 @@ class Collector:
             return
         t = time.perf_counter()
         try:
+            await self._log("click", f"לוחץ על \"{((await btn.text_content()) or 'מעבר לקופה').strip()[:40]}\"", page.url)
             await btn.click(timeout=10000)
             await page.wait_for_load_state("load", timeout=30000)
         except PWError:
@@ -529,6 +619,7 @@ class Collector:
         reached = bool(re.search(r"checkout|קופה|תשלום|payment", page.url + " " + text[:3000], re.I)) and info["fields"] > 0
         login_wall = info["password"] and not re.search(r"אורח|guest|ללא\s+הרשמה|continue\s+as", text, re.I)
         ck.screenshot_id = await self._shot(page, "checkout", "desktop")
+        await self._excerpt(page, "checkout")
         self.out.facts["checkout"] = {
             "button_found": True, "reached": reached, "url": page.url, "fields": info["fields"],
             "login_required": login_wall, "payment_methods": sorted({m.group(0).lower() for m in PAYMENT_RE.finditer(text)})[:10],
@@ -564,6 +655,7 @@ class Collector:
                     if await opener.is_visible():
                         await opener.click()
                         break
+            await self._log("type", f"מקליד בחיפוש: \"{term}\"", page.url)
             await box.fill(term, timeout=5000)
             url_before = page.url
             await box.press("Enter")
