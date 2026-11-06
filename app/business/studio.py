@@ -148,10 +148,42 @@ def update_lead(db: Database, lead_id: str, account_id: str, **fields) -> None:
         c.execute(f"UPDATE leads SET {', '.join(k + '=?' for k in fields)} WHERE id=? AND account_id=?", (*fields.values(), lead_id, account_id))
 
 
+def remind_followups(db: Database) -> int:
+    """נקרא מה-worker כל דקה: פנייה שהגיע זמן המעקב שלה → התראה אחת (בתוך המערכת; לא נשלחת הודעה ללקוח)."""
+    now = store.now()
+    with db._conn() as c:
+        due = [dict(r) for r in c.execute("SELECT id, account_id, name FROM leads WHERE follow_up_at IS NOT NULL AND follow_up_at <= ? "
+                                          "AND reminded_at IS NULL AND status IN ('new','contacted')", (now,))]
+        for d in due:
+            c.execute("UPDATE leads SET reminded_at=? WHERE id=?", (now, d["id"]))
+    for d in due:
+        db.add_notification(d["account_id"], "lead_followup", f"תזכורת: לחזור ל{d['name']}", "הגיע זמן המעקב שקבעתם")
+    return len(due)
+
+
+def funnel(db: Database, account_id: str) -> dict:
+    """משפך מכירה מנתוני ה-CRM בלבד (נמדד). אחוז סגירה רק כשיש מספיק פניות שהוכרעו."""
+    ls = list_leads(db, account_id)
+    by = {s: [x for x in ls if x["status"] == s] for s in LEAD_STATUSES}
+    decided = len(by["won"]) + len(by["lost"])
+    by_channel: dict[str, int] = {}
+    for x in ls:
+        by_channel[x["channel"] or "other"] = by_channel.get(x["channel"] or "other", 0) + 1
+    return {"stages": {s: len(v) for s, v in by.items()}, "by_channel": by_channel,
+            "win_rate": round(100 * len(by["won"]) / decided) if decided >= 5 else None,
+            "win_rate_note": None if decided >= 5 else "אחוז סגירה יוצג אחרי 5 פניות שהוכרעו (נסגר/לא רלוונטי)",
+            "won_value": round(sum(x.get("value") or 0 for x in by["won"]), 2),
+            "open_value": round(sum(x.get("value") or 0 for x in by["new"] + by["contacted"]), 2),
+            "opportunities": [{"id": x["id"], "name": x["name"], "reason": (x.get("ai") or {}).get("summary")}
+                              for x in ls if x["status"] in ("new", "contacted") and (x.get("ai") or {}).get("urgency") == "high"][:10]}
+
+
 def leads_summary(db: Database, account_id: str) -> dict:
     from datetime import datetime, timedelta, timezone
     ls = list_leads(db, account_id)
     stale = (datetime.now(timezone.utc) - timedelta(hours=24)).isoformat()
-    return {"total": len(ls), "new": sum(1 for x in ls if x["status"] == "new"),
+    now = store.now()
+    return {"followups_due": sum(1 for x in ls if x.get("follow_up_at") and x["follow_up_at"] <= now and x["status"] in ("new", "contacted")),
+            "total": len(ls), "new": sum(1 for x in ls if x["status"] == "new"),
             "unanswered_24h": sum(1 for x in ls if x["status"] == "new" and x["created_at"] < stale),
             "won": sum(1 for x in ls if x["status"] == "won"), "lost": sum(1 for x in ls if x["status"] == "lost")}

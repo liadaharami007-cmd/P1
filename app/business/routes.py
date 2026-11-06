@@ -46,6 +46,8 @@ class LeadIn(BaseModel):
 class LeadPatch(BaseModel):
     status: str | None = None
     notes: str | None = None
+    follow_up_at: str | None = None
+    value: float | None = None
 
 
 class RunIn(BaseModel):
@@ -195,6 +197,7 @@ def register(app: FastAPI, db: Database, runner, browser_available: Callable[[],
     @app.get("/api/leads")
     def leads(ctx: Ctx = Depends(current)):
         return {"items": studio.list_leads(db, ctx.account_id), "summary": studio.leads_summary(db, ctx.account_id),
+                "funnel": studio.funnel(db, ctx.account_id),
                 "ai": missions.ceo_engine_active()}
 
     @app.post("/api/leads", status_code=201)
@@ -216,6 +219,17 @@ def register(app: FastAPI, db: Database, runner, browser_available: Callable[[],
             fields["status"] = body.status
         if body.notes is not None:
             fields["notes"] = body.notes[:2000]
+        if body.follow_up_at is not None:
+            from datetime import datetime as _dt
+            try:
+                fields["follow_up_at"] = _dt.fromisoformat(body.follow_up_at).isoformat() if body.follow_up_at else None
+            except ValueError:
+                raise HTTPException(400, "תאריך לא תקין")
+            fields["reminded_at"] = None
+        if body.value is not None:
+            if body.value < 0:
+                raise HTTPException(400, "ערך לא תקין")
+            fields["value"] = body.value
         if fields:
             studio.update_lead(db, lead_id, ctx.account_id, **fields)
         return studio.get_lead(db, lead_id, ctx.account_id)

@@ -96,3 +96,24 @@ def test_leads_crud_triage_and_ceo_item(make_client, monkeypatch):
     o = make_client(db=db)
     register(o, "o@p1.co")
     assert o.get("/api/leads").json()["items"] == [] and o.patch(f"/api/leads/{lead['id']}", json={"status": "won"}).status_code == 404
+
+
+def test_crm_followups_and_funnel(make_client):
+    c = make_client()
+    register(c, "crm@p1.co")
+    db = c.app.state.db
+    ids = [c.post("/api/leads", json={"name": f"L{i}", "channel": "whatsapp" if i % 2 else "landing_page"}).json()["id"] for i in range(6)]
+    past = (datetime.now(timezone.utc) - timedelta(minutes=5)).isoformat()
+    assert c.patch(f"/api/leads/{ids[0]}", json={"follow_up_at": "לא תאריך"}).status_code == 400
+    c.patch(f"/api/leads/{ids[0]}", json={"follow_up_at": past, "value": 1200})
+    assert c.get("/api/leads").json()["summary"]["followups_due"] == 1
+    assert studio.remind_followups(db) == 1 and studio.remind_followups(db) == 0  # תזכורת אחת בלבד
+    assert any(n["kind"] == "lead_followup" for n in c.get("/api/notifications").json()["items"])
+    f = c.get("/api/leads").json()["funnel"]
+    assert f["win_rate"] is None and "5" in f["win_rate_note"] and f["open_value"] == 1200
+    for i in ids[:3]:
+        c.patch(f"/api/leads/{i}", json={"status": "won"})
+    for i in ids[3:5]:
+        c.patch(f"/api/leads/{i}", json={"status": "lost"})
+    f = c.get("/api/leads").json()["funnel"]
+    assert f["win_rate"] == 60 and f["won_value"] == 1200 and f["by_channel"]["whatsapp"] == 3

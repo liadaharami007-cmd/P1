@@ -36,3 +36,13 @@ def test_every_translation_key_exists_in_both_languages():
         used |= set(re.findall(r'(?<![\w.$])t\("([a-zA-Z0-9_.]+)"', f.read_text(encoding="utf-8")))
     missing = sorted(k for k in used if k not in he and not k.endswith("."))
     assert not missing, missing
+
+
+def test_every_nav_item_has_labels():
+    """כל פריט בתפריט צריך תווית מלאה, וכל פריט בתפריט התחתון (טלפון) גם תווית קצרה — בשתי השפות."""
+    app_js = (JS / "app.js").read_text(encoding="utf-8")
+    dicts = (JS / "i18n.js").read_text(encoding="utf-8") + (JS / "i18n-biz.js").read_text(encoding="utf-8")
+    for line in re.findall(r"\{ path: \"[^\"]+\", key: \"(\w+)\"[^}]*\}", app_js):
+        assert dicts.count(f'"nav.{line}"') >= 2, line
+    for key in re.findall(r"\{ path: \"[^\"]+\", key: \"(\w+)\", icon: \"\w+\", group: \"\w+\" \}", app_js):
+        assert dicts.count(f'"nav.short.{key}"') >= 2, f"nav.short.{key}"

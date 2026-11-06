@@ -19,6 +19,12 @@ export async function leadsView(view) {
         <div class="kpi attn"><div class="kpi-num">${S.unanswered_24h}</div><div class="kpi-label">${t("ld.stale")}</div></div>
         <div class="kpi"><div class="kpi-num">${S.new}</div><div class="kpi-label">${t("ld.st.new")}</div></div>
         <div class="kpi"><div class="kpi-num">${S.won}</div><div class="kpi-label">${t("ld.st.won")}</div></div></div>
+      <div class="card"><div class="card-head"><div><h2>${t("ld.funnel")}</h2><div class="card-sub">${t("ld.funnelSub")}</div></div><span class="badge src-measured">${t("src.measured")}</span></div>
+        <div class="funnel">${["new", "contacted", "won", "lost"].map((s) => `<div class="funnel-stage st-${s}"><span class="num">${d.funnel.stages[s]}</span><small>${t("ld.st." + s)}</small></div>`).join("")}</div>
+        <div class="row small" style="margin-top:10px;gap:16px"><span>${t("ld.winRate")} <strong>${d.funnel.win_rate == null ? "—" : d.funnel.win_rate + "%"}</strong></span>
+          <span>${t("ld.openValue")} <strong>₪${d.funnel.open_value}</strong></span><span>${t("ld.wonValue")} <strong>₪${d.funnel.won_value}</strong></span>
+          ${S.followups_due ? `<span class="chip warn">${t("ld.due", { n: S.followups_due })}</span>` : ""}</div>
+        ${d.funnel.win_rate_note ? `<p class="tiny faint" style="margin-top:6px">${esc(d.funnel.win_rate_note)}</p>` : ""}</div>
       <p class="tiny faint">${t("ld.note")}</p>
       ${d.items.length ? `<div class="stack">${d.items.map((/** @type {any} */ l) => `<article class="card lead">
         <div class="row" style="justify-content:space-between"><div><strong>${esc(l.name)}</strong> <span class="tiny faint">${esc(l.channel || "")} · ${esc(l.contact || "")} · ${new Date(l.created_at).toLocaleString()}</span></div>
@@ -29,6 +35,8 @@ export async function leadsView(view) {
           <div class="small muted">${esc(l.ai.summary)}</div>
           <div class="out-field"><div class="out-key">${t("ld.draft")}</div><p style="white-space:pre-line">${esc(l.ai.draft_reply)}</p></div>
           <div class="small"><strong>${t("ld.next")}</strong> ${esc(l.ai.next_step)}</div></div>` : ""}
+        <div class="row small" style="margin-top:8px;gap:8px"><label>${t("ld.followUp")} <input class="input lead-fu" type="datetime-local" data-id="${l.id}" value="${l.follow_up_at ? esc(l.follow_up_at.slice(0, 16)) : ""}" style="width:auto;height:32px"></label>
+          <label>${t("ld.value")} <input class="input lead-val" type="number" min="0" data-id="${l.id}" value="${l.value ?? ""}" style="width:110px;height:32px"></label></div>
         <div class="row" style="margin-top:8px"><button class="btn btn-sm" data-triage="${l.id}" ${d.ai ? "" : "disabled title='" + esc(t("st.noAi")) + "'"}>${icon("sparkle")}${t("ld.triage")}</button>
           <button class="btn btn-sm btn-ghost" data-del="${l.id}">${t("common.delete")}</button></div></article>`).join("")}</div>`
         : `<div class="card empty">${t("ld.empty")}</div>`}</div>`;
@@ -58,6 +66,8 @@ export async function leadsView(view) {
   root.addEventListener("change", async (e) => {
     const s = /** @type {HTMLSelectElement} */ (e.target);
     if (s.classList.contains("lead-st")) { await api(`/api/leads/${s.dataset.id}`, { method: "PATCH", body: JSON.stringify({ status: s.value }) }); load(); }
+    if (s.classList.contains("lead-fu")) { await api(`/api/leads/${s.dataset.id}`, { method: "PATCH", body: JSON.stringify({ follow_up_at: s.value ? new Date(s.value).toISOString() : "" }) }); toast(t("ld.saved")); }
+    if (s.classList.contains("lead-val")) { await api(`/api/leads/${s.dataset.id}`, { method: "PATCH", body: JSON.stringify({ value: Number(s.value) || 0 }) }); load(); }
   });
   document.getElementById("topbar-actions")?.addEventListener("click", onClick);
   await load();

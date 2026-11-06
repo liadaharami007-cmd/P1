@@ -749,3 +749,7 @@ textarea.input { height: auto; padding: 9px 12px; resize: vertical; line-height:
 @media (max-width: 900px) { .pg-wrap { grid-template-columns: 1fr; } .pg-side { position: static; } .pg-frame iframe { height: 64vh; } }
 .start-btns { display: flex; flex-direction: column; gap: 8px; } .start-btns .btn { flex: 1; }
 @media (max-width: 900px) { .start-btns { flex-direction: row; } }
+.funnel { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
+.funnel-stage { display: flex; flex-direction: column; align-items: center; padding: 12px 6px; border-radius: 10px; background: var(--surface-2); }
+.funnel-stage .num { font-size: 22px; font-weight: 800; } .funnel-stage small { color: var(--muted); font-size: 12px; }
+.funnel-stage.st-won { background: var(--good-soft); } .funnel-stage.st-new { background: var(--brand-soft); }

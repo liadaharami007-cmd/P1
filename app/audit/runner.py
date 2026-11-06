@@ -86,6 +86,11 @@ class AuditRunner:
                     monitor.tick(self.db, self)
                 except Exception:  # noqa: BLE001
                     log.exception("monitor tick failed")
+                try:
+                    from ..business.studio import remind_followups
+                    remind_followups(self.db)
+                except Exception:  # noqa: BLE001
+                    log.exception("follow-up reminders failed")
             while self._active < config.MAX_CONCURRENT_AUDITS:  # יש מקום פנוי
                 job = self.db.claim_next_queued()
                 if not job:

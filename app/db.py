@@ -384,6 +384,7 @@ ADDED_COLUMNS = {
     "findings": {"fix_status": "TEXT NOT NULL DEFAULT 'proposed'", "priority": "INTEGER"},
     "sites": {"authorized_by": "TEXT", "authorized_at": "TEXT", "is_demo": "INTEGER NOT NULL DEFAULT 0"},
     "audits": {"trigger": "TEXT NOT NULL DEFAULT 'manual'", "cancel_requested": "INTEGER NOT NULL DEFAULT 0"},
+    "leads": {"follow_up_at": "TEXT", "reminded_at": "TEXT", "value": "REAL"},
 }
 
 
