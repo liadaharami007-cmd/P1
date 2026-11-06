@@ -50,6 +50,11 @@ class LeadPatch(BaseModel):
     value: float | None = None
 
 
+class SendIn(BaseModel):
+    channel: str
+    body: str
+
+
 class RunIn(BaseModel):
     request: str
 
@@ -233,6 +238,73 @@ def register(app: FastAPI, db: Database, runner, browser_available: Callable[[],
         if fields:
             studio.update_lead(db, lead_id, ctx.account_id, **fields)
         return studio.get_lead(db, lead_id, ctx.account_id)
+
+    @app.post("/api/leads/{lead_id}/send", status_code=201)
+    def send_to_lead(lead_id: str, body: SendIn, ctx: Ctx = Depends(current)):
+        """מכין שליחה ללקוח — לא שולח. השליחה עצמה רק אחרי אישור במרכז האישורים."""
+        lead = studio.get_lead(db, lead_id, ctx.account_id)
+        if not lead:
+            raise HTTPException(404, "הפנייה לא נמצאה")
+        if body.channel not in ("whatsapp", "email") or not body.body.strip():
+            raise HTTPException(400, "ערוץ או תוכן לא תקינים")
+        kind = "send_whatsapp" if body.channel == "whatsapp" else "send_email"
+        return actions.propose(db, ctx.account, ctx.user_id, {"key": f"{kind}:{lead_id}:{hash(body.body) % 10**8}", "kind": kind,
+                                                              "title": f"שליחה ל{lead['name']} ({'WhatsApp' if kind == 'send_whatsapp' else 'מייל'})",
+                                                              "why": body.body[:300], "payload": {"lead_id": lead_id, "body": body.body[:4000]}})
+
+    @app.get("/api/leads/export.csv")
+    def export_leads(ctx: Ctx = Depends(current)):
+        """ייצוא ל-CSV (נפתח ב-Google Sheets / Excel)."""
+        import csv
+        import io
+        from fastapi.responses import Response as R
+        buf = io.StringIO()
+        w = csv.writer(buf)
+        w.writerow(["name", "contact", "channel", "status", "value", "follow_up_at", "message", "created_at"])
+        for l in studio.list_leads(db, ctx.account_id):
+            w.writerow([l["name"], l["contact"], l["channel"], l["status"], l.get("value") or "", l.get("follow_up_at") or "", l["message"], l["created_at"]])
+        return R("\ufeff" + buf.getvalue(), media_type="text/csv; charset=utf-8", headers={"Content-Disposition": 'attachment; filename="p1-leads.csv"'})
+
+    # ------------------------------------------------------------ חיבורים רשמיים: WhatsApp webhook · Shopify · WordPress
+    @app.get("/api/whatsapp/webhook")
+    def wa_verify(request: Request):
+        import os as _os
+        from fastapi.responses import PlainTextResponse
+        q = request.query_params
+        if q.get("hub.mode") == "subscribe" and _os.environ.get("WHATSAPP_VERIFY_TOKEN") and q.get("hub.verify_token") == _os.environ["WHATSAPP_VERIFY_TOKEN"]:
+            return PlainTextResponse(q.get("hub.challenge", ""))
+        raise HTTPException(403, "אימות נכשל")
+
+    @app.post("/api/whatsapp/webhook")
+    async def wa_inbound(request: Request):
+        import json as _json
+        import os as _os
+        from ..integrations import connectors
+        body = await request.body()
+        if not connectors.wa_verify_signature(body, request.headers.get("x-hub-signature-256")):
+            raise HTTPException(401, "חתימה לא תקינה")
+        acc = _os.environ.get("P1_WHATSAPP_ACCOUNT_ID")
+        if not acc or not db.get_account(acc):
+            raise HTTPException(503, "WhatsApp לא משויך לחשבון")
+        n = 0
+        for m in connectors.wa_parse_inbound(_json.loads(body or b"{}")):
+            studio.add_lead(db, acc, m["name"] or m["from"], m["from"], "whatsapp", m["text"])
+            db.add_notification(acc, "new_lead", f"הודעת WhatsApp: {m['name']}", m["text"][:120])
+            n += 1
+        return {"received": n}
+
+    @app.get("/api/integrations/{name}/test")
+    def test_integration(name: str, ctx: Ctx = Depends(current)):
+        from ..integrations import connectors
+        fn = {"shopify": connectors.shopify_summary, "wordpress": connectors.wordpress_pages}.get(name)
+        if not fn:
+            raise HTTPException(404, "חיבור לא מוכר")
+        try:
+            return {"ok": True, "data": fn()}
+        except RuntimeError as e:
+            raise HTTPException(503, str(e))
+        except Exception as e:  # noqa: BLE001
+            raise HTTPException(502, f"החיבור נכשל: {type(e).__name__}")
 
     @app.delete("/api/leads/{lead_id}", status_code=204)
     def delete_lead(lead_id: str, ctx: Ctx = Depends(current)):

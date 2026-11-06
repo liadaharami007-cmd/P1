@@ -94,8 +94,9 @@ def test_api_requires_permission_and_blocks_internal(make_client):
     d = client.get("/api/dashboard").json()
     assert d["sites"] == [] and d["site"] is None
     ints = {i["id"]: i["status"] for i in client.get("/api/integrations").json()}
-    assert ints["shopify"] == "not_built" and ints["wordpress"] == "not_built"  # לא מוצג כמחובר
-    assert all(s != "connected" for k, s in ints.items() if k not in ("claude", "ollama", "email", "paddle"))
+    assert ints["shopify"] == "not_configured" and ints["wordpress"] == "not_configured" and ints["whatsapp"] == "not_configured"
+    assert ints["ga4"] == "not_built"  # לא מוצג כמחובר
+    assert all(s != "connected" for k, s in ints.items() if k not in ("claude", "gemini", "ollama", "email", "paddle", "sheets"))
     m = client.get("/api/methodology").json()
     assert sum(m["weights"].values()) == 100 and m["counts_sources"] == ["measured"]
 

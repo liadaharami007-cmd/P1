@@ -27,6 +27,9 @@ KINDS = {
     "enable_monitor": {"risk": "low", "changes": ["תופעל בדיקה אוטומטית קבועה של האתר לפי התדירות שבחרתם",
                                                   "כל בדיקה נספרת במכסה החודשית", "תקבלו התראה על בעיות חדשות, תיקונים ושינויי ציון",
                                                   "אפשר לכבות בכל רגע במסך 'אתרים'"]},
+    "send_whatsapp": {"risk": "high", "changes": ["תישלח הודעת WhatsApp אמיתית ללקוח, מהמספר העסקי שלכם (WhatsApp Business API הרשמי)",
+                                                  "לפי כללי WhatsApp: הודעה חופשית רק תוך 24 שעות מהודעת הלקוח", "אי אפשר לבטל הודעה שנשלחה"]},
+    "send_email": {"risk": "high", "changes": ["יישלח מייל אמיתי ללקוח משרת המייל שהגדרתם", "אי אפשר לבטל מייל שנשלח"]},
     "publish_page": {"risk": "medium", "changes": ["הדף יפורסם בכתובת ציבורית בשרת של P1 (/p/…) — כל מי שיש לו את הקישור יוכל לראות אותו",
                                                    "הטופס בדף יתחיל לקלוט פניות אמיתיות ל-CRM", "אפשר לבטל פרסום בכל רגע"]},
     "fix_package": {"risk": "none", "changes": ["תיווצר חבילת תיקון להורדה: מה לשנות, טקסטים מוכנים וקוד לדוגמה",
@@ -102,6 +105,29 @@ def _execute(db: Database, runner, account: dict, user_id: str | None, action: d
             raise ValueError("התדירות הזו לא כלולה במסלול")
         db.upsert_monitor(site["id"], account["id"], freq, True, mon.next_run(freq))
         return {"frequency": freq, "next_run_at": db.get_monitor(site["id"])["next_run_at"]}, "done"
+    if k in ("send_whatsapp", "send_email"):
+        from . import studio as _st
+        lead = _st.get_lead(db, p["lead_id"], account["id"])
+        if not lead:
+            raise ValueError("הפנייה לא נמצאה")
+        if k == "send_whatsapp":
+            from ..integrations import connectors
+            try:
+                res = connectors.wa_send_text(lead["contact"] or "", p["body"])
+            except RuntimeError as e:
+                raise ValueError(str(e))
+        else:
+            import re as _re
+            from ..saas import recovery
+            m = _re.search(r"[\w.+-]+@[\w-]+\.[\w.]+", lead["contact"] or "")
+            if not recovery.email_configured():
+                raise ValueError("שליחת מייל לא מחוברת (חסר P1_SMTP_HOST / P1_SMTP_FROM)")
+            if not m:
+                raise ValueError("לפנייה אין כתובת מייל")
+            recovery.send_email(m.group(0), "תשובה מ-" + (account.get("name") or "העסק"), p["body"])
+            res = {"to": m.group(0)}
+        _st.update_lead(db, lead["id"], account["id"], status="contacted")
+        return res, "done"
     if k == "publish_page":
         from . import pages
         pg = pages.get(db, p["page_id"], account["id"])

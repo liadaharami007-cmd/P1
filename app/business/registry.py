@@ -38,17 +38,29 @@ def integrations() -> list[dict]:
          "unlocks": "שחזור סיסמה במייל (בהמשך: התראות ודוחות במייל)", "cost": "יש מסלולים חינמיים",
          "how": "ספק SMTP כלשהו (Brevo / Resend / Gmail) → P1_SMTP_HOST, P1_SMTP_USER, P1_SMTP_PASSWORD, P1_SMTP_FROM"},
     ]
+    from ..integrations import connectors as cn
+    items += [
+        {"id": "whatsapp", "name": "WhatsApp Business (Cloud API רשמי)", "category": "messaging", "built": True, "connected": not cn.wa_missing(),
+         "missing": cn.wa_missing(), "unlocks": "פניות מ-WhatsApp נכנסות ל-CRM אוטומטית · שליחת תשובה ללקוח באישור", "cost": "שיחות שירות — חינם במסגרת Meta; הודעות יזומות בתשלום אצל Meta",
+         "how": "developers.facebook.com → App → WhatsApp → מספר + טוקן קבוע; Webhook ל-/api/whatsapp/webhook (Verify token + App secret)"},
+        {"id": "shopify", "name": "Shopify (Admin API, קריאה)", "category": "store", "built": True, "connected": not cn.env(*cn.SHOPIFY_VARS),
+         "missing": cn.env(*cn.SHOPIFY_VARS), "unlocks": "נתוני חנות אמיתיים: הזמנות ומוצרים (store_data)", "cost": "חינם",
+         "how": "Shopify Admin → Apps → Develop apps → custom app עם read_orders, read_products → Admin API token"},
+        {"id": "wordpress", "name": "WordPress (REST API)", "category": "store", "built": True, "connected": not cn.env(*cn.WP_VARS),
+         "missing": cn.env(*cn.WP_VARS), "unlocks": "קריאת עמודי האתר (בהמשך: עדכון באישור + גיבוי)", "cost": "חינם",
+         "how": "WordPress → Users → Profile → Application Passwords → WP_URL, WP_USER, WP_APP_PASSWORD"},
+        {"id": "sheets", "name": "Google Sheets", "category": "analytics", "built": True, "connected": True, "missing": [],
+         "unlocks": "ייצוא לידים ל-CSV שנפתח ב-Google Sheets (סנכרון אוטומטי — עוד לא)", "cost": "חינם", "how": "לידים → ייצוא CSV"},
+    ]
     for iid, name, cat, unlocks in (
-        ("shopify", "Shopify", "store", "נתוני מכירות והזמנות אמיתיים, ותיקונים באתר באישור (עם גיבוי ושחזור)"),
-        ("wordpress", "WordPress / WooCommerce", "store", "נתוני חנות ותיקוני תוכן באישור"),
         ("ga4", "Google Analytics 4", "analytics", "כניסות, מקורות תנועה, משפך המרה — ניתוח נטישות על נתונים אמיתיים"),
+        ("search_console", "Google Search Console", "analytics", "חיפושים שמביאים תנועה, בעיות אינדוקס"),
         ("google_ads", "Google Ads", "ads", "ביצועי קמפיינים, זיהוי בזבוז תקציב"),
         ("meta_ads", "Meta Ads (פייסבוק/אינסטגרם)", "ads", "ביצועי מודעות וקריאייטיב"),
-        ("whatsapp", "WhatsApp Business", "messaging", "התראות לבעל העסק, ובהסכמה — מענה ללקוחות"),
-        ("crm", "CRM (HubSpot / Pipedrive / monday)", "crm", "ניהול לידים ומעקב אחרי פניות"),
+        ("crm", "CRM חיצוני (HubSpot / Pipedrive / monday)", "crm", "סנכרון לידים (ה-CRM הפנימי של P1 כבר עובד)"),
     ):
         items.append({"id": iid, "name": name, "category": cat, "built": False, "connected": False, "missing": [],
-                      "unlocks": unlocks, "cost": "—", "how": "החיבור עוד לא נבנה במערכת — בתוכנית העבודה"})
+                      "unlocks": unlocks, "cost": "—", "how": "דורש OAuth מול Google/Meta + אישור אפליקציה — עוד לא נבנה"})
     for i in items:
         i["status"] = "connected" if i["built"] and i["connected"] else "not_configured" if i["built"] else "not_built"
     return items
