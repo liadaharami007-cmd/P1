@@ -38,10 +38,10 @@ export async function startView(view, _p, app) {
     <a class="agency-strip" href="#/ceo?intent=agency">${tile("agency")}<span><strong>${t("start.p.agency")}</strong><span class="small muted">${t("start.p.agencyT")}</span></span>${icon("chevron")}</a>
     <section class="how-solve"><h2 class="section-title">${t("start.howTitle")}</h2>
       <ol class="how-steps">${HOW.map(([ic, ti, tx], n) => `<li><span class="how-n">${n + 1}</span><span class="tile" style="--hue:var(--brand)">${icon(ic)}</span><div><strong>${t(ti)}</strong><p class="small muted">${t(tx)}</p></div></li>`).join("")}</ol></section>
-    <section class="why-p1 card"><h2 class="section-title" style="margin-top:0">${t("start.whyTitle")}</h2><p class="small muted">${t("start.whySub")}</p>
-      <div class="why-grid"><div class="why-col"><div class="why-h">${t("start.whyChat")}</div><ul>${[1, 2, 3, 4, 5].map((n) => `<li>${t(`start.whyC${n}`)}</li>`).join("")}</ul></div>
-      <div class="why-col p1"><div class="why-h">P1 AI</div><ul>${[1, 2, 3, 4, 5].map((n) => `<li>${t(`start.whyP${n}`)}</li>`).join("")}</ul></div></div>
-      <p class="tiny faint" style="margin-top:10px">${t("start.whyNote")}</p></section>
+    <section class="gets card"><h2 class="section-title" style="margin-top:0">${t("start.getsTitle")}</h2><p class="small muted">${t("start.getsSub")}</p>
+      <div class="gets-grid">${[["browser", 1], ["megaphone", 2], ["handshake", 3], ["bolt", 4], ["check", 5], ["trend", 6]].map(([ic, n]) =>
+        `<div class="get"><span class="tile">${icon(String(ic))}</span><div><strong>${t(`start.get${n}`)}</strong><p class="small muted">${t(`start.get${n}T`)}</p></div></div>`).join("")}</div>
+      <a class="btn btn-primary" id="gets-go" href="#/run" style="margin-top:14px">${icon("play")}${t("start.getsCta")}</a></section>
     ${ms.items.length ? `<section class="card"><div class="card-head"><h2>${t("start.missions")}</h2><a class="btn btn-sm btn-ghost" href="#/">${t("nav.command")}</a></div>
       <div class="list">${ms.items.slice(0, 5).map((/** @type {any} */ m) => `<a class="list-item" href="#/ceo?mission=${m.id}"><strong class="small">${esc(m.title)}</strong>
         <span class="tiny faint" style="margin-inline-start:auto">${new Date(m.created_at).toLocaleDateString()}</span></a>`).join("")}</div></section>` : ""}

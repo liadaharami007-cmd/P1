@@ -868,3 +868,7 @@ body { background: radial-gradient(1200px 600px at 100% -10%, color-mix(in srgb,
   .how-steps { grid-template-columns: 1fr 1fr; } .why-grid { grid-template-columns: 1fr; }
   .free-box .start-btns { flex-direction: row; width: 100%; }
 }
+.gets-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin-top: 14px; }
+.get { display: flex; gap: 12px; align-items: flex-start; padding: 14px; border-radius: 16px; background: var(--surface-2); }
+.get strong { font-size: 14.5px; } .get p { margin: 4px 0 0; }
+@media (max-width: 900px) { .gets-grid { grid-template-columns: 1fr; } }
