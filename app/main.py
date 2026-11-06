@@ -501,6 +501,10 @@ def create_app(db: Database | None = None, agent: Agent | None = None, runner: A
             raise HTTPException(404, "הממצא לא נמצא")
         return {"id": finding_id, "fix_status": body.status}
 
+    # ---------------------------------------------------------------- Business OS: פרופיל, CEO, אישורים, ציר זמן
+    from .business.routes import register as register_business
+    register_business(app, database, the_runner, browser_available)
+
     # ---------------------------------------------------------------- אתרים + Smart Monitor + התראות
     @app.get("/api/sites")
     def sites(ctx: Ctx = Depends(current)):

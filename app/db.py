@@ -15,7 +15,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Iterator
 
-SCHEMA_VERSION = 3
+SCHEMA_VERSION = 4
 
 SCHEMA = """
 -- ===== חשבונות ומשתמשים (SaaS) =====
@@ -241,6 +241,47 @@ CREATE TABLE IF NOT EXISTS notifications (
     read_at TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_notifications_account ON notifications(account_id, created_at);
+
+-- ===== Business OS (גרסה 4): פרופיל עסק, פעולות שדורשות אישור, יומן פעילות =====
+CREATE TABLE IF NOT EXISTS business_profiles (
+    account_id TEXT PRIMARY KEY,
+    data_json TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    updated_by TEXT
+);
+CREATE TABLE IF NOT EXISTS actions (
+    id TEXT PRIMARY KEY,
+    account_id TEXT NOT NULL,
+    site_id TEXT,
+    kind TEXT NOT NULL,                -- run_audit / enable_monitor / fix_package / verify_fix
+    title TEXT NOT NULL,
+    summary TEXT NOT NULL,
+    changes_json TEXT NOT NULL,        -- מה ישתנה (מוצג לפני אישור)
+    risk TEXT NOT NULL,                -- none / low / medium / high
+    payload_json TEXT NOT NULL,
+    source TEXT NOT NULL,              -- rules / ai / user
+    status TEXT NOT NULL,              -- proposed / approved / executing / done / failed / rejected
+    result_json TEXT,
+    error TEXT,
+    created_at TEXT NOT NULL,
+    created_by TEXT,
+    decided_at TEXT,
+    decided_by TEXT,
+    executed_at TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_actions_account ON actions(account_id, created_at);
+CREATE TABLE IF NOT EXISTS activity (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    account_id TEXT NOT NULL,
+    kind TEXT NOT NULL,                -- profile_updated / action_proposed / action_approved / action_done / ...
+    title TEXT NOT NULL,
+    detail TEXT,
+    ref_type TEXT,
+    ref_id TEXT,
+    user_id TEXT,
+    created_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_activity_account ON activity(account_id, created_at);
 """
 
 # עמודות שנוספו בגרסאות מאוחרות לטבלאות קיימות (מיגרציה בטוחה: ADD COLUMN אם חסר)
