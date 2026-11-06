@@ -260,3 +260,43 @@ async def ai_brief(db: Database, snap: dict, engine) -> dict:
     db.record_ai_run(audit_id=None, account_id=snap["account"]["id"], kind="ceo_brief", status="done", model=usage.model,
                      usage=usage, result=data)
     return {"engine": getattr(engine, "id", "ai"), "model": usage.model, "source": "ai", **data}
+
+
+# ---------------------------------------------------------------- P1 Value Center
+def value(db: Database, account: dict) -> dict:
+    """הפרדה מלאה: measured (נספר מהמערכת) · estimate (אומדן עם הנחה גלויה) · demo (נתונים מסביבת הדגמה)."""
+    aid = account["id"]
+    with db._conn() as c:
+        rows = [dict(r) for r in c.execute(
+            """SELECT a.id, a.status, a.started_at, a.finished_at, a."trigger" AS trig, COALESCE(s.is_demo, 0) AS is_demo
+               FROM audits a LEFT JOIN sites s ON s.id = a.site_id WHERE a.account_id = ?""", (aid,))]
+        steps_real = c.execute("""SELECT COUNT(*) FROM audit_events e JOIN audits a ON a.id=e.audit_id LEFT JOIN sites s ON s.id=a.site_id
+                                  WHERE a.account_id=? AND COALESCE(s.is_demo,0)=0
+                                  AND e.kind IN ('click','navigate','select','type','scroll','loaded')""", (aid,)).fetchone()[0]
+        findings = c.execute("""SELECT COALESCE(s.is_demo,0) AS is_demo, COUNT(*) FROM findings f JOIN audits a ON a.id=f.audit_id
+                                LEFT JOIN sites s ON s.id=a.site_id WHERE a.account_id=? AND f.source='measured' GROUP BY 1""", (aid,)).fetchall()
+    found = {r[0]: r[1] for r in findings}
+
+    def bucket(demo: int) -> dict:
+        done = [r for r in rows if r["status"] == "done" and r["is_demo"] == demo]
+        secs = sum(((_parse(r["finished_at"]) - _parse(r["started_at"])).total_seconds() for r in done
+                    if _parse(r["finished_at"]) and _parse(r["started_at"])), 0.0)
+        return {"audits": len(done), "machine_minutes": round(secs / 60, 1), "issues_found": found.get(demo, 0)}
+    snap = snapshot(db, account)
+    pr = proof(db, snap)
+    demo_urls = {x["url"] for x in snap["sites"] if x.get("is_demo")}
+    usage = db.usage(aid)
+    acts = snap["actions"]
+    return {
+        "measured": {**bucket(0), "browser_steps": steps_real,
+                     "issues_verified_fixed": sum(1 for f in pr["issues_fixed_verified"] if f["site"] not in demo_urls),
+                     "actions_done": sum(1 for a in acts if a["status"] == "done"),
+                     "actions_waiting": sum(1 for a in acts if a["status"] == "proposed"),
+                     "ai_cost_usd_month": usage["ai_cost_usd"]},
+        "demo": bucket(1),
+        "assumptions": {"manual_minutes_per_audit": snap["profile"].get("manual_minutes_per_audit") or ASSUMED_MANUAL_MINUTES_PER_AUDIT,
+                        "hourly_value": snap["profile"].get("hourly_value"), "hours_on_site_per_month": snap["profile"].get("hours_on_site_per_month")},
+        "business_metrics": {"sales": None, "leads": None, "conversion": None,
+                             "note": "שינויים במכירות, לידים והמרות יוצגו רק אחרי חיבור נתונים (Shopify / Google Analytics). P1 לא מייחס לעצמו שיפור בלי ראיות."},
+        "next": plan(snap)["top3"],
+    }

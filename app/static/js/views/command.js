@@ -56,8 +56,13 @@ export async function commandView(view, _p, app) {
   let timer = 0;
   const load = async () => {
     const [d, wk] = await Promise.all([api("/api/business/overview"), api("/api/business/weekly")]);
+    if (!d.profile.business_name && !d.site && !sessionStorage.getItem("p1.seenStart")) {  // משתמש חדש → מסך הפתיחה
+      sessionStorage.setItem("p1.seenStart", "1");
+      location.hash = "#/start";
+      return;
+    }
     const name = d.profile.business_name || app.me.account.name;
-    setTitle(t("nav.command"), `<a class="btn btn-sm" href="#/approvals">${t("nav.approvals")}${d.pending_actions.length ? ` <span class="count-pill">${d.pending_actions.length}</span>` : ""}</a>`);
+    setTitle(t("nav.command"), `<a class="btn btn-sm btn-primary" href="#/start">${icon("plus")}<span class="btn-label">${t("nav.start")}</span></a><a class="btn btn-sm" href="#/approvals">${t("nav.approvals")}${d.pending_actions.length ? ` <span class="count-pill">${d.pending_actions.length}</span>` : ""}</a>`);
     const L = d.latest;
     root.innerHTML = `<div class="stack">
       <section class="cmd-hero">

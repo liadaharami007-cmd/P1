@@ -50,3 +50,12 @@ def test_mission_flows(make_client, monkeypatch):
     o = make_client(db=c.app.state.db)
     register(o, "other@p1.co")
     assert o.get(f"/api/missions/{m['id']}").status_code == 404 and o.get("/api/missions").json()["items"] == []
+
+
+def test_value_center_separates_layers(make_client):
+    c = make_client()
+    register(c, "val@p1.co")
+    v = c.get("/api/business/value").json()
+    assert set(v) >= {"measured", "demo", "assumptions", "business_metrics", "next"}
+    assert v["business_metrics"]["sales"] is None and "לא מייחס" in v["business_metrics"]["note"]
+    assert v["measured"]["audits"] == 0 and v["demo"]["audits"] == 0

@@ -21,6 +21,9 @@ import { approvalsView } from "./views/approvals.js";
 import { timelineView } from "./views/timeline.js";
 import { agencyView } from "./views/agency.js";
 import { departmentsView } from "./views/departments.js";
+import { startView } from "./views/start.js";
+import { ceoView } from "./views/ceo.js";
+import { valueView } from "./views/value.js";
 
 /** @typedef {{ status: any, me: any, account: any, cleanup: (() => void) | null }} AppState */
 /** @type {AppState} */
@@ -28,13 +31,15 @@ export const app = { status: null, me: null, account: null, cleanup: null };
 
 const NAV = [
   { path: "/", key: "command", icon: "home", group: "business" },
+  { path: "/start", key: "start", icon: "sparkle", group: "business" },
   { path: "/approvals", key: "approvals", icon: "check", group: "business" },
+  { path: "/value", key: "value", icon: "sparkle", group: "business", desktopOnly: true },
   { path: "/agency", key: "agency", icon: "users", group: "business", desktopOnly: true },
   { path: "/departments", key: "departments", icon: "overview", group: "business", desktopOnly: true },
   { path: "/business", key: "business", icon: "account", group: "business", desktopOnly: true },
   { path: "/timeline", key: "timeline", icon: "clock", group: "business", desktopOnly: true },
   { path: "/site", key: "overview", icon: "overview", group: "workspace", desktopOnly: true },
-  { path: "/sites", key: "sites", icon: "globe", group: "workspace" },
+  { path: "/sites", key: "sites", icon: "globe", group: "workspace", desktopOnly: true },
   { path: "/audits", key: "audits", icon: "audit", group: "workspace" },
   { path: "/fix", key: "fix", icon: "sparkle", group: "workspace", desktopOnly: true },
   { path: "/tasks", key: "tasks", icon: "tasks", group: "workspace", desktopOnly: true },
@@ -51,7 +56,7 @@ function route() {
   const fx = hash.match(/^\/fix(?:\/([a-f0-9]+))?$/);
   if (fx) return { view: fixStudioView, params: /** @type {any} */ ({ id: fx[1] || null }), nav: "/fix" };
   /** @type {Record<string, Function>} */
-  const table = { "/": commandView, "/site": dashboardView, "/business": businessView, "/approvals": approvalsView, "/timeline": timelineView, "/agency": agencyView, "/departments": departmentsView, "/audits": auditsView, "/tasks": tasksView, "/assistant": assistantView,
+  const table = { "/": commandView, "/site": dashboardView, "/business": businessView, "/approvals": approvalsView, "/timeline": timelineView, "/agency": agencyView, "/departments": departmentsView, "/start": startView, "/value": valueView, "/ceo": ceoView, "/audits": auditsView, "/tasks": tasksView, "/assistant": assistantView,
     "/integrations": integrationsView, "/account": accountView, "/admin": adminView, "/sites": sitesView, "/demo": demoView };
   return { view: table[hash] || commandView, params: /** @type {any} */ ({}), nav: table[hash] ? hash : "/" };
 }

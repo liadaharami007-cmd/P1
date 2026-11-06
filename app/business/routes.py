@@ -77,6 +77,10 @@ def register(app: FastAPI, db: Database, runner, browser_available: Callable[[],
                 "pending_actions": [a for a in store.list_actions(db, ctx.account_id) if a["status"] in ("proposed", "executing")],
                 "engines": engines.status()["active"]}
 
+    @app.get("/api/business/value")
+    def value(ctx: Ctx = Depends(current)):
+        return ceo.value(db, ctx.account)
+
     @app.get("/api/business/weekly")
     def weekly(ctx: Ctx = Depends(current)):
         return ceo.weekly(db, ceo.snapshot(db, ctx.account))
