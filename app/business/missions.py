@@ -177,7 +177,7 @@ def build_plan(db: Database, account: dict, user_id: str | None, intent: str, an
                            link="#/pages", note=None if ai else "מחכה למנוע AI"))
         return {"intent": intent, "steps": steps, "readiness": r, "engine": "rules",
                 "autopilot": {"agents": ["research", "strategy", "landing_page", "tasks"], "ready": ai,
-                              "request": "הקמת עסק: " + "; ".join(f"{k}: {v}" for k, v in answers.items() if v)[:600]}}
+                              "request": "אני רוצה להקים עסק — " + (answers.get("offer") or prof.get("offer") or "")[:200]}}
     if intent == "agency":
         steps.append(_step("לפתוח את מסך הסוכנות: כל הלקוחות, מי דורש טיפול, דוחות מוכנים", "ops", "works",
                            "רואים במבט אחד את כל האתרים של הלקוחות.", link="#/agency"))
@@ -295,7 +295,8 @@ def problem_plan(db, account, user_id, intent, answers, prof, site, url, ai) -> 
     order = ["audit", "research", "strategy", "ads", "content", "video", "landing_page", "leads", "tasks"]
     agents = [a for a in order if a in set(agents)]
     can_run = ai or all(a in ("audit", "leads", "tasks") for a in agents)
-    request = f"{INTENTS[intent]}. " + "; ".join(f"{k}: {v}" for k, v in answers.items() if k not in ("permission",) and v)[:600]
+    name = (answers.get("business_name") or prof.get("business_name") or "").strip()
+    request = INTENTS[intent] + (f" — {name}" if name else "")  # פרטי העסק עצמם עוברים לסוכנים מהפרופיל
     return {"intent": intent, "steps": steps, "engine": "rules", "site_id": site["id"] if site else None,
             "autopilot": {"agents": agents, "request": request, "ready": bool(agents) and can_run}}
 

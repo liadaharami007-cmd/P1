@@ -34,7 +34,7 @@ export async function runView(view) {
     view.innerHTML = `<div class="stack" style="max-width:820px;margin:0 auto">
       <div class="bubble me" dir="auto" style="align-self:flex-end">${esc(r.request)}</div>
       <div class="run-hero aurora"><div class="eyebrow-light">P1 CEO · Autopilot</div><p class="run-reply">${r.planner === "pending" ? `<span class="spinner"></span> ${t("ap.planning")}` : esc(r.plan.reply || t("ap.planned"))}</p>
-        <div class="run-meta"><span>${done}/${r.plan.steps.length} ${t("ap.agentsDone")}</span><span>${t("ap.planner")} ${r.planner === "ai" ? "Gemini" : r.planner === "pending" ? "…" : t("act.source.rules")}</span></div>
+        <div class="run-meta"><span>${done}/${r.plan.steps.length} ${t("ap.agentsDone")}</span><span>${t("ap.planner")} ${r.planner === "ai" ? "Gemini" : r.planner === "mission" ? t("ap.fromMission") : r.planner === "pending" ? "…" : t("act.source.rules")}</span></div>
         <div class="run-bar"><div style="width:${Math.round(done / Math.max(1, r.plan.steps.length) * 100)}%"></div></div></div>
       <ol class="agent-timeline">${r.plan.steps.map((/** @type {any} */ s) => { const a = AGENT[s.agent] || AGENT.tasks; return `<li class="agent-step ap-${s.status}">
         <span class="agent-av" style="--hue:${a.hue}">${icon(a.icon)}${s.status === "done" ? `<i class="agent-ok">${icon("check")}</i>` : ""}</span>
