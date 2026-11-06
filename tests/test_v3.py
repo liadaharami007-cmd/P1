@@ -47,9 +47,10 @@ def test_missing_info_is_a_placeholder_not_invented():
 def test_engine_status_without_any_model(monkeypatch):
     monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
     monkeypatch.setattr(engines, "ollama_status", lambda timeout=1.5: (False, "not running"))
+    monkeypatch.setattr(engines, "gemini_status", lambda *a, **k: (False, "חסר GEMINI_API_KEY", None))
     st = engines.status()
     assert st["active"] == "rules" and engines.active_engine() is None
-    assert {e["id"] for e in st["engines"]} == {"anthropic", "ollama", "rules"}
+    assert {e["id"] for e in st["engines"]} == {"anthropic", "gemini", "ollama", "rules"}
 
 
 def test_ollama_engine_structured_call():
