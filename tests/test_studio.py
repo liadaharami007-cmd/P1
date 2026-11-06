@@ -23,7 +23,7 @@ def test_gemini_engine_structured_and_retry():
             return httpx.Response(429, json={"error": {"message": "rate"}})
         return httpx.Response(200, json={"candidates": [{"content": {"parts": [{"text": json.dumps({"answer": "שלום"})}]}}],
                                          "usageMetadata": {"promptTokenCount": 10, "candidatesTokenCount": 4}})
-    eng = engines.GeminiEngine(model="gemini-2.5-flash", transport=httpx.MockTransport(handler), key="k")
+    eng = engines.GeminiEngine(model="gemini-2.5-flash", transport=httpx.MockTransport(handler), key="k", fallbacks=[])
     import app.intelligence.engines as E
     orig = asyncio.sleep
     E_sleep = []

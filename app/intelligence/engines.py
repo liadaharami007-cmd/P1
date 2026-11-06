@@ -83,7 +83,7 @@ def _gemini_key() -> str | None:
     return k or ("proxy-injected" if GEMINI_PROXY_KEY else None)
 
 
-_gemini_cache: dict = {"at": 0.0, "ok": False, "msg": "", "model": None}
+_gemini_cache: dict = {"at": 0.0, "ok": False, "msg": "", "model": None, "candidates": []}
 
 
 def gemini_status(timeout: float = 6, force: bool = False) -> tuple[bool, str, str | None]:
@@ -101,33 +101,48 @@ def gemini_status(timeout: float = 6, force: bool = False) -> tuple[bool, str, s
         else:
             names = [m["name"].split("/")[-1] for m in r.json().get("models", [])
                      if "generateContent" in m.get("supportedGenerationMethods", [])]
-            model = GEMINI_MODEL if GEMINI_MODEL in names else pick_gemini_model(names)
-            res = (bool(model), f"Gemini · {model}" if model else "לא נמצא מודל Gemini זמין", model)
+            cands = gemini_candidates(names)
+            if GEMINI_MODEL in names:
+                cands = [GEMINI_MODEL] + [c for c in cands if c != GEMINI_MODEL]
+            model = cands[0] if cands else None
+            _gemini_cache["candidates"] = cands
+            res = (bool(model), f"Gemini · {model} (+{len(cands) - 1} גיבוי)" if model else "לא נמצא מודל Gemini זמין", model)
     except httpx.HTTPError as e:
         res = (False, f"אין חיבור ל-Gemini: {type(e).__name__}", None)
     _gemini_cache.update(at=_t.time(), ok=res[0], msg=res[1], model=res[2])
     return res
 
 
-def pick_gemini_model(names: list[str]) -> str | None:
-    """המודל הטוב ביותר במסלול החינמי: Flash יציב בגרסה הגבוהה ביותר (לא lite/preview/image/tts/live)."""
+def gemini_candidates(names: list[str]) -> list[str]:
+    """מודלים מתאימים לפי סדר עדיפות: Flash יציב בגרסה הגבוהה → Flash-Lite. בלי preview/image/tts/omni/כלים מיוחדים."""
     import re as _re
-    good = [n for n in names if "flash" in n and not _re.search(r"lite|image|tts|live|audio|thinking|exp|preview|embedding", n)]
-    if not good:
-        good = [n for n in names if "flash" in n and not _re.search(r"image|tts|live|audio|embedding", n)]
+    bad = r"image|tts|live|audio|thinking|exp|preview|embedding|omni|robotics|computer|antigravity|research|nano|transcribe|customtools|latest"
 
     def ver(n: str) -> tuple:
         m = _re.search(r"gemini-(\d+)(?:\.(\d+))?", n)
-        return (int(m.group(1)), int(m.group(2) or 0), -len(n)) if m else (0, 0, 0)
-    return max(good, key=ver) if good else None
+        return (int(m.group(1)), int(m.group(2) or 0)) if m else (0, 0)
+    flash = [n for n in names if "flash" in n and not _re.search(bad, n)]
+    full = sorted([n for n in flash if "lite" not in n], key=ver, reverse=True)
+    lite = sorted([n for n in flash if "lite" in n], key=ver, reverse=True)
+    return full + lite
+
+
+def pick_gemini_model(names: list[str]) -> str | None:
+    c = gemini_candidates(names)
+    return c[0] if c else None
 
 
 class GeminiEngine:
     """Google Gemini דרך REST. פלט JSON מובנה (responseJsonSchema). עלות 0 במסלול החינמי."""
     id = "gemini"
 
-    def __init__(self, model: str | None = None, transport: httpx.AsyncBaseTransport | None = None, key: str | None = None):
-        self.model = model or gemini_status()[2] or "gemini-2.5-flash"
+    def __init__(self, model: str | None = None, transport: httpx.AsyncBaseTransport | None = None, key: str | None = None,
+                 fallbacks: list[str] | None = None):
+        if model is None:
+            gemini_status()
+        cands = [model] if model else list(_gemini_cache.get("candidates") or [])
+        self.models = (cands + [m for m in (fallbacks or []) if m not in cands]) or ["gemini-flash-latest"]
+        self.model = self.models[0]
         self.transport, self.key = transport, key or _gemini_key() or ""
 
     async def structured(self, *, system: str, content: list[dict], schema: dict, effort: str = "medium",
@@ -142,17 +157,26 @@ class GeminiEngine:
         body = {"systemInstruction": {"parts": [{"text": system}]}, "contents": [{"role": "user", "parts": parts}],
                 "generationConfig": {"responseMimeType": "application/json", "responseJsonSchema": schema,
                                      "temperature": 0.3, "maxOutputTokens": min(max_tokens, 32000)}}
-        url = f"{GEMINI_URL}/models/{self.model}:generateContent"
         last = ""
-        async with httpx.AsyncClient(timeout=180, transport=self.transport) as c:
-            for attempt in range(4):
+        queue = list(self.models)
+        tried = 0
+        async with httpx.AsyncClient(timeout=120, transport=self.transport) as c:
+            while queue and tried < 8:
+                model = queue[0]
+                tried += 1
                 try:
-                    r = await c.post(url, json=body, headers={"x-goog-api-key": self.key})
+                    r = await c.post(f"{GEMINI_URL}/models/{model}:generateContent", json=body, headers={"x-goog-api-key": self.key})
                 except httpx.HTTPError as e:
-                    raise IntelligenceError(f"אין חיבור ל-Gemini: {type(e).__name__}", retryable=True)
-                if r.status_code == 429 or r.status_code >= 500:  # מגבלת קצב של המסלול החינמי / עומס
-                    last = f"Gemini {r.status_code}"
-                    await _a.sleep(min(30, 4 * (attempt + 1)))
+                    last = f"{model}: {type(e).__name__}"
+                    queue.pop(0)  # מודל שלא עונה בזמן — עוברים למודל הבא
+                    continue
+                if r.status_code in (503, 404) or (r.status_code == 429 and len(queue) > 1):  # עמוס / לא זמין / מכסה של מודל → המודל הבא
+                    last = f"{model} {r.status_code}"
+                    queue.pop(0)
+                    continue
+                if r.status_code == 429 or r.status_code >= 500:
+                    last = f"{model} {r.status_code}"
+                    await _a.sleep(min(30, 4 * tried))
                     continue
                 if r.status_code == 400 and "responseJsonSchema" in r.text:  # גרסת API ישנה — סכימה בתוך ההנחיה
                     body["generationConfig"].pop("responseJsonSchema", None)
@@ -163,13 +187,14 @@ class GeminiEngine:
                 data = r.json()
                 try:
                     cand = data["candidates"][0]
-                    text = "".join(p.get("text", "") for p in cand["content"]["parts"])
+                    text = "".join(p.get("text", "") for p in cand["content"]["parts"] if not p.get("thought"))
                     out = json.loads(text)
                 except (KeyError, IndexError, json.JSONDecodeError):
                     reason = (data.get("candidates") or [{}])[0].get("finishReason") or data.get("promptFeedback", {}).get("blockReason")
                     raise IntelligenceError(f"Gemini לא החזיר JSON תקין ({reason or 'ללא סיבה'})", retryable=reason == "MAX_TOKENS")
                 um = data.get("usageMetadata", {})
-                return out, Usage(model=f"gemini:{self.model}", input_tokens=um.get("promptTokenCount", 0),
+                self.model = model
+                return out, Usage(model=f"gemini:{model}", input_tokens=um.get("promptTokenCount", 0),
                                   output_tokens=um.get("candidatesTokenCount", 0) + um.get("thoughtsTokenCount", 0))
         raise IntelligenceError(f"Gemini עמוס או שהגעתם למגבלת המסלול החינמי ({last}). נסו שוב בעוד דקה.", retryable=True)
 
