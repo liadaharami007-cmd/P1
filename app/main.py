@@ -168,7 +168,7 @@ def create_app(db: Database | None = None, agent: Agent | None = None, runner: A
         response.headers["X-Content-Type-Options"] = "nosniff"
         response.headers["X-Frame-Options"] = "DENY"
         response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
-        if request.url.path.startswith("/demo-store"):  # חנות הדמו: דפים פשוטים עם סקריפטים פנימיים, בלי גישה ל-API
+        if request.url.path.startswith(("/demo-store", "/demo-clients")):  # חנות הדמו: דפים פשוטים עם סקריפטים פנימיים, בלי גישה ל-API
             response.headers["Content-Security-Policy"] = ("default-src 'self'; script-src 'self' 'unsafe-inline'; "
                                                            "style-src 'self' 'unsafe-inline'; img-src 'self' data:; frame-ancestors 'none'")
         else:
@@ -665,6 +665,20 @@ def create_app(db: Database | None = None, agent: Agent | None = None, runner: A
     @app.post("/demo-store/cart/add")
     def demo_cart_add():
         return {"ok": True}
+
+    # לקוחות דמו של סוכנות: גרסאות של חנות הדמו (תוכן של P1 עצמו, מסומן "לקוח דמו")
+    @app.post("/demo-clients/{slug}/cart/add")
+    def demo_client_cart_add(slug: str):
+        return {"ok": True}
+
+    @app.get("/demo-clients/{slug}/{path:path}")
+    def demo_client_page(slug: str, path: str = ""):
+        from fastapi.responses import Response as RawResponse
+        from .business.agency import demo_page
+        res = demo_page(slug, path)
+        if not res:
+            raise HTTPException(404, "לא נמצא")
+        return RawResponse(res[0], media_type=res[1])
 
     # ---------------------------------------------------------------- ניהול פלטפורמה
     @app.get("/api/admin/overview")

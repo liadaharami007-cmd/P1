@@ -282,6 +282,18 @@ CREATE TABLE IF NOT EXISTS activity (
     created_at TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_activity_account ON activity(account_id, created_at);
+CREATE TABLE IF NOT EXISTS clients (            -- Agency Mode: לקוחות של סוכנות (is_demo=1 = לקוח הדגמה פיקטיבי)
+    id TEXT PRIMARY KEY,
+    account_id TEXT NOT NULL,
+    name TEXT NOT NULL,
+    url TEXT NOT NULL,
+    industry TEXT,
+    contact_name TEXT,
+    notes TEXT,
+    is_demo INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_clients_account ON clients(account_id);
 CREATE TABLE IF NOT EXISTS password_resets (    -- אסימוני שחזור סיסמה (רק hash), חד-פעמיים
     token_hash TEXT PRIMARY KEY,
     user_id TEXT NOT NULL,
@@ -474,8 +486,10 @@ class Database:
     def usage(self, account_id: str, since: str | None = None) -> dict:
         since = since or month_start()
         with self._conn() as c:
-            audits = c.execute("SELECT COUNT(*) FROM audits WHERE account_id = ? AND created_at >= ?", (account_id, since)).fetchone()[0]
-            running = c.execute("SELECT COUNT(*) FROM audits WHERE account_id = ? AND status IN ('queued','running')",
+            # בדיקות של סביבת ההדגמה לסוכנות רצות על התוכן של P1 עצמו — לא נספרות במכסת הלקוח
+            audits = c.execute("SELECT COUNT(*) FROM audits WHERE account_id = ? AND created_at >= ? AND \"trigger\" != 'demo_agency'",
+                               (account_id, since)).fetchone()[0]
+            running = c.execute("SELECT COUNT(*) FROM audits WHERE account_id = ? AND status IN ('queued','running') AND \"trigger\" != 'demo_agency'",
                                 (account_id,)).fetchone()[0]
             sites = c.execute("SELECT COUNT(*) FROM sites WHERE account_id = ?", (account_id,)).fetchone()[0]
             ai = c.execute("SELECT COUNT(DISTINCT audit_id), COALESCE(SUM(input_tokens),0), COALESCE(SUM(output_tokens),0), "

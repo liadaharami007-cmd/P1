@@ -19,6 +19,7 @@ import { commandView } from "./views/command.js";
 import { businessView } from "./views/business.js";
 import { approvalsView } from "./views/approvals.js";
 import { timelineView } from "./views/timeline.js";
+import { agencyView } from "./views/agency.js";
 
 /** @typedef {{ status: any, me: any, account: any, cleanup: (() => void) | null }} AppState */
 /** @type {AppState} */
@@ -27,6 +28,7 @@ export const app = { status: null, me: null, account: null, cleanup: null };
 const NAV = [
   { path: "/", key: "command", icon: "home", group: "business" },
   { path: "/approvals", key: "approvals", icon: "check", group: "business" },
+  { path: "/agency", key: "agency", icon: "users", group: "business", desktopOnly: true },
   { path: "/business", key: "business", icon: "account", group: "business", desktopOnly: true },
   { path: "/timeline", key: "timeline", icon: "clock", group: "business", desktopOnly: true },
   { path: "/site", key: "overview", icon: "overview", group: "workspace", desktopOnly: true },
@@ -47,7 +49,7 @@ function route() {
   const fx = hash.match(/^\/fix(?:\/([a-f0-9]+))?$/);
   if (fx) return { view: fixStudioView, params: /** @type {any} */ ({ id: fx[1] || null }), nav: "/fix" };
   /** @type {Record<string, Function>} */
-  const table = { "/": commandView, "/site": dashboardView, "/business": businessView, "/approvals": approvalsView, "/timeline": timelineView, "/audits": auditsView, "/tasks": tasksView, "/assistant": assistantView,
+  const table = { "/": commandView, "/site": dashboardView, "/business": businessView, "/approvals": approvalsView, "/timeline": timelineView, "/agency": agencyView, "/audits": auditsView, "/tasks": tasksView, "/assistant": assistantView,
     "/integrations": integrationsView, "/account": accountView, "/admin": adminView, "/sites": sitesView, "/demo": demoView };
   return { view: table[hash] || commandView, params: /** @type {any} */ ({}), nav: table[hash] ? hash : "/" };
 }

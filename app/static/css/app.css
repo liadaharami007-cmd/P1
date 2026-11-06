@@ -643,3 +643,28 @@ textarea.input { height: auto; padding: 9px 12px; resize: vertical; line-height:
   padding: 12px 14px; border-radius: 14px; background: var(--surface); border: 1px solid var(--border); box-shadow: var(--shadow-lg); animation: pop .25s var(--ease); }
 .install-hint img { width: 40px; height: 40px; border-radius: 10px; }
 .install-hint div { flex: 1; display: flex; flex-direction: column; font-size: 13px; } .install-hint span { color: var(--muted); font-size: 12.5px; }
+/* Agency Mode */
+.ag-kpis { grid-template-columns: repeat(6, minmax(0, 1fr)); }
+.kpi.attn .kpi-num { color: var(--serious-text); }
+.client-list { display: flex; flex-direction: column; gap: 8px; }
+.client-row { display: grid; grid-template-columns: 52px minmax(0, 1fr) auto auto; gap: 16px; align-items: center; padding: 14px 16px;
+  background: var(--surface); border: 1px solid var(--border); border-radius: 12px; }
+.client-row.attn { border-inline-start: 3px solid var(--serious); }
+.client-score { width: 48px; height: 48px; border-radius: 12px; display: grid; place-items: center; font-weight: 700; font-size: 17px;
+  background: var(--surface-2); color: var(--muted); font-variant-numeric: tabular-nums; }
+.client-score.good { background: var(--good-soft); color: var(--good-text); } .client-score.mid { background: var(--warning-soft); color: var(--warning-text); }
+.client-score.bad { background: var(--critical-soft); color: var(--critical-text); }
+.client-main { min-width: 0; }
+.client-reasons { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 6px; }
+.chip.warn { background: var(--serious-soft); color: var(--serious-text); } .chip.ok { background: var(--good-soft); color: var(--good-text); }
+.client-stats { display: flex; gap: 18px; text-align: center; }
+.client-stats div { display: flex; flex-direction: column; min-width: 56px; } .client-stats .num { font-weight: 700; }
+.client-stats small { font-size: 11px; color: var(--muted); }
+.client-actions { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
+.demo-badge { background: var(--src-sim-soft); color: var(--src-sim); }
+@media (max-width: 1100px) { .ag-kpis { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+@media (max-width: 900px) {
+  .client-row { grid-template-columns: 44px minmax(0, 1fr); }
+  .client-stats, .client-actions { grid-column: 1 / -1; justify-content: flex-start; }
+  .ag-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}

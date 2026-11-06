@@ -10,7 +10,7 @@ from pydantic import BaseModel
 from ..db import Database
 from ..intelligence import engines
 from ..saas.auth import Ctx, current
-from . import actions, brain, ceo, store
+from . import actions, agency, brain, ceo, store
 
 
 class ProfileIn(BaseModel):
@@ -19,6 +19,13 @@ class ProfileIn(BaseModel):
 
 class ActionIn(BaseModel):
     key: str
+
+
+class ClientIn(BaseModel):
+    name: str
+    url: str
+    industry: str | None = None
+    confirm_permission: bool = False
 
 
 def register(app: FastAPI, db: Database, runner, browser_available: Callable[[], tuple[bool, str | None]]) -> None:
@@ -79,6 +86,61 @@ def register(app: FastAPI, db: Database, runner, browser_available: Callable[[],
         except Exception as e:  # noqa: BLE001 — כשל במנוע מוצג כמו שהוא, בלי תשובה מומצאת
             db.record_ai_run(audit_id=None, account_id=ctx.account_id, kind="ceo_brief", status="failed", error=str(e)[:300])
             raise HTTPException(502, f"המנוע לא החזיר תשובה: {str(e)[:200]}")
+
+    # ------------------------------------------------------------ Agency Mode
+    @app.get("/api/agency")
+    def agency_overview(ctx: Ctx = Depends(current)):
+        return agency.overview(db, ctx.account)
+
+    @app.post("/api/agency/clients", status_code=201)
+    def agency_add(body: ClientIn, ctx: Ctx = Depends(current)):
+        from .. import config
+        from ..research.analyzer import assert_public_host, normalize_url
+        if not body.confirm_permission:
+            raise HTTPException(400, "יש לאשר שיש לכם הרשאה מהלקוח לבדוק את האתר שלו")
+        if not body.name.strip():
+            raise HTTPException(400, "חסר שם לקוח")
+        try:
+            url = normalize_url(body.url)
+            if not config.DEV_ALLOW_PRIVATE_TARGETS:
+                assert_public_host(url)
+        except ValueError as e:
+            raise HTTPException(400, str(e))
+        cl = agency.add_client(db, ctx.account_id, body.name.strip(), url, body.industry)
+        store.log(db, ctx.account_id, "client_added", f"נוסף לקוח: {cl['name']}", user_id=ctx.user_id)
+        return cl
+
+    @app.delete("/api/agency/clients/{client_id}", status_code=204)
+    def agency_delete(client_id: str, ctx: Ctx = Depends(current)):
+        if not agency.delete_client(db, client_id, ctx.account_id):
+            raise HTTPException(404, "הלקוח לא נמצא")
+
+    @app.post("/api/agency/clients/{client_id}/audit", status_code=202)
+    def agency_audit(client_id: str, ctx: Ctx = Depends(current)):
+        from ..saas import plans
+        cl = agency.get_client(db, client_id, ctx.account_id)
+        if not cl:
+            raise HTTPException(404, "הלקוח לא נמצא")
+        ok, missing = browser_available()
+        if not ok:
+            raise HTTPException(503, missing)
+        try:
+            return agency.queue_audit(db, runner, ctx.account, ctx.user_id, cl)
+        except plans.QuotaError as e:
+            raise HTTPException(402, e.message)
+        except ValueError as e:
+            raise HTTPException(400, str(e))
+
+    @app.post("/api/agency/demo", status_code=201)
+    def agency_demo(ctx: Ctx = Depends(current)):
+        ok, missing = browser_available()
+        if not ok:
+            raise HTTPException(503, missing)
+        return {"created": len(agency.seed_demo(db, runner, ctx.account, ctx.user_id))}
+
+    @app.delete("/api/agency/demo")
+    def agency_demo_remove(ctx: Ctx = Depends(current)):
+        return {"removed": agency.remove_demo(db, ctx.account_id)}
 
     # ------------------------------------------------------------ Human Approval Center
     @app.get("/api/actions")
