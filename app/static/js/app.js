@@ -28,6 +28,7 @@ import { studioView } from "./views/studio.js";
 import { leadsView } from "./views/leads.js";
 import { pagesView } from "./views/pages.js";
 import { runView } from "./views/run.js";
+import { connectView } from "./views/connect.js";
 
 /** @typedef {{ status: any, me: any, account: any, cleanup: (() => void) | null }} AppState */
 /** @type {AppState} */
@@ -53,6 +54,7 @@ const NAV = [
   { path: "/tasks", key: "tasks", icon: "tasks", group: "workspace", desktopOnly: true },
   { path: "/assistant", key: "assistant", icon: "chat", group: "workspace", desktopOnly: true },
   { path: "/demo", key: "demo", icon: "play", group: "settings", desktopOnly: true },
+  { path: "/connect", key: "connect", icon: "plug", group: "settings", desktopOnly: true },
   { path: "/integrations", key: "integrations", icon: "plug", group: "settings", desktopOnly: true },
   { path: "/account", key: "account", icon: "account", group: "settings" },
 ];
@@ -64,7 +66,7 @@ function route() {
   const fx = hash.match(/^\/fix(?:\/([a-f0-9]+))?$/);
   if (fx) return { view: fixStudioView, params: /** @type {any} */ ({ id: fx[1] || null }), nav: "/fix" };
   /** @type {Record<string, Function>} */
-  const table = { "/": commandView, "/site": dashboardView, "/business": businessView, "/approvals": approvalsView, "/timeline": timelineView, "/agency": agencyView, "/departments": departmentsView, "/start": startView, "/value": valueView, "/studio": studioView, "/pages": pagesView, "/run": runView, "/leads": leadsView, "/ceo": ceoView, "/audits": auditsView, "/tasks": tasksView, "/assistant": assistantView,
+  const table = { "/": commandView, "/site": dashboardView, "/business": businessView, "/approvals": approvalsView, "/timeline": timelineView, "/agency": agencyView, "/departments": departmentsView, "/start": startView, "/value": valueView, "/studio": studioView, "/pages": pagesView, "/run": runView, "/connect": connectView, "/leads": leadsView, "/ceo": ceoView, "/audits": auditsView, "/tasks": tasksView, "/assistant": assistantView,
     "/integrations": integrationsView, "/account": accountView, "/admin": adminView, "/sites": sitesView, "/demo": demoView };
   return { view: table[hash] || commandView, params: /** @type {any} */ ({}), nav: table[hash] ? hash : "/" };
 }

@@ -754,3 +754,5 @@ textarea.input { height: auto; padding: 9px 12px; resize: vertical; line-height:
 .funnel-stage .num { font-size: 22px; font-weight: 800; } .funnel-stage small { color: var(--muted); font-size: 12px; }
 .funnel-stage.st-won { background: var(--good-soft); } .funnel-stage.st-new { background: var(--brand-soft); }
 .ap-video { display: block; width: 100%; max-width: 260px; aspect-ratio: 9 / 16; border-radius: 12px; background: #000; margin: 8px 0; }
+.snippet { background: var(--surface-2); border: 1px solid var(--border); border-radius: 10px; padding: 12px; font: 12.5px/1.5 ui-monospace, Menlo, monospace; white-space: pre-wrap; word-break: break-all; margin: 0 0 10px; }
+.conn-form label { display: grid; gap: 4px; }
