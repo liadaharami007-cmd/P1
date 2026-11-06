@@ -839,3 +839,9 @@ body { background: radial-gradient(1200px 600px at 100% -10%, color-mix(in srgb,
 }
 .clamp { display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; overflow: hidden; cursor: pointer; color: var(--text-2); }
 .clamp.open { -webkit-line-clamp: unset; display: block; }
+@media (max-width: 900px) {
+  .cmd-hero { gap: 14px; }
+  .cmd-score { flex-direction: row; align-items: center; gap: 12px; padding: 10px 14px; border-radius: 16px; align-self: stretch; }
+  .cmd-score .ring { transform: scale(.62); margin: -21px; flex-shrink: 0; }
+  .cmd-score .tiny { text-align: start; }
+}
