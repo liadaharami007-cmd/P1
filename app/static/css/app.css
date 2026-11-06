@@ -668,3 +668,15 @@ textarea.input { height: auto; padding: 9px 12px; resize: vertical; line-height:
   .client-stats, .client-actions { grid-column: 1 / -1; justify-content: flex-start; }
   .ag-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
+/* Departments + capability status */
+.dep-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 16px; }
+.dep-head { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; } .dep-head h2 { font-size: 16px; }
+.dep-ico { font-size: 22px; }
+.cap-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.cap-list li { display: flex; gap: 10px; align-items: flex-start; font-size: 13.5px; }
+.cap-list li.cap-unavailable { color: var(--muted); }
+.cap-dot { width: 9px; height: 9px; border-radius: 50%; margin-top: 6px; flex-shrink: 0; display: inline-block; }
+.cap-dot.cap-works { background: var(--good); } .cap-dot.cap-partial { background: var(--warning); } .cap-dot.cap-unavailable { background: var(--faint); }
+.cap-label { color: var(--muted); white-space: nowrap; }
+.cap-legend { gap: 6px 14px; font-size: 13px; color: var(--text-2); } .cap-legend .cap-dot { margin-top: 0; }
+.int-not_built { opacity: .78; }

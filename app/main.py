@@ -306,7 +306,13 @@ def create_app(db: Database | None = None, agent: Agent | None = None, runner: A
 
     @app.get("/api/integrations")
     def get_integrations(ctx: Ctx = Depends(current)):
-        return integrations(ai_configured() or app.state.agent.ready)
+        from .business import registry
+        return registry.integrations()
+
+    @app.get("/api/departments")
+    def get_departments(ctx: Ctx = Depends(current)):
+        from .business import registry
+        return {"departments": registry.departments_json()}
 
     @app.get("/api/account")
     def account(ctx: Ctx = Depends(current)):

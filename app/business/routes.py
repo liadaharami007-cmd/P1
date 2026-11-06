@@ -10,7 +10,7 @@ from pydantic import BaseModel
 from ..db import Database
 from ..intelligence import engines
 from ..saas.auth import Ctx, current
-from . import actions, agency, brain, ceo, store
+from . import actions, agency, brain, ceo, missions, store
 
 
 class ProfileIn(BaseModel):
@@ -19,6 +19,16 @@ class ProfileIn(BaseModel):
 
 class ActionIn(BaseModel):
     key: str
+
+
+class IntentIn(BaseModel):
+    text: str | None = None
+    intent: str | None = None
+
+
+class MissionIn(BaseModel):
+    intent: str
+    answers: dict[str, Any] = {}
 
 
 class ClientIn(BaseModel):
@@ -86,6 +96,43 @@ def register(app: FastAPI, db: Database, runner, browser_available: Callable[[],
         except Exception as e:  # noqa: BLE001 — כשל במנוע מוצג כמו שהוא, בלי תשובה מומצאת
             db.record_ai_run(audit_id=None, account_id=ctx.account_id, kind="ceo_brief", status="failed", error=str(e)[:300])
             raise HTTPException(502, f"המנוע לא החזיר תשובה: {str(e)[:200]}")
+
+    # ------------------------------------------------------------ P1 CEO: כוונה → שאלות → משימה + תוכנית
+    @app.post("/api/ceo/intent")
+    def ceo_intent(body: IntentIn, ctx: Ctx = Depends(current)):
+        if body.intent:
+            if body.intent not in missions.INTENTS:
+                raise HTTPException(400, "מסלול לא מוכר")
+            res = {"intent": body.intent, "label": missions.INTENTS[body.intent], "source": "choice", "matched": None}
+        else:
+            if not (body.text or "").strip():
+                raise HTTPException(400, "כתבו מה תרצו להשיג")
+            res = missions.classify(body.text[:2000])
+        prof = (store.get_profile(db, ctx.account_id) or {"data": {}})["data"]
+        return {**res, "questions": missions.questions_for(res["intent"], prof), "ai": missions.ceo_engine_active()}
+
+    @app.post("/api/missions", status_code=201)
+    def create_mission(body: MissionIn, ctx: Ctx = Depends(current)):
+        from ..saas import plans
+        try:
+            return missions.create_mission(db, ctx.account, ctx.user_id, body.intent, body.answers)
+        except (ValueError, plans.QuotaError) as e:
+            raise HTTPException(400, getattr(e, "message", None) or str(e))
+
+    @app.get("/api/missions")
+    def list_missions(ctx: Ctx = Depends(current)):
+        return {"items": missions.list_missions(db, ctx.account_id)}
+
+    @app.get("/api/missions/{mission_id}")
+    def get_mission(mission_id: str, ctx: Ctx = Depends(current)):
+        m = missions.get_mission(db, mission_id, ctx.account_id)
+        if not m:
+            raise HTTPException(404, "המשימה לא נמצאה")
+        return m
+
+    @app.get("/api/ceo/today")
+    def ceo_today(ctx: Ctx = Depends(current)):
+        return missions.today(db, ctx.account)
 
     # ------------------------------------------------------------ Agency Mode
     @app.get("/api/agency")

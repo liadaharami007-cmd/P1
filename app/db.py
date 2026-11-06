@@ -282,6 +282,18 @@ CREATE TABLE IF NOT EXISTS activity (
     created_at TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_activity_account ON activity(account_id, created_at);
+CREATE TABLE IF NOT EXISTS missions (           -- P1 CEO: משימה = כוונה + תשובות + תוכנית
+    id TEXT PRIMARY KEY,
+    account_id TEXT NOT NULL,
+    intent TEXT NOT NULL,
+    title TEXT NOT NULL,
+    status TEXT NOT NULL,
+    answers_json TEXT NOT NULL,
+    plan_json TEXT NOT NULL,
+    created_by TEXT,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+);
 CREATE TABLE IF NOT EXISTS clients (            -- Agency Mode: לקוחות של סוכנות (is_demo=1 = לקוח הדגמה פיקטיבי)
     id TEXT PRIMARY KEY,
     account_id TEXT NOT NULL,
