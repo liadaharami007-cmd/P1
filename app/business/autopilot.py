@@ -163,7 +163,16 @@ async def _step(db, runner, account, user_id, step, handoff, request, engine) ->
                                       "שהניתוח מבוסס על ידע כללי של המודל ועל המתחרים שבעל העסק ציין, ושיש לאמת. אל תמציא מחירים או נתונים מספריים.",
                                       RESEARCH_SCHEMA, request, extra=extra, engine=engine)
         return _short(res["output"]), {"type": "ai_output", "id": res["id"]}
-    kind = {"strategy": "marketing_strategy", "ads": "ad_copy", "content": "content_calendar", "video": "video_script"}.get(a)
+    if a == "video":
+        res = await studio.run(db, account, user_id, "video_script", request, extra=extra, engine=engine)
+        o = res["output"]
+        scenes = ([{"seconds": "3", "visual": "", "voiceover": o["hook"]}] if o.get("hook") else []) + list(o.get("scenes") or [])
+        if not scenes:
+            return _short(o) or "נכתב תסריט", {"type": "ai_output", "id": res["id"]}
+        from . import video
+        v = await video.render(db, account, user_id, scenes, o.get("cta") or "", (request or "סרטון")[:60])
+        return f"נכתב תסריט ונוצר סרטון MP4 ({v['seconds']} שנ'). {_short(o)[:300]}", {"type": "video", "id": v["id"], "url": v["url"]}
+    kind = {"strategy": "marketing_strategy", "ads": "ad_copy", "content": "content_calendar"}.get(a)
     if kind:
         res = await studio.run(db, account, user_id, kind, request, extra=extra, engine=engine)
         return _short(res["output"]) or "הוכן", {"type": "ai_output", "id": res["id"]}

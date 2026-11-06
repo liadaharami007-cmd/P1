@@ -50,7 +50,13 @@ export async function studioView(view) {
       const r = await api("/api/studio/run", { method: "POST", body: JSON.stringify({ kind: fd.get("kind"), input: fd.get("input") || "" }) });
       out.innerHTML = `<article class="card out-card"><div class="row" style="justify-content:space-between"><span class="badge src-ai">${t("src.ai")} · ${esc(r.model)}</span>
         <span class="tiny faint">${t("st.basedOn")} ${r.grounded_on.profile_fields.length} ${t("st.fields")} · ${r.grounded_on.site_pages.length} ${t("st.pages")}</span></div>${render(r.output)}
-        <p class="tiny faint" style="margin-top:8px">${t("st.draft")}</p></article>`;
+        <p class="tiny faint" style="margin-top:8px">${t("st.draft")}</p>
+        ${r.kind === "video_script" ? `<button class="btn btn-sm btn-primary" id="mk-video" style="margin-top:8px">${icon("play")}${t("st.makeVideo")}</button><div id="vid"></div>` : ""}</article>`;
+      const mv = /** @type {HTMLButtonElement|null} */ (out.querySelector("#mk-video"));
+      if (mv) mv.onclick = async () => { mv.disabled = true; mv.innerHTML = `<span class="spinner"></span>${t("st.rendering")}`;
+        try { const v = await api("/api/videos", { method: "POST", body: JSON.stringify({ output_id: r.id }) });
+          /** @type {HTMLElement} */ (out.querySelector("#vid")).innerHTML = `<video class="ap-video" controls playsinline src="${esc(v.url)}"></video><a class="btn btn-sm" href="${esc(v.url)}" download>${icon("download")}MP4</a>`; mv.remove(); }
+        catch (err) { toast(/** @type {Error} */ (err).message, "error"); mv.disabled = false; mv.textContent = t("st.makeVideo"); } };
     } catch (err) { out.innerHTML = ""; toast(/** @type {Error} */ (err).message, "error"); }
     btn.disabled = false;
   };

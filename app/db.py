@@ -327,6 +327,16 @@ CREATE TABLE IF NOT EXISTS page_versions (
     created_at TEXT NOT NULL,
     PRIMARY KEY (page_id, version)
 );
+CREATE TABLE IF NOT EXISTS videos (             -- סרטוני מוטיון שנוצרו מתסריט (דפדפן + ffmpeg)
+    id TEXT PRIMARY KEY,
+    account_id TEXT NOT NULL,
+    title TEXT NOT NULL,
+    scenes_json TEXT NOT NULL,
+    path TEXT NOT NULL,
+    seconds REAL,
+    created_by TEXT,
+    created_at TEXT NOT NULL
+);
 CREATE TABLE IF NOT EXISTS runs (               -- Autopilot: בקשה אחת → כמה סוכנים ברצף, עם העברת תוצרים ביניהם
     id TEXT PRIMARY KEY,
     account_id TEXT NOT NULL,

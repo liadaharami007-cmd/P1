@@ -6,7 +6,7 @@ import { api, esc, icon, toast } from "../ui.js";
 
 const ICON = { audit: "🔍", research: "🔭", strategy: "🧭", ads: "📣", content: "🗓️", video: "🎬", landing_page: "🌐", leads: "🤝", tasks: "✅" };
 const LINK = { ai_output: (/** @type {string} */ id) => "#/studio", page: (/** @type {string} */ id) => `#/pages?id=${id}`, audit: (/** @type {string} */ id) => `#/audits/${id}`,
-  action: () => "#/approvals", leads: () => "#/leads", plan: () => "#/" };
+  action: () => "#/approvals", leads: () => "#/leads", plan: () => "#/", video: () => "#/studio?tab=marketing" };
 
 /** @param {HTMLElement} view */
 export async function runView(view) {
@@ -42,6 +42,7 @@ export async function runView(view) {
           <div class="tiny muted">${esc(s.goal)}</div>
           ${s.summary ? `<div class="small" style="margin-top:6px;white-space:pre-line">${esc(s.summary.slice(0, 600))}</div>` : ""}
           ${s.error ? `<div class="notice notice-error" style="margin-top:6px"><span class="ico">!</span><span class="small">${esc(s.error)}</span></div>` : ""}
+          ${s.ref && s.ref.type === "video" ? `<video class="ap-video" controls playsinline preload="metadata" src="${esc(s.ref.url)}"></video>` : ""}
           ${s.ref && /** @type {any} */ (LINK)[s.ref.type] ? `<a class="btn btn-sm" style="margin-top:6px" href="${/** @type {any} */ (LINK)[s.ref.type](s.ref.id)}">${s.ref.needs_approval ? t("ceo.approve") : t("cmd.open")}</a>` : ""}</div></li>`).join("")}</ol>
       ${r.status !== "running" ? `<div class="row"><a class="btn btn-sm" href="#/">${t("ceo.toCommand")}</a><a class="btn btn-sm btn-ghost" href="#/run">${t("ap.new")}</a></div>` : ""}</div>`;
     clearTimeout(timer);

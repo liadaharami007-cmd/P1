@@ -50,6 +50,13 @@ class LeadPatch(BaseModel):
     value: float | None = None
 
 
+class VideoIn(BaseModel):
+    output_id: str | None = None   # תסריט שסוכן הווידאו כבר כתב (ai_outputs)
+    scenes: list[dict] | None = None
+    cta: str = ""
+    title: str = "סרטון"
+
+
 class SendIn(BaseModel):
     channel: str
     body: str
@@ -264,6 +271,42 @@ def register(app: FastAPI, db: Database, runner, browser_available: Callable[[],
         for l in studio.list_leads(db, ctx.account_id):
             w.writerow([l["name"], l["contact"], l["channel"], l["status"], l.get("value") or "", l.get("follow_up_at") or "", l["message"], l["created_at"]])
         return R("\ufeff" + buf.getvalue(), media_type="text/csv; charset=utf-8", headers={"Content-Disposition": 'attachment; filename="p1-leads.csv"'})
+
+    # ------------------------------------------------------------ סוכן וידאו (מוטיון טקסט → MP4)
+    @app.post("/api/videos", status_code=201)
+    async def make_video(body: VideoIn, ctx: Ctx = Depends(current)):
+        from . import video
+        scenes, cta, title = body.scenes, body.cta, body.title
+        if body.output_id:
+            h = next((x for x in studio.history(db, ctx.account_id, "video_script", 100) if x["id"] == body.output_id), None)
+            if not h:
+                raise HTTPException(404, "התסריט לא נמצא")
+            scenes, cta, title = h["output"].get("scenes") or [], h["output"].get("cta") or cta, (h["input"] or "סרטון")[:80]
+            if h["output"].get("hook"):
+                scenes = [{"seconds": "3", "visual": "", "voiceover": h["output"]["hook"]}] + scenes
+        if not scenes:
+            raise HTTPException(400, "אין סצנות לסרטון")
+        ok, missing = browser_available()
+        if not ok:
+            raise HTTPException(503, missing)
+        try:
+            return await video.render(db, ctx.account, ctx.user_id, scenes, cta, title)
+        except RuntimeError as e:
+            raise HTTPException(500, str(e))
+
+    @app.get("/api/videos")
+    def videos(ctx: Ctx = Depends(current)):
+        from . import video
+        return {"items": video.list_videos(db, ctx.account_id)}
+
+    @app.get("/api/videos/{vid}.mp4")
+    def video_file(vid: str, ctx: Ctx = Depends(current)):
+        from fastapi.responses import FileResponse as F
+        from . import video
+        p = video.video_path(db, vid, ctx.account_id)
+        if not p:
+            raise HTTPException(404, "לא נמצא")
+        return F(p, media_type="video/mp4")
 
     # ------------------------------------------------------------ חיבורים רשמיים: WhatsApp webhook · Shopify · WordPress
     @app.get("/api/whatsapp/webhook")

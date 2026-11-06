@@ -96,3 +96,25 @@ def test_plan_and_execute_in_background(make_client):
     asyncio.run(autopilot.plan_and_execute(db, None, acc, None, run["id"], engine=SpecEngine()))
     r = autopilot.get(db, run["id"], acc["id"])
     assert r["status"] == "done" and r["planner"] in ("ai", "rules") and r["plan"]["steps"]
+
+
+import pytest  # noqa: E402
+
+from app.main import browser_available  # noqa: E402
+
+
+@pytest.mark.skipif(not browser_available()[0], reason="Chromium/Playwright לא זמין")
+def test_video_agent_renders_real_mp4(make_client, tmp_path, monkeypatch):
+    from app import config
+    monkeypatch.setattr(config, "DATA_DIR", tmp_path)
+    c = make_client()
+    register(c, "video@p1.co")
+    assert c.post("/api/videos", json={"scenes": []}).status_code == 400
+    v = c.post("/api/videos", json={"title": "קיץ", "cta": "להזמנה", "scenes": [
+        {"seconds": "2", "visual": "<script>x</script>", "voiceover": "פשתן טבעי לקיץ"}, {"seconds": "2", "visual": "", "voiceover": "משלוח מהיר"}]}).json()
+    assert v["seconds"] >= 7
+    f = c.get(v["url"])
+    assert f.status_code == 200 and f.headers["content-type"] == "video/mp4" and len(f.content) > 10000 and f.content[4:8] == b"ftyp"
+    o = make_client(db=c.app.state.db)
+    register(o, "o3@p1.co")
+    assert o.get(v["url"]).status_code == 404
