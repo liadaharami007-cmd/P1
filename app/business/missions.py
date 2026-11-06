@@ -14,11 +14,18 @@ from ..db import Database
 from . import actions, brain, ceo, store
 
 INTENTS = {
+    "stuck": "העסק שלי לא מתקדם", "site_sales": "האתר שלי לא מוכר", "ads": "הפרסום לא מביא תוצאות",
+    "customers": "אין לי מספיק לקוחות", "no_time": "אין לי זמן לנהל הכול",
     "start": "לפתוח עסק", "grow": "להגדיל את העסק", "website": "לבנות או לשפר אתר",
     "marketing": "שיווק, תוכן ופרסום", "manage": "לנהל את העסק עם P1", "consult": "להתייעץ עם P1",
     "agency": "סוכנות / משרד פרסום עם לקוחות", "today": "מה עושים היום",
 }
 KEYWORDS = [  # הסדר חשוב: ספציפי לפני כללי
+    ("ads", r"פרסום לא|הפרסום לא|קמפיין לא|מודעות לא|שורף כסף|בזבוז.{0,8}פרסום|ads (are )?not|campaigns? (is|are)? ?not"),
+    ("site_sales", r"(אתר|חנות).{0,25}(לא מוכר|לא קונים|אין רכישות|אין מכירות|לא יודע אם.{0,6}טוב)|למה אין (לו )?רכישות|site.{0,15}not sell|no (sales|purchases)"),
+    ("customers", r"אין (לי )?(מספיק )?לקוחות|מעט לקוחות|אין פניות|לא מגיעים לקוחות|need (more )?customers|no leads"),
+    ("no_time", r"אין לי זמן|לא מספיק|עמוס|לנהל הכול|no time|too busy"),
+    ("stuck", r"לא מתקדם|לא מצליח לקדם|תקוע|לא גדל|לא צומח|stuck|not growing"),
     ("agency", r"משרד פרסום|סוכנות|לקוחות שלי|ללקוחות שלנו|agency|clients"),
     ("today", r"מה עושים היום|מה לעשות היום|מה הצעד הבא|מה עכשיו|today|next step"),
     ("start", r"לפתוח עסק|להקים עסק|רעיון|עסק חדש|start a business|new business|idea"),
@@ -51,6 +58,33 @@ SITE_Q = [_q("website", "מה כתובת האתר? (אם אין — השאירו
           _q("permission", "האתר שלכם, או שיש לכם הרשאה לבדוק אותו?", "yesno", required=False,
              hint="P1 גולש באתר כמו לקוח ועוצר לפני תשלום. בלי אישור — לא בודקים.")]
 QUESTIONS = {
+    "stuck": [_q("business_name", "איך קוראים לעסק?", "text", "business_name"),
+              _q("business_type", "איזה סוג עסק?", "choice", "business_type", BT),
+              _q("offer", "מה אתם מוכרים או נותנים, בקצרה?", "textarea", "offer"),
+              _q("audience", "מי הלקוחות שלכם?", "textarea", "audience"),
+              _q("pain", "מה הכי מתסכל עכשיו?", "multi", None, [["few_customers", "מעט לקוחות"], ["low_sales", "מכירות נמוכות"],
+                 ["no_time", "אין זמן"], ["ads_waste", "פרסום שלא עובד"], ["unclear", "לא ברור מה לעשות"]], required=False),
+              *SITE_Q, _q("competitors", "מתחרים (שמות או אתרים, לא חובה)", "textarea", "competitors", required=False)],
+    "site_sales": [_q("business_name", "איך קוראים לעסק?", "text", "business_name"),
+                   _q("business_type", "איזה סוג עסק?", "choice", "business_type", BT),
+                   _q("website", "מה כתובת האתר?", "url", "website"),
+                   _q("permission", "האתר שלכם, או שיש לכם הרשאה לבדוק אותו?", "yesno",
+                      hint="P1 גולש באתר כמו לקוח ועוצר לפני תשלום. בלי אישור — לא בודקים."),
+                   _q("site_goal", "מה האתר צריך להשיג?", "choice", None, [["sales", "מכירות"], ["leads", "פניות/לידים"], ["info", "הצגת העסק"]])],
+    "ads": [_q("business_name", "איך קוראים לעסק?", "text", "business_name"),
+            _q("offer", "מה אתם מפרסמים?", "textarea", "offer"), _q("audience", "למי הפרסום מכוון?", "textarea", "audience"),
+            _q("channels", "איפה אתם מפרסמים?", "multi", "channels", CH),
+            _q("monthly_ad_budget", "תקציב פרסום חודשי (₪)", "number", "monthly_ad_budget", required=False),
+            _q("website", "לאיזה דף/אתר המודעות מובילות?", "url", "website", required=False),
+            _q("permission", "האתר שלכם, או שיש לכם הרשאה לבדוק אותו?", "yesno", required=False)],
+    "customers": [_q("business_name", "איך קוראים לעסק?", "text", "business_name"),
+                  _q("business_type", "איזה סוג עסק?", "choice", "business_type", BT),
+                  _q("offer", "מה אתם מוכרים?", "textarea", "offer"), _q("audience", "מי הלקוח האידיאלי?", "textarea", "audience"),
+                  _q("channels", "מאיפה מגיעים לקוחות היום?", "multi", "channels", CH, required=False), *SITE_Q],
+    "no_time": [_q("business_name", "איך קוראים לעסק?", "text", "business_name"),
+                _q("business_type", "איזה סוג עסק?", "choice", "business_type", BT),
+                _q("time_sinks", "על מה הולך לכם הכי הרבה זמן?", "multi", None, [["inquiries", "מענה לפניות"], ["content", "תוכן ושיווק"],
+                   ["site", "תחזוקת האתר"], ["followup", "מעקב אחרי לקוחות"], ["reports", "דוחות"]]), *SITE_Q],
     "start": [_q("offer", "מה הרעיון? מה תמכרו או איזה שירות תיתנו?", "textarea", "offer"),
               _q("audience", "מי הלקוח? תארו אדם אחד שהיה קונה", "textarea", "audience"),
               _q("price_range", "כמה זה יעלה ללקוח (בערך)?", "text", "price_range", required=False),
@@ -127,6 +161,8 @@ def build_plan(db: Database, account: dict, user_id: str | None, intent: str, an
     url = (answers.get("website") or prof.get("website") or "").strip()
     if url and answers.get("permission") in (True, "yes", "כן", 1, "1"):
         site = _authorize_site(db, account, user_id, url)
+    if intent in ("stuck", "site_sales", "ads", "customers", "no_time"):
+        return problem_plan(db, account, user_id, intent, answers, prof, site, url, ai)
     if intent == "start":
         r = readiness(answers, prof)
         steps.append(_step(f"בדיקת מוכנות לרעיון: {r['score']}%", "research", "works",
@@ -135,9 +171,13 @@ def build_plan(db: Database, account: dict, user_id: str | None, intent: str, an
             if not c["ok"]:
                 steps.append(_step(f"להשלים: {c['label']}", "research", "works", "חסר בתוכנית — כדאי לסגור לפני השקעה.", link="#/business"))
         steps.append(_step("מחקר מתחרים ושוק", "research", "partial" if ai else "unavailable",
-                           "השוואת מחירים והצעות של מתחרים.", note=None if ai else "דורש מנוע מודל + גישה לאינטרנט"))
-        steps.append(_step("בניית דף נחיתה ראשון", "web", "unavailable", "כדי לבדוק ביקוש לפני השקעה גדולה.", note="Website Builder בתוכנית"))
-        return {"intent": intent, "steps": steps, "readiness": r, "engine": "rules"}
+                           "ניתוח מודל + ביקור באתרי מתחרים שציינתם.", note="חיפוש חי בגוגל לא כלול במסלול החינמי" if ai else "דורש מנוע AI"))
+        steps.append(_step("תוכנית פעולה ושיווק להשקה", "marketing", "works" if ai else "partial", "", note=None if ai else "מחכה למנוע AI"))
+        steps.append(_step("דף נחיתה לבדיקת ביקוש (טופס → CRM)", "web", "works" if ai else "partial", "לבדוק אם יש ביקוש לפני השקעה גדולה.",
+                           link="#/pages", note=None if ai else "מחכה למנוע AI"))
+        return {"intent": intent, "steps": steps, "readiness": r, "engine": "rules",
+                "autopilot": {"agents": ["research", "strategy", "landing_page", "tasks"], "ready": ai,
+                              "request": "הקמת עסק: " + "; ".join(f"{k}: {v}" for k, v in answers.items() if v)[:600]}}
     if intent == "agency":
         steps.append(_step("לפתוח את מסך הסוכנות: כל הלקוחות, מי דורש טיפול, דוחות מוכנים", "ops", "works",
                            "רואים במבט אחד את כל האתרים של הלקוחות.", link="#/agency"))
@@ -173,6 +213,91 @@ def build_plan(db: Database, account: dict, user_id: str | None, intent: str, an
         steps.append(_step("ניתוח רווחיות", "finance", "unavailable", "", note="דורש נתוני מכירות / הנהלת חשבונות"))
         steps.append(_step("דוח שבועי + ציר צמיחה", "ops", "works", "מה בוצע, מה נמדד ומה הלאה.", link="#/timeline"))
     return {"intent": intent, "steps": steps, "engine": "rules", "site_id": site["id"] if site else None}
+
+
+def _conn_status(db: Database, account_id: str, provider: str) -> str:
+    from ..integrations import accounts as acc
+    try:
+        return acc.get_public(db, account_id, provider)["status"]
+    except Exception:  # noqa: BLE001
+        return "not_connected"
+
+
+def problem_plan(db, account, user_id, intent, answers, prof, site, url, ai) -> dict:
+    """מסלולי הבעיה: כל צעד מסומן לפי מה שבאמת קיים ומחובר בחשבון הזה. בסוף — Autopilot עם הסוכנים הזמינים."""
+    steps: list[dict] = []
+    agents: list[str] = []
+    A = "works" if ai else "partial"
+    ai_note = None if ai else "בנוי — מחכה למנוע AI (Gemini חינם)"
+    ga4 = _conn_status(db, account["id"], "ga4")
+    store_conn = any(_conn_status(db, account["id"], p) == "connected" for p in ("shopify", "woocommerce"))
+
+    def audit_step(title="בדיקת האתר בדפדפן אמיתי — מחשב + iPhone, 5 לקוחות מדומים, טפסים ו-WhatsApp"):
+        if site:
+            a = actions.propose(db, account, user_id, {"key": f"audit:{site['id']}", "kind": "run_audit", "title": title,
+                                                       "why": "ממצאים אמיתיים עם צילומי מסך — הבסיס לכל ההמלצות.", "payload": {"site_id": site["id"], "url": url}})
+            steps.append(_step(title, "web", "works", "ממצאים אמיתיים עם צילומי מסך — הבסיס לכל ההמלצות.",
+                               action={"id": a["id"], "status": a["status"]}, minutes=3, approval=True))
+            agents.append("audit")
+        elif url:
+            steps.append(_step("בדיקת האתר", "web", "works", "צריך לאשר שהאתר שלכם / שיש הרשאה.", link="#/sites"))
+        else:
+            steps.append(_step("בדיקת אתר", "web", "unavailable", "", note="אין כתובת אתר — אפשר לבנות דף נחיתה (למטה)"))
+
+    def ga4_step(why):
+        st = "works" if ga4 == "connected" else "partial"
+        steps.append(_step("נתוני תנועה ורכישות אמיתיים (Google Analytics)", "web", st, why, link="#/connect",
+                           note=None if st == "works" else "לא מחובר — מחברים ב'החשבונות שלי'"))
+
+    if intent == "stuck":
+        audit_step()
+        steps.append(_step("מחקר מתחרים", "research", A, "מה המתחרים מציעים ואיפה אפשר להתבדל.", note=ai_note)); agents.append("research")
+        steps.append(_step("תוכנית צמיחה ושיווק לחודש הקרוב", "marketing", A, "מבוססת על הבעיות שנמצאו והמתחרים.", note=ai_note)); agents.append("strategy")
+        ga4_step("כדי לדעת מאיפה מגיעים לקוחות ואיפה הם נוטשים.")
+        steps.append(_step("ניתוח רווחיות", "finance", "works" if store_conn else "unavailable", "",
+                           note=None if store_conn else "דורש חיבור חנות (Shopify/WooCommerce) או נתוני מכירות"))
+        steps.append(_step("3 הפעולות הבאות + משימות שבועיות", "ops", "works", "P1 מתעדף ומזכיר כל שבוע.", link="#/")); agents.append("tasks")
+    elif intent == "site_sales":
+        audit_step("בדיקת האתר כמו לקוח: מוצר → סל → קופה (עוצר לפני תשלום), מחשב + iPhone")
+        steps.append(_step("איתור בעיות המרה: מחיר, משלוח, אמון, כפתורים, טפסים, מובייל", "web", "works", "חלק מהבדיקה — כל ממצא עם הוכחה."))
+        steps.append(_step("Fix Studio: תיקון מוכן + תמונת לפני/אחרי לכל בעיה", "web", "works", "בלי לגעת באתר החי.", link="#/fix"))
+        steps.append(_step("בדיקה חוזרת שמוכיחה שהתיקון עבד", "web", "works", "אחרי שמיישמים — P1 מודד שהבעיה נעלמה.", link="#/approvals"))
+        ga4_step("כדי לראות כמה נכנסים, כמה מגיעים לסל וכמה קונים בפועל.")
+        steps.append(_step("תיקון ישיר באתר החי", "web", "unavailable", "", note="עוד לא קיים — היום P1 מכין חבילת תיקון למי שמתחזק את האתר"))
+        steps.append(_step("שמירה קבועה + התראה כשמשהו נשבר", "ops", "works", "", link="#/sites")); agents.append("tasks")
+    elif intent == "ads":
+        audit_step("בדיקת הדף שאליו המודעות מובילות (האם הוא ממיר?)")
+        steps.append(_step("ניתוח מסרים והצעת זווית חדשה", "marketing", A, "למה המודעות לא עובדות ומה לשנות במסר.", note=ai_note)); agents.append("strategy")
+        steps.append(_step("מודעות חדשות לפייסבוק/אינסטגרם/גוגל (טיוטות)", "marketing", A, "כמה וריאציות לבדיקה.", note=ai_note)); agents.append("ads")
+        steps.append(_step("סרטון קצר לרילס/סטורי (MP4)", "marketing", A, "מבוסס על המסר החדש.", note=ai_note)); agents.append("video")
+        steps.append(_step("דף נחיתה ממוקד לקמפיין", "web", A, "דף אחד, מסר אחד, טופס שנכנס ל-CRM.", note=ai_note)); agents.append("landing_page")
+        steps.append(_step("ניתוח נתוני הקמפיינים בפועל (עלות לליד, בזבוז תקציב)", "marketing", "unavailable", "",
+                           note="דורש חיבור Google Ads / Meta Ads — עוד לא נבנה"))
+    elif intent == "customers":
+        steps.append(_step("אסטרטגיית גיוס לקוחות: קהלים, ערוצים, הצעה", "marketing", A, "", note=ai_note)); agents.append("strategy")
+        steps.append(_step("מודעות + לוח תוכן לשבועיים", "marketing", A, "", note=ai_note)); agents += ["ads", "content"]
+        steps.append(_step("דף נחיתה עם טופס שנכנס ישר ל-CRM", "web", A, "", note=ai_note)); agents.append("landing_page")
+        steps.append(_step("קליטת פניות מכל טופס באתר הקיים (שורת קוד אחת)", "sales", "works", "", link="#/connect"))
+        steps.append(_step("ניהול לידים: משפך, תזכורות מעקב, טיוטת תשובה לכל פנייה", "sales", "works", "", link="#/leads")); agents.append("leads")
+        steps.append(_step("שליחת תשובות ב-WhatsApp (באישור)", "sales", "works" if _conn_status(db, account["id"], "whatsapp") in ("saved", "connected") else "partial", "",
+                           link="#/connect", note=None if _conn_status(db, account["id"], "whatsapp") in ("saved", "connected") else "דורש חיבור WhatsApp Business"))
+        if site:
+            audit_step("בדיקה שהאתר לא מפספס פניות (טפסים, WhatsApp, טלפון)")
+    elif intent == "no_time":
+        steps.append(_step("Autopilot: בקשה אחת → הסוכנים עובדים בשבילך", "ops", A, "שיווק, תוכן, דפים ומשימות — ברצף.", link="#/run", note=ai_note))
+        steps.append(_step("סוכן שירות לקוחות שעונה לפי המידע של העסק", "sales", A, "מעביר לנציג כשאין מידע.", link="#/studio?tab=support", note=ai_note))
+        steps.append(_step("פניות נכנסות ל-CRM + תזכורות מעקב אוטומטיות", "sales", "works", "", link="#/leads")); agents.append("leads")
+        steps.append(_step("שמירה קבועה על האתר + התראות", "ops", "works", "", link="#/sites"))
+        steps.append(_step("3 הפעולות הבאות + דוח שבועי", "ops", "works", "", link="#/")); agents.append("tasks")
+        steps.append(_step("לוח תוכן לשבועיים (טיוטות)", "marketing", A, "", note=ai_note)); agents.append("content")
+        if site:
+            audit_step()
+    order = ["audit", "research", "strategy", "ads", "content", "video", "landing_page", "leads", "tasks"]
+    agents = [a for a in order if a in set(agents)]
+    can_run = ai or all(a in ("audit", "leads", "tasks") for a in agents)
+    request = f"{INTENTS[intent]}. " + "; ".join(f"{k}: {v}" for k, v in answers.items() if k not in ("permission",) and v)[:600]
+    return {"intent": intent, "steps": steps, "engine": "rules", "site_id": site["id"] if site else None,
+            "autopilot": {"agents": agents, "request": request, "ready": bool(agents) and can_run}}
 
 
 def ceo_engine_active() -> bool:

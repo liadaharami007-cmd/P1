@@ -845,3 +845,26 @@ body { background: radial-gradient(1200px 600px at 100% -10%, color-mix(in srgb,
   .cmd-score .ring { transform: scale(.62); margin: -21px; flex-shrink: 0; }
   .cmd-score .tiny { text-align: start; }
 }
+/* מסך פתיחה v2: 6 בעיות + שדה חופשי + איך P1 פותר + למה P1 */
+.path-grid.problems { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.free-box { background: var(--surface); border: 1px solid var(--border); border-radius: 20px; padding: 16px; box-shadow: 0 6px 24px -14px rgba(18,18,40,.18); }
+.free-box .start-free { margin: 0; max-width: none; flex-wrap: wrap; }
+.free-label { width: 100%; font-weight: 700; font-size: 15px; margin-bottom: 2px; }
+.free-box textarea { min-height: 56px; }
+.agency-strip { display: flex; align-items: center; gap: 12px; padding: 14px 16px; border-radius: 18px; text-decoration: none; color: var(--text);
+  background: linear-gradient(135deg, color-mix(in srgb, var(--brand) 9%, var(--surface)), var(--surface)); border: 1px solid var(--border); }
+.agency-strip > span:not(.tile) { flex: 1; display: flex; flex-direction: column; } .agency-strip > svg { width: 18px; height: 18px; color: var(--faint); transform: rotate(90deg); }
+[dir="ltr"] .agency-strip > svg { transform: rotate(-90deg); }
+.how-steps { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+.how-steps li { position: relative; display: flex; flex-direction: column; gap: 10px; padding: 16px; border-radius: 18px; background: var(--surface); border: 1px solid var(--border); }
+.how-steps p { margin: 4px 0 0; } .how-n { position: absolute; inset-inline-end: 14px; top: 12px; font-weight: 800; font-size: 22px; color: color-mix(in srgb, var(--brand) 25%, transparent); }
+.why-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 12px; }
+.why-col { border-radius: 14px; padding: 14px; background: var(--surface-2); } .why-col.p1 { background: color-mix(in srgb, var(--brand) 9%, var(--surface)); box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--brand) 40%, transparent); }
+.why-h { font-weight: 800; margin-bottom: 8px; } .why-col ul { margin: 0; padding-inline-start: 18px; display: grid; gap: 6px; font-size: 13.5px; }
+.why-col li::marker { color: var(--faint); } .why-col.p1 li::marker { content: "✓  "; color: var(--good); }
+.run-cta { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin: 14px 0 6px; padding: 12px; border-radius: 14px; background: color-mix(in srgb, var(--brand) 7%, var(--surface)); }
+@media (max-width: 900px) {
+  .path-grid.problems { grid-template-columns: 1fr 1fr; }
+  .how-steps { grid-template-columns: 1fr 1fr; } .why-grid { grid-template-columns: 1fr; }
+  .free-box .start-btns { flex-direction: row; width: 100%; }
+}

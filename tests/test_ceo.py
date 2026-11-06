@@ -59,3 +59,26 @@ def test_value_center_separates_layers(make_client):
     assert set(v) >= {"measured", "demo", "assumptions", "business_metrics", "next"}
     assert v["business_metrics"]["sales"] is None and "לא מייחס" in v["business_metrics"]["note"]
     assert v["measured"]["audits"] == 0 and v["demo"]["audits"] == 0
+
+
+def test_problem_paths_plans_respect_connections(make_client, monkeypatch):
+    monkeypatch.setattr(engines, "status", lambda: {"active": "rules", "preferred": "auto", "engines": []})
+    c = make_client()
+    register(c, "paths@p1.co")
+    base = {"business_name": "בלום", "business_type": "ecommerce", "offer": "זרי פרחים לאירועים", "audience": "זוגות שמתחתנים"}
+    for intent in ("stuck", "site_sales", "ads", "customers", "no_time", "start"):
+        q = c.post("/api/ceo/intent", json={"intent": intent}).json()
+        assert q["intent"] == intent and isinstance(q["questions"], list), intent
+    site = c.post("/api/missions", json={"intent": "site_sales", "answers": {**base, "website": "https://8.8.8.8", "permission": "yes", "site_goal": "sales"}}).json()
+    st = {s["title"][:20]: s for s in site["plan"]["steps"]}
+    assert site["plan"]["steps"][0]["action"]["status"] == "proposed"  # בדיקה מוכנה לאישור
+    assert any(s["status"] == "unavailable" and "ישיר" in s["title"] for s in site["plan"]["steps"])  # לא מבטיחים תיקון באתר חי
+    assert any("Analytics" in s["title"] and s["status"] == "partial" for s in site["plan"]["steps"])  # GA4 לא מחובר
+    ads = c.post("/api/missions", json={"intent": "ads", "answers": {**base, "channels": ["meta_ads"]}}).json()["plan"]
+    assert any("Google Ads" in (s["note"] or "") and s["status"] == "unavailable" for s in ads["steps"])
+    assert set(ads["autopilot"]["agents"]) >= {"strategy", "ads", "video", "landing_page"} and ads["autopilot"]["ready"] is False  # בלי AI
+    nt = c.post("/api/missions", json={"intent": "no_time", "answers": {"time_sinks": ["inquiries"]}}).json()["plan"]
+    assert {"leads", "tasks"} <= set(nt["autopilot"]["agents"])
+    r = c.post("/api/autopilot", json={"request": "x", "agents": ["tasks", "leads", "bogus"]}).json()
+    assert [s["agent"] for s in r["plan"]["steps"]] == ["leads", "tasks"] and r["planner"] == "mission"
+    assert c.post("/api/autopilot", json={"request": "x", "agents": ["bogus"]}).status_code == 400

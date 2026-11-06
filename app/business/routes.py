@@ -68,6 +68,7 @@ class SendIn(BaseModel):
 
 class RunIn(BaseModel):
     request: str
+    agents: list[str] | None = None   # מסלול מוכן (ממשימה של P1 CEO) — מדלג על שלב התכנון
 
 
 class PageIn(BaseModel):
@@ -467,6 +468,14 @@ def register(app: FastAPI, db: Database, runner, browser_available: Callable[[],
     async def autopilot_run(body: RunIn, ctx: Ctx = Depends(current)):
         if not body.request.strip():
             raise HTTPException(400, "כתבו מה תרצו ש-P1 יעשה")
+        if body.agents:
+            steps = [{"agent": a, "goal": autopilot.AGENTS[a]} for a in autopilot.ORDER if a in set(body.agents)]
+            if not steps:
+                raise HTTPException(400, "אין סוכנים מתאימים")
+            run = autopilot.create(db, ctx.account, ctx.user_id, body.request, steps, "mission", "P1 CEO מפעיל את הסוכנים לפי התוכנית שבניתם יחד.")
+            import asyncio as _aio
+            _aio.get_running_loop().create_task(autopilot.execute(db, runner, ctx.account, ctx.user_id, run["id"]))
+            return run
         run = autopilot.create(db, ctx.account, ctx.user_id, body.request, [], "pending", "")
         autopilot.start_background(db, runner, ctx.account, ctx.user_id, run["id"])
         return run

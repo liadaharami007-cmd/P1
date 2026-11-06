@@ -32,6 +32,8 @@ function planHtml(m) {
       <ul class="check-list">${r.checks.map((/** @type {any} */ c) => `<li class="${c.ok ? "ok" : "no"}">${c.ok ? "✓" : "○"} ${esc(c.label)}</li>`).join("")}</ul>
       <p class="tiny faint">${esc(r.note)}</p></div>` : ""}
     <ol class="plan-steps">${m.plan.steps.map(stepRow).join("")}</ol>
+    ${m.plan.autopilot && m.plan.autopilot.agents.length ? `<div class="run-cta"><button class="btn btn-primary" data-run="${m.id}">${icon("play")}${t("ceo.runAll")}</button>
+      <span class="tiny muted">${m.plan.autopilot.ready ? t("ceo.runAllSub") : t("ceo.runNotReady")}</span></div>` : ""}
     <p class="tiny faint">${t("ceo.engineRules")}</p>
     <div class="row" style="margin-top:10px">${m.plan.suggest_demo ? `<a class="btn btn-sm btn-primary" href="#/agency">${t("ceo.toAgency")}</a>` : ""}
       <a class="btn btn-sm" href="#/">${t("ceo.toCommand")}</a><a class="btn btn-sm btn-ghost" href="#/start">${t("ceo.newMission")}</a></div></div>`;
@@ -46,10 +48,14 @@ export async function ceoView(view) {
   const composer = /** @type {HTMLElement} */ (view.querySelector("#composer"));
   const say = (/** @type {string} */ html, who = "ceo") => { chat.insertAdjacentHTML("beforeend", who === "ceo"
     ? `<div class="bubble ceo"><div class="bubble-who">P1 CEO</div>${html}</div>` : `<div class="bubble me" dir="auto">${html}</div>`); chat.lastElementChild?.scrollIntoView({ behavior: "smooth", block: "end" }); };
-  const bindPlan = (/** @type {any} */ m) => chat.querySelectorAll("[data-act]").forEach((b) => b.addEventListener("click", async () => {
+  const bindRun = (/** @type {any} */ m) => chat.querySelectorAll("[data-run]").forEach((b) => b.addEventListener("click", async () => {
+    /** @type {HTMLButtonElement} */ (b).disabled = true;
+    try { const r = await api("/api/autopilot", { method: "POST", body: JSON.stringify({ request: m.plan.autopilot.request, agents: m.plan.autopilot.agents }) });
+      location.hash = `#/run?id=${r.id}`; } catch (e) { toast(/** @type {Error} */ (e).message, "error"); /** @type {HTMLButtonElement} */ (b).disabled = false; } }));
+  const bindPlan = (/** @type {any} */ m) => { bindRun(m); return chat.querySelectorAll("[data-act]").forEach((b) => b.addEventListener("click", async () => {
     try { openActionModal(await api(`/api/actions/${/** @type {HTMLElement} */ (b).dataset.act}`), async () => {
       const fresh = await api(`/api/missions/${m.id}`); chat.lastElementChild?.remove(); chat.insertAdjacentHTML("beforeend", planHtml(fresh)); bindPlan(fresh); }); }
-    catch (e) { toast(/** @type {Error} */ (e).message, "error"); } }));
+    catch (e) { toast(/** @type {Error} */ (e).message, "error"); } })); };
 
   const missionId = qs.get("mission");
   if (missionId) {

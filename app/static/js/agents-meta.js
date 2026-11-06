@@ -7,5 +7,6 @@ export const AGENT = {
   landing_page: { icon: "layout", hue: "#5b54e8" }, leads: { icon: "handshake", hue: "#10b981" }, tasks: { icon: "flag", hue: "#64748b" },
   start: { icon: "rocket", hue: "#7c5cff" }, grow: { icon: "trend", hue: "#10b981" }, website: { icon: "browser", hue: "#2f80ed" },
   marketing: { icon: "megaphone", hue: "#f2557a" }, manage: { icon: "compass", hue: "#f59e0b" }, consult: { icon: "chat", hue: "#0ea5a4" },
-  agency: { icon: "building", hue: "#5b54e8" },
+  agency: { icon: "building", hue: "#5b54e8" }, stuck: { icon: "trend", hue: "#7c5cff" }, site_sales: { icon: "browser", hue: "#2f80ed" },
+  customers: { icon: "users", hue: "#10b981" }, no_time: { icon: "bolt", hue: "#f59e0b" },
 };
