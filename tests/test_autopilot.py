@@ -118,3 +118,24 @@ def test_video_agent_renders_real_mp4(make_client, tmp_path, monkeypatch):
     o = make_client(db=c.app.state.db)
     register(o, "o3@p1.co")
     assert o.get(v["url"]).status_code == 404
+
+
+def test_research_visits_competitor_sites(make_client, monkeypatch):
+    import app.research.analyzer as an
+    c = make_client()
+    register(c, "res@p1.co")
+    c.put("/api/business/profile", json={"data": {"competitors": "https://rival.co.il, shop.other.com ועוד מתחרה בלי אתר"}})
+    db = c.app.state.db
+    acc = db.get_account(c.get("/api/account").json()["account"]["id"])
+    seen = []
+
+    async def fake(url, **kw):
+        seen.append(url)
+        return {"ok": url.startswith("https"), "error": None if url.startswith("https") else "blocked", "facts": {"title": "T"}, "issues": []}
+    monkeypatch.setattr(an, "analyze_url", fake)
+    eng = SpecEngine()
+    run = autopilot.create(db, acc, None, "מחקר מתחרים", [{"agent": "research", "goal": "x"}], "rules", "")
+    asyncio.run(autopilot.execute(db, None, acc, None, run["id"], engine=eng))
+    r = autopilot.get(db, run["id"], acc["id"])
+    assert seen == ["https://rival.co.il", "shop.other.com"] and "1/2" in r["plan"]["steps"][0]["summary"]
+    assert eng.seen[-1][1]["competitor_sites_measured"][1]["ok"] is False

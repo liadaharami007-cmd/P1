@@ -158,11 +158,25 @@ async def _step(db, runner, account, user_id, step, handoff, request, engine) ->
             return "אין עדיין בדיקה — הוכנה בדיקה לאישור (נספרת במכסה).", {"type": "action", "id": act["id"], "needs_approval": True}
         return "אין אתר בחשבון — לא ניתן לבדוק. הוסיפו אתר במסך 'אתרים'.", None
     if a == "research":
+        # מתחרים שבעל העסק ציין עם כתובת → ביקור אמיתי באתר שלהם (measured). מה שלא נגיש — מסומן כך.
+        from ..research.analyzer import analyze_url
+        prof = (store.get_profile(db, account["id"]) or {"data": {}})["data"]
+        urls = re.findall(r"https?://[^\s,]+|(?<![@\w.])(?:[a-z0-9-]+\.)+(?:co\.il|com|co|net|org|shop|store)\b(?:/[^\s,]*)?", prof.get("competitors") or "", re.I)[:4]
+        visited = []
+        for u in urls:
+            rep = await analyze_url(u, check_links=0)
+            visited.append({"url": u, "ok": rep.get("ok"), "error": rep.get("error"),
+                            "title": (rep.get("facts") or {}).get("title"), "h1": (rep.get("facts") or {}).get("h1"),
+                            "issues": [i.get("title") for i in (rep.get("issues") or [])][:8]})
+        extra = {**extra, "competitor_sites_measured": visited}
         res = await studio.run_custom(db, account, user_id, "research",
-                                      "אתה חוקר שוק. נתח מתחרים והזדמנויות לעסק. אין לך גישה חיה לאינטרנט כרגע: כתוב ב-source_note "
-                                      "שהניתוח מבוסס על ידע כללי של המודל ועל המתחרים שבעל העסק ציין, ושיש לאמת. אל תמציא מחירים או נתונים מספריים.",
+                                      "אתה חוקר שוק. נתח מתחרים והזדמנויות לעסק. אין לך חיפוש חי באינטרנט. מקורות: competitor_sites_measured (אתרי מתחרים "
+                                      "שנבדקו בפועל — ok=false אומר שלא היו נגישים), המתחרים שבעל העסק ציין, וידע כללי של המודל. כתוב ב-source_note "
+                                      "בדיוק על מה כל חלק מבוסס ושיש לאמת. אל תמציא מחירים או נתונים מספריים.",
                                       RESEARCH_SCHEMA, request, extra=extra, engine=engine)
-        return _short(res["output"]), {"type": "ai_output", "id": res["id"]}
+        ok = sum(1 for v in visited if v["ok"])
+        note = f" · אתרי מתחרים שנבדקו בפועל: {ok}/{len(visited)}" if visited else " · לא צוינו אתרי מתחרים בפרופיל"
+        return (res["output"].get("source_note", "") + note + " | " + _short(res["output"]))[:1500], {"type": "ai_output", "id": res["id"]}
     if a == "video":
         res = await studio.run(db, account, user_id, "video_script", request, extra=extra, engine=engine)
         o = res["output"]
