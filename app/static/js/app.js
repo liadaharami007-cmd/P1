@@ -197,3 +197,23 @@ export async function boot() {
 }
 
 boot();
+
+// PWA: service worker (מעטפת בלי רשת) + הסבר התקנה באייפון (ב-iOS אין כפתור התקנה אוטומטי)
+if ("serviceWorker" in navigator && (location.protocol === "https:" || ["localhost", "127.0.0.1"].includes(location.hostname))) {
+  navigator.serviceWorker.register("/sw.js").catch(() => { /* לא קריטי */ });
+}
+function installHint() {
+  const ios = /iphone|ipad|ipod/i.test(navigator.userAgent);
+  const standalone = window.matchMedia("(display-mode: standalone)").matches || /** @type {any} */ (navigator).standalone;
+  let dismissed = false;
+  try { dismissed = localStorage.getItem("p1.installHint") === "0"; } catch { /* פרטיות */ }
+  if (!ios || standalone || dismissed || document.getElementById("install-hint")) return;
+  const el = document.createElement("div");
+  el.id = "install-hint";
+  el.className = "install-hint";
+  el.innerHTML = `<img src="/static/pwa/icon-192.png" alt=""><div><strong>${t("pwa.title")}</strong><span>${t("pwa.howto")}</span></div>
+    <button class="icon-btn" aria-label="${t("common.close")}">✕</button>`;
+  /** @type {HTMLElement} */ (el.querySelector("button")).onclick = () => { el.remove(); try { localStorage.setItem("p1.installHint", "0"); } catch { /* */ } };
+  document.body.appendChild(el);
+}
+setTimeout(installHint, 2500);

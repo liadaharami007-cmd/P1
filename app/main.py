@@ -644,6 +644,16 @@ def create_app(db: Database | None = None, agent: Agent | None = None, runner: A
     def index():
         return FileResponse(STATIC / "index.html", headers={"Cache-Control": "no-cache"})
 
+    # PWA: ה-manifest וה-service worker בשורש האתר כדי שה-scope יכסה את כל האפליקציה
+    @app.get("/manifest.webmanifest")
+    def manifest():
+        return FileResponse(STATIC / "manifest.webmanifest", media_type="application/manifest+json", headers={"Cache-Control": "no-cache"})
+
+    @app.get("/sw.js")
+    def service_worker():
+        return FileResponse(STATIC / "sw.js", media_type="text/javascript",
+                            headers={"Cache-Control": "no-cache", "Service-Worker-Allowed": "/"})
+
     app.mount("/demo-store", StaticFiles(directory=STATIC / "demo-store", html=True), name="demo-store")
     app.mount("/static", StaticFiles(directory=STATIC), name="static")
     return app

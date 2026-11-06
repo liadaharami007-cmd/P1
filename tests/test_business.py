@@ -125,3 +125,20 @@ def test_health_never_invents_overall():
     snap = {"latest": {"id": "a", "score": 80, "finished_at": "2026-01-01"}, "done": [{"score": 80}]}
     h = ceo.health(snap)
     assert h["overall"] is None and sum(1 for d in h["domains"] if d["status"] == "no_data") >= 5
+
+
+def test_pwa_assets_served(make_client):
+    import json as _json
+    from pathlib import Path
+    c = make_client()
+    m = c.get("/manifest.webmanifest")
+    assert m.status_code == 200 and "manifest+json" in m.headers["content-type"]
+    man = _json.loads(m.text)
+    assert man["display"] == "standalone" and man["start_url"].startswith("/")
+    for icon in man["icons"]:
+        assert c.get(icon["src"]).status_code == 200
+    sw = c.get("/sw.js")
+    assert sw.status_code == 200 and "javascript" in sw.headers["content-type"] and "/api/" in sw.text
+    assert c.get("/static/offline.html").status_code == 200 and c.get("/static/pwa/apple-touch-icon.png").status_code == 200
+    html = Path("app/static/index.html").read_text(encoding="utf-8")
+    assert 'rel="manifest"' in html and "apple-touch-icon" in html

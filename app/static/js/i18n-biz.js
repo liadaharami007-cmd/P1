@@ -46,6 +46,7 @@ extend({
     "ch.google_ads": "Google Ads", "ch.meta_ads": "פייסבוק/אינסטגרם ממומן", "ch.seo": "חיפוש אורגני בגוגל", "ch.social_organic": "רשתות חברתיות",
     "ch.whatsapp": "וואטסאפ", "ch.email": "דיוור", "ch.referrals": "המלצות מפה לאוזן", "ch.offline": "שילוט/עסק פיזי",
     "tl.title": "ציר הצמיחה", "tl.sub": "מה זוהה, מה הוצע, מה בוצע ומה נמדד — לפי סדר הזמן.", "tl.none": "עוד אין אירועים.",
+    "pwa.title": "התקנת P1 באייפון", "pwa.howto": "בספארי: לוחצים על כפתור השיתוף ⎋ ואז \"הוספה למסך הבית\".",
     "wk.title": "דוח שבועי", "wk.period": "7 הימים האחרונים", "wk.audits": "בדיקות בתקופה", "wk.next": "השבוע כדאי",
   },
   en: {
@@ -91,6 +92,7 @@ extend({
     "ch.google_ads": "Google Ads", "ch.meta_ads": "Meta paid ads", "ch.seo": "Organic search", "ch.social_organic": "Social media",
     "ch.whatsapp": "WhatsApp", "ch.email": "Email", "ch.referrals": "Word of mouth", "ch.offline": "Offline / storefront",
     "tl.title": "Growth timeline", "tl.sub": "What was detected, proposed, done and measured — in time order.", "tl.none": "No events yet.",
+    "pwa.title": "Install P1 on your iPhone", "pwa.howto": "In Safari: tap Share ⎋, then \"Add to Home Screen\".",
     "wk.title": "Weekly report", "wk.period": "Last 7 days", "wk.audits": "Audits in period", "wk.next": "This week",
   },
 });
