@@ -139,3 +139,8 @@ def test_research_visits_competitor_sites(make_client, monkeypatch):
     r = autopilot.get(db, run["id"], acc["id"])
     assert seen == ["https://rival.co.il", "shop.other.com"] and "1/2" in r["plan"]["steps"][0]["summary"]
     assert eng.seen[-1][1]["competitor_sites_measured"][1]["ok"] is False
+
+
+def test_video_seconds_parsing_handles_model_formats():
+    from app.business.video import _seconds
+    assert [_seconds(x) for x in (3, "4s", "0-5", "5-8", "00:03-00:06", "", None, "שלוש", 60)] == [3, 4, 5, 3, 3, 3, 3, 3, 6]

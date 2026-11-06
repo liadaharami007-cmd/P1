@@ -20,11 +20,21 @@ from . import store
 W, H = 720, 1280
 
 
+def _seconds(v) -> float:
+    """משך סצנה מכל פורמט שמודל עלול להחזיר: 3 · "3" · "3s" · "0-5" (טווח) · "00:03-00:06" · ריק → 3."""
+    import re as _re
+    nums = [float(x) for x in _re.findall(r"\d+(?:\.\d+)?", str(v or ""))]
+    if ":" in str(v or "") and len(nums) >= 4:
+        nums = [nums[0] * 60 + nums[1], nums[2] * 60 + nums[3]]
+    d = (nums[1] - nums[0]) if len(nums) >= 2 and nums[1] > nums[0] else (nums[0] if nums else 3.0)
+    return max(2.0, min(6.0, d))
+
+
 def _scenes_html(scenes: list[dict], brand: str, color: str, cta: str) -> tuple[str, float]:
     e = html.escape
     t, parts = 0.0, []
     for s in scenes[:8]:
-        dur = max(2.0, min(6.0, float(s.get("seconds") or 3)))
+        dur = _seconds(s.get("seconds"))
         parts.append(f"<section style='animation-delay:{t:.2f}s;animation-duration:{dur:.2f}s'><p class='v'>{e(s.get('visual', ''))[:140]}</p>"
                      f"<h2>{e(s.get('voiceover') or s.get('text') or '')[:160]}</h2></section>")
         t += dur
