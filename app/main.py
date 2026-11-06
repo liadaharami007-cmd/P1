@@ -644,6 +644,18 @@ def create_app(db: Database | None = None, agent: Agent | None = None, runner: A
     def index():
         return FileResponse(STATIC / "index.html", headers={"Cache-Control": "no-cache"})
 
+    # אתר שיווקי ציבורי + מסלולים (מהמגבלות האמיתיות שבקוד; מחירים עוד לא נקבעו — לא מוצגים מחירים מומצאים)
+    @app.get("/welcome")
+    def welcome():
+        return FileResponse(STATIC / "welcome.html", headers={"Cache-Control": "no-cache"})
+
+    @app.get("/api/public/plans")
+    def public_plans():
+        who = {"free": "להתחיל ולראות ערך על אתר אחד", "pro": "עסק עם כמה אתרים או דפי נחיתה", "agency": "סוכנות שמנהלת אתרים של לקוחות"}
+        return {"plans": [{"id": k, **{f: v[f] for f in ("name", "sites", "audits_per_month", "members", "monitor")},
+                           "for": who.get(k, ""), "price_label": "חינם" if k == "free" else "מחיר ייקבע בפיילוט"}
+                          for k, v in plans.PLANS.items()]}
+
     # PWA: ה-manifest וה-service worker בשורש האתר כדי שה-scope יכסה את כל האפליקציה
     @app.get("/manifest.webmanifest")
     def manifest():

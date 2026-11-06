@@ -142,3 +142,16 @@ def test_pwa_assets_served(make_client):
     assert c.get("/static/offline.html").status_code == 200 and c.get("/static/pwa/apple-touch-icon.png").status_code == 200
     html = Path("app/static/index.html").read_text(encoding="utf-8")
     assert 'rel="manifest"' in html and "apple-touch-icon" in html
+
+
+def test_marketing_page_public_and_honest(make_client):
+    c = make_client()
+    r = c.get("/welcome")
+    assert r.status_code == 200 and "P1 AI" in r.text
+    for banned in ("לקוחות מרוצים", "testimonial", "★★★★★"):
+        assert banned not in r.text
+    plans = c.get("/api/public/plans").json()["plans"]
+    assert {p["id"] for p in plans} == {"free", "pro", "agency"}
+    assert all("₪" not in p["price_label"] for p in plans)  # אין מחירים מומצאים
+    for img in ("command.jpg", "mission.jpg", "fix.jpg"):
+        assert c.get(f"/static/marketing/{img}").status_code == 200

@@ -17,7 +17,7 @@ export async function authView(root, { onDone, switchLang }) {
       <main class="auth-main"><div class="auth-card">
         <div class="row" style="justify-content:space-between;margin-bottom:28px"><span class="logo" style="padding:0"><span class="logo-mark">P1</span>P1 AI</span>
           <button class="btn btn-ghost btn-sm" id="lang">${icon("globe")} ${t("common.language")}</button></div>
-        <h2>${reg ? t("auth.register") : t("auth.login")}</h2><p class="muted" style="margin-bottom:22px">${t("auth.subtitle")}</p>
+        <h2>${reg ? t("auth.register") : t("auth.login")}</h2><p class="muted" style="margin-bottom:22px">${t("auth.subtitle")} <a href="/welcome">${t("auth.learnMore")}</a></p>
         ${reg && !cfg.has_users ? `<div class="notice notice-info" style="margin-bottom:16px"><span class="ico">i</span>${t("auth.firstUser")}</div>` : ""}
         ${reg && !cfg.signup_allowed ? `<div class="notice notice-warn">${t("auth.signupClosed")}</div>` : `
         <form id="auth-form" class="stack" novalidate>
