@@ -73,13 +73,15 @@ def departments() -> list[dict]:
             ("ניסויי A/B", U, None, "דורש אתר מחובר + נתוני תנועה"),
         ]},
         {"id": "marketing", "name": "שיווק ותוכן", "capabilities": [
-            ("אסטרטגיה, קופי ותסריטים", W if ai else U, "#/assistant", "" if ai else "דורש מנוע מודל"),
+            ("אסטרטגיה, מודעות, לוח תוכן ותסריטי וידאו (טיוטות)", W if ai else P, "#/studio?tab=marketing", "" if ai else "בנוי — מחכה למנוע AI (Gemini חינם)"),
             ("ניתוח ביצועי קמפיינים", U, "#/integrations", "דורש Google Ads / Meta Ads"),
             ("יצירת וידאו", U, None, "דורש שירות וידאו מחובר"),
         ]},
         {"id": "sales", "name": "מכירות ולקוחות", "capabilities": [
             ("בדיקה שערוצי הפנייה עובדים (טפסים/WhatsApp)", W, "#/audits", ""),
-            ("ניהול לידים ומעקב פניות", U, "#/integrations", "דורש CRM / WhatsApp Business"),
+            ("ניהול לידים: רשימה, סטטוסים, פניות שמחכות", W, "#/leads", "הזנה ידנית; קליטה אוטומטית דורשת WhatsApp/CRM"),
+            ("סיווג פנייה + טיוטת תשובה (לא נשלחת)", W if ai else P, "#/leads", "" if ai else "מחכה למנוע AI"),
+            ("סוכן שירות לקוחות על מידע העסק (מסוף בדיקה)", W if ai else P, "#/studio?tab=support", "וידג'ט באתר — בתוכנית"),
             ("ניהול ביקורות ומוניטין", U, None, "בתוכנית"),
         ]},
         {"id": "finance", "name": "כספים ורווחיות", "capabilities": [
@@ -88,7 +90,8 @@ def departments() -> list[dict]:
         ]},
         {"id": "research", "name": "מחקר והזדמנויות", "capabilities": [
             ("בדיקת רעיון עסקי (רשימת מוכנות)", W, "#/ceo?intent=start", "מבוסס כללים: מה חסר בתוכנית"),
-            ("מחקר מתחרים ושוק", P if ai else U, "#/assistant", "דורש מנוע מודל + גישה לאינטרנט"),
+            ("ייעוץ עם P1 CEO על בסיס נתוני העסק", W if ai else P, "#/studio?tab=consult", "" if ai else "מחכה למנוע AI"),
+            ("מחקר מתחרים ושוק", U, None, "דורש חיפוש באינטרנט — בתוכנית"),
         ]},
         {"id": "ops", "name": "אוטומציות וניהול", "capabilities": [
             ("3 הפעולות הבאות + מרכז אישורים", W, "#/", ""),

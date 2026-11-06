@@ -282,6 +282,33 @@ CREATE TABLE IF NOT EXISTS activity (
     created_at TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_activity_account ON activity(account_id, created_at);
+CREATE TABLE IF NOT EXISTS ai_outputs (         -- תוצרים של סוכני המחלקות (source=ai, טיוטות לאישור)
+    id TEXT PRIMARY KEY,
+    account_id TEXT NOT NULL,
+    kind TEXT NOT NULL,
+    input TEXT,
+    output_json TEXT NOT NULL,
+    engine TEXT,
+    model TEXT,
+    created_by TEXT,
+    created_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_ai_outputs_account ON ai_outputs(account_id, created_at);
+CREATE TABLE IF NOT EXISTS leads (              -- פניות/לידים (מוזנים ידנית היום; בעתיד מ-WhatsApp/טפסים/CRM)
+    id TEXT PRIMARY KEY,
+    account_id TEXT NOT NULL,
+    client_id TEXT,
+    name TEXT NOT NULL,
+    contact TEXT,
+    channel TEXT,
+    message TEXT,
+    status TEXT NOT NULL,
+    notes TEXT,
+    ai_json TEXT,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_leads_account ON leads(account_id, created_at);
 CREATE TABLE IF NOT EXISTS missions (           -- P1 CEO: משימה = כוונה + תשובות + תוכנית
     id TEXT PRIMARY KEY,
     account_id TEXT NOT NULL,

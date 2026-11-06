@@ -98,6 +98,18 @@ export async function ceoView(view) {
     try {
       const m = await api("/api/missions", { method: "POST", body: JSON.stringify({ intent, answers }) });
       history.replaceState(null, "", `#/ceo?mission=${m.id}`);
+      if (intent === "consult" && r.ai && answers.question) {  // ייעוץ אמיתי ע"י מודל, מבוסס על נתוני העסק
+        composer.innerHTML = `<div class="row small muted"><span class="spinner"></span>${t("st.working")}</div>`;
+        try {
+          const a = await api("/api/studio/run", { method: "POST", body: JSON.stringify({ kind: "consult", input: answers.question }) });
+          const o = a.output;
+          say(`<p style="white-space:pre-line">${esc(o.answer)}</p>${o.steps.length ? `<ol class="wk-lines">${o.steps.map((/** @type {string} */ x) => `<li>${esc(x)}</li>`).join("")}</ol>` : ""}
+            <p class="tiny faint">${t("cmd.basedOn")} ${o.based_on.map(esc).join(" · ")}${o.missing_info.length ? ` · ${t("cmd.insufficient")} ${o.missing_info.map(esc).join(" · ")}` : ""}</p>
+            <span class="badge src-ai">${t("src.ai")} · ${esc(a.model)}</span>`);
+        } catch (err) { say(`<p>${esc(/** @type {Error} */ (err).message)}</p>`); }
+        composer.innerHTML = `<div class="row"><a class="btn btn-sm" href="#/studio?tab=consult">${t("ceo.moreQuestions")}</a><a class="btn btn-sm btn-ghost" href="#/start">${t("ceo.newMission")}</a></div>`;
+        return;
+      }
       chat.insertAdjacentHTML("beforeend", planHtml(m)); bindPlan(m);
       chat.lastElementChild?.scrollIntoView({ behavior: "smooth", block: "end" });
       composer.innerHTML = "";

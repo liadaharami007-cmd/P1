@@ -150,7 +150,7 @@ def build_plan(db: Database, account: dict, user_id: str | None, intent: str, an
         return {"intent": intent, "steps": steps, "engine": "rules", "suggest_demo": True}
     if intent == "consult":
         steps.append(_step("שיחה חופשית עם P1", "ops", "works" if ai else "unavailable", "תשובה מותאמת לעסק שלכם.",
-                           link="#/assistant", note=None if ai else "דורש מנוע מודל (Claude או Ollama). בינתיים — בחרו מסלול מונחה."))
+                           link="#/studio?tab=consult", note=None if ai else "דורש מנוע AI (Gemini חינם / Claude / Ollama). בינתיים — בחרו מסלול מונחה."))
         return {"intent": intent, "steps": steps, "engine": "rules"}
     # grow / website / marketing / manage — מסלול שמבוסס על אתר
     if site:
@@ -166,7 +166,8 @@ def build_plan(db: Database, account: dict, user_id: str | None, intent: str, an
         steps.append(_step("בניית אתר / דף נחיתה", "web", "unavailable", "אין עדיין אתר לבדוק.", note="Website Builder בתוכנית"))
     if intent in ("grow", "marketing"):
         steps.append(_step("ניתוח משפך המכירה על נתוני תנועה", "web", "unavailable", "", note="דורש חיבור Google Analytics"))
-        steps.append(_step("אסטרטגיית שיווק, קופי ותסריטים", "marketing", "works" if ai else "unavailable", "", note=None if ai else "דורש מנוע מודל"))
+        steps.append(_step("אסטרטגיית שיווק, מודעות ולוח תוכן (טיוטות)", "marketing", "works" if ai else "partial", "מבוסס על פרופיל העסק והאתר.",
+                           link="#/studio?tab=marketing", note=None if ai else "בנוי — מחכה למנוע AI (Gemini חינם)"))
         steps.append(_step("ניתוח קמפיינים ובזבוז תקציב", "marketing", "unavailable", "", note="דורש Google Ads / Meta Ads"))
     if intent in ("grow", "manage"):
         steps.append(_step("ניתוח רווחיות", "finance", "unavailable", "", note="דורש נתוני מכירות / הנהלת חשבונות"))

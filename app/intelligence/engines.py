@@ -1,6 +1,7 @@
 """מנועי AI מודולריים — מחליפים ביניהם בלי לשנות את שאר המערכת.
 
 - anthropic : Claude (בתשלום, דורש ANTHROPIC_API_KEY). המנוע המומלץ לאיכות.
+- gemini    : Google Gemini API — מסלול חינמי (מגבלת קצב). דורש GEMINI_API_KEY (חינם ב-aistudio.google.com).
 - ollama    : מודל פתוח שרץ מקומית בחינם (Ollama). דורש התקנת Ollama + מודל על השרת.
 - rules     : ניתוח דטרמיניסטי (כללים + תבניות) — תמיד זמין, בחינם, בלי מודל שפה.
 
@@ -20,7 +21,11 @@ from .client import IntelligenceError, Usage, get_client, structured_call
 OLLAMA_URL = os.environ.get("P1_OLLAMA_URL", "http://127.0.0.1:11434")
 OLLAMA_MODEL = os.environ.get("P1_OLLAMA_MODEL", "qwen2.5:7b-instruct")
 OLLAMA_VISION = os.environ.get("P1_OLLAMA_VISION", "0") == "1"
-PREFERRED = os.environ.get("P1_AI_ENGINE", "auto")  # auto / anthropic / ollama / rules
+PREFERRED = os.environ.get("P1_AI_ENGINE", "auto")  # auto / anthropic / gemini / ollama / rules
+GEMINI_URL = os.environ.get("P1_GEMINI_URL", "https://generativelanguage.googleapis.com/v1beta")
+GEMINI_MODEL = os.environ.get("P1_GEMINI_MODEL", "")  # ריק = בחירה אוטומטית של מודל Flash זמין
+# בסביבת הענן של Claude Code המפתח מוזרק ע"י ה-proxy (P1_GEMINI_PROXY_KEY=1) — האפליקציה עצמה לא רואה אותו
+GEMINI_PROXY_KEY = os.environ.get("P1_GEMINI_PROXY_KEY") == "1"
 
 
 class Engine(Protocol):
@@ -73,6 +78,102 @@ class OllamaEngine:
                           output_tokens=data.get("eval_count", 0))  # עלות 0 — רץ מקומית
 
 
+def _gemini_key() -> str | None:
+    k = os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY")
+    return k or ("proxy-injected" if GEMINI_PROXY_KEY else None)
+
+
+_gemini_cache: dict = {"at": 0.0, "ok": False, "msg": "", "model": None}
+
+
+def gemini_status(timeout: float = 6, force: bool = False) -> tuple[bool, str, str | None]:
+    """בדיקה אמיתית מול ה-API (רשימת מודלים) — לא רק "יש מפתח". נשמר במטמון 5 דקות."""
+    import time as _t
+    key = _gemini_key()
+    if not key:
+        return False, "חסר GEMINI_API_KEY (חינם: aistudio.google.com → Get API key)", None
+    if not force and _t.time() - _gemini_cache["at"] < 300:
+        return _gemini_cache["ok"], _gemini_cache["msg"], _gemini_cache["model"]
+    try:
+        r = httpx.get(f"{GEMINI_URL}/models", headers={"x-goog-api-key": key}, params={"pageSize": 200}, timeout=timeout)
+        if r.status_code != 200:
+            res = (False, f"Gemini החזיר {r.status_code} — בדקו את המפתח", None)
+        else:
+            names = [m["name"].split("/")[-1] for m in r.json().get("models", [])
+                     if "generateContent" in m.get("supportedGenerationMethods", [])]
+            model = GEMINI_MODEL if GEMINI_MODEL in names else pick_gemini_model(names)
+            res = (bool(model), f"Gemini · {model}" if model else "לא נמצא מודל Gemini זמין", model)
+    except httpx.HTTPError as e:
+        res = (False, f"אין חיבור ל-Gemini: {type(e).__name__}", None)
+    _gemini_cache.update(at=_t.time(), ok=res[0], msg=res[1], model=res[2])
+    return res
+
+
+def pick_gemini_model(names: list[str]) -> str | None:
+    """המודל הטוב ביותר במסלול החינמי: Flash יציב בגרסה הגבוהה ביותר (לא lite/preview/image/tts/live)."""
+    import re as _re
+    good = [n for n in names if "flash" in n and not _re.search(r"lite|image|tts|live|audio|thinking|exp|preview|embedding", n)]
+    if not good:
+        good = [n for n in names if "flash" in n and not _re.search(r"image|tts|live|audio|embedding", n)]
+
+    def ver(n: str) -> tuple:
+        m = _re.search(r"gemini-(\d+)(?:\.(\d+))?", n)
+        return (int(m.group(1)), int(m.group(2) or 0), -len(n)) if m else (0, 0, 0)
+    return max(good, key=ver) if good else None
+
+
+class GeminiEngine:
+    """Google Gemini דרך REST. פלט JSON מובנה (responseJsonSchema). עלות 0 במסלול החינמי."""
+    id = "gemini"
+
+    def __init__(self, model: str | None = None, transport: httpx.AsyncBaseTransport | None = None, key: str | None = None):
+        self.model = model or gemini_status()[2] or "gemini-2.5-flash"
+        self.transport, self.key = transport, key or _gemini_key() or ""
+
+    async def structured(self, *, system: str, content: list[dict], schema: dict, effort: str = "medium",
+                         max_tokens: int = 16000) -> tuple[dict, Usage]:
+        import asyncio as _a
+        parts: list[dict] = []
+        for b in content:
+            if b.get("type") == "text":
+                parts.append({"text": b["text"]})
+            elif b.get("type") == "image":
+                parts.append({"inline_data": {"mime_type": b["source"].get("media_type", "image/jpeg"), "data": b["source"]["data"]}})
+        body = {"systemInstruction": {"parts": [{"text": system}]}, "contents": [{"role": "user", "parts": parts}],
+                "generationConfig": {"responseMimeType": "application/json", "responseJsonSchema": schema,
+                                     "temperature": 0.3, "maxOutputTokens": min(max_tokens, 32000)}}
+        url = f"{GEMINI_URL}/models/{self.model}:generateContent"
+        last = ""
+        async with httpx.AsyncClient(timeout=180, transport=self.transport) as c:
+            for attempt in range(4):
+                try:
+                    r = await c.post(url, json=body, headers={"x-goog-api-key": self.key})
+                except httpx.HTTPError as e:
+                    raise IntelligenceError(f"אין חיבור ל-Gemini: {type(e).__name__}", retryable=True)
+                if r.status_code == 429 or r.status_code >= 500:  # מגבלת קצב של המסלול החינמי / עומס
+                    last = f"Gemini {r.status_code}"
+                    await _a.sleep(min(30, 4 * (attempt + 1)))
+                    continue
+                if r.status_code == 400 and "responseJsonSchema" in r.text:  # גרסת API ישנה — סכימה בתוך ההנחיה
+                    body["generationConfig"].pop("responseJsonSchema", None)
+                    body["systemInstruction"]["parts"][0]["text"] = system + "\nהחזר JSON בלבד לפי הסכימה: " + json.dumps(schema, ensure_ascii=False)
+                    continue
+                if r.status_code != 200:
+                    raise IntelligenceError(f"Gemini החזיר {r.status_code}: {r.text[:200]}")
+                data = r.json()
+                try:
+                    cand = data["candidates"][0]
+                    text = "".join(p.get("text", "") for p in cand["content"]["parts"])
+                    out = json.loads(text)
+                except (KeyError, IndexError, json.JSONDecodeError):
+                    reason = (data.get("candidates") or [{}])[0].get("finishReason") or data.get("promptFeedback", {}).get("blockReason")
+                    raise IntelligenceError(f"Gemini לא החזיר JSON תקין ({reason or 'ללא סיבה'})", retryable=reason == "MAX_TOKENS")
+                um = data.get("usageMetadata", {})
+                return out, Usage(model=f"gemini:{self.model}", input_tokens=um.get("promptTokenCount", 0),
+                                  output_tokens=um.get("candidatesTokenCount", 0) + um.get("thoughtsTokenCount", 0))
+        raise IntelligenceError(f"Gemini עמוס או שהגעתם למגבלת המסלול החינמי ({last}). נסו שוב בעוד דקה.", retryable=True)
+
+
 def ollama_status(timeout: float = 1.5) -> tuple[bool, str]:
     try:
         r = httpx.get(f"{OLLAMA_URL}/api/tags", timeout=timeout, trust_env=False)
@@ -88,14 +189,16 @@ def status() -> dict:
     """מצב כל המנועים + איזה מנוע פעיל בפועל."""
     a_ok = config.anthropic_configured()
     o_ok, o_msg = ollama_status()
+    g_ok, g_msg, g_model = gemini_status()
     engines = [
         {"id": "anthropic", "name": f"Claude ({config.MODEL})", "available": a_ok, "cost": "paid",
          "detail": "מחובר" if a_ok else "חסר ANTHROPIC_API_KEY"},
+        {"id": "gemini", "name": f"Google Gemini ({g_model or 'Flash'})", "available": g_ok, "cost": "free", "detail": g_msg},
         {"id": "ollama", "name": f"Ollama ({OLLAMA_MODEL})", "available": o_ok, "cost": "free", "detail": o_msg},
         {"id": "rules", "name": "P1 Rules Engine", "available": True, "cost": "free",
          "detail": "כללים + תבניות CRO — בלי מודל שפה"},
     ]
-    order = {"anthropic": ["anthropic"], "ollama": ["ollama"], "rules": []}.get(PREFERRED, ["anthropic", "ollama"])
+    order = {"anthropic": ["anthropic"], "gemini": ["gemini"], "ollama": ["ollama"], "rules": []}.get(PREFERRED, ["anthropic", "gemini", "ollama"])
     active = next((e["id"] for e in engines if e["id"] in order and e["available"]), "rules")
     return {"active": active, "preferred": PREFERRED, "engines": engines}
 
@@ -107,6 +210,8 @@ def active_engine(override: Any = None) -> Engine | None:
     act = status()["active"]
     if act == "anthropic":
         return AnthropicEngine()
+    if act == "gemini":
+        return GeminiEngine()
     if act == "ollama":
         return OllamaEngine()
     return None

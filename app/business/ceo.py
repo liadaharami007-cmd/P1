@@ -55,7 +55,14 @@ def snapshot(db: Database, account: dict) -> dict:
     return {"account": account, "profile": data, "profile_updated_at": prof["updated_at"] if prof else None,
             "completeness": brain.completeness(data), "sites": sites, "site": site, "audits": audits, "done": done,
             "latest": latest, "findings": findings, "comparison": cmp,
-            "monitor": db.get_monitor(site["id"]) if site else None, "actions": store.list_actions(db, aid)}
+            "monitor": db.get_monitor(site["id"]) if site else None, "actions": store.list_actions(db, aid),
+            "leads_unanswered": _stale_leads(db, aid)}
+
+
+def _stale_leads(db: Database, account_id: str) -> int:
+    since = (datetime.now(timezone.utc) - timedelta(hours=24)).isoformat()
+    with db._conn() as c:
+        return c.execute("SELECT COUNT(*) FROM leads WHERE account_id=? AND status='new' AND created_at < ?", (account_id, since)).fetchone()[0]
 
 
 # ---------------------------------------------------------------- Business Health Score
@@ -143,6 +150,11 @@ def plan(snap: dict) -> dict:
                                confidence="high", minutes=20, kind="fix_package", risk="none",
                                evidence=f"נמדד בבדיקה מ-{(L.get('finished_at') or '')[:10]} · חומרה: {f['severity']}",
                                payload={"finding_id": f["id"], "audit_id": L["id"]}, area=f["category"]))
+    stale = snap.get("leads_unanswered", 0)
+    if stale:
+        items.append(_item("leads:stale", f"לחזור ל-{stale} פניות שמחכות יותר מ-24 שעות",
+                           "פנייה שלא חוזרים אליה מהר — הולכת למתחרה. P1 יכול להכין טיוטת תשובה לכל פנייה.",
+                           impact="high", effort="low", confidence="high", minutes=5 * stale, kind="link", link="#/leads", area="sales"))
     mon = snap["monitor"]
     if site and not (mon and mon.get("enabled")):
         allowed = plans.plan_of(acc)["monitor"]

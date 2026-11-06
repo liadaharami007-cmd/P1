@@ -10,7 +10,7 @@ from pydantic import BaseModel
 from ..db import Database
 from ..intelligence import engines
 from ..saas.auth import Ctx, current
-from . import actions, agency, brain, ceo, missions, store
+from . import actions, agency, brain, ceo, missions, store, studio
 
 
 class ProfileIn(BaseModel):
@@ -29,6 +29,23 @@ class IntentIn(BaseModel):
 class MissionIn(BaseModel):
     intent: str
     answers: dict[str, Any] = {}
+
+
+class StudioIn(BaseModel):
+    kind: str
+    input: str = ""
+
+
+class LeadIn(BaseModel):
+    name: str
+    contact: str = ""
+    channel: str = "other"
+    message: str = ""
+
+
+class LeadPatch(BaseModel):
+    status: str | None = None
+    notes: str | None = None
 
 
 class ClientIn(BaseModel):
@@ -137,6 +154,77 @@ def register(app: FastAPI, db: Database, runner, browser_available: Callable[[],
     @app.get("/api/ceo/today")
     def ceo_today(ctx: Ctx = Depends(current)):
         return missions.today(db, ctx.account)
+
+    # ------------------------------------------------------------ סוכני המחלקות (שיווק / שירות / ייעוץ) — מנוע מודל אמיתי בלבד
+    @app.post("/api/studio/run")
+    async def studio_run(body: StudioIn, ctx: Ctx = Depends(current)):
+        from ..intelligence.client import IntelligenceError
+        if not body.input.strip() and body.kind not in ("marketing_strategy", "content_calendar"):
+            raise HTTPException(400, "כתבו מה לבקש")
+        try:
+            return await studio.run(db, ctx.account, ctx.user_id, body.kind, body.input)
+        except studio.NotConfigured as e:
+            raise HTTPException(503, str(e))
+        except ValueError as e:
+            raise HTTPException(400, str(e))
+        except IntelligenceError as e:
+            db.record_ai_run(audit_id=None, account_id=ctx.account_id, kind=f"studio:{body.kind}", status="failed", error=str(e)[:300])
+            raise HTTPException(502, str(e))
+
+    @app.get("/api/studio/history")
+    def studio_history(kind: str | None = None, ctx: Ctx = Depends(current)):
+        return {"items": studio.history(db, ctx.account_id, kind), "ai": missions.ceo_engine_active()}
+
+    # ------------------------------------------------------------ לידים
+    @app.get("/api/leads")
+    def leads(ctx: Ctx = Depends(current)):
+        return {"items": studio.list_leads(db, ctx.account_id), "summary": studio.leads_summary(db, ctx.account_id),
+                "ai": missions.ceo_engine_active()}
+
+    @app.post("/api/leads", status_code=201)
+    def add_lead(body: LeadIn, ctx: Ctx = Depends(current)):
+        if not body.name.strip():
+            raise HTTPException(400, "חסר שם")
+        lead = studio.add_lead(db, ctx.account_id, body.name.strip(), body.contact, body.channel, body.message)
+        store.log(db, ctx.account_id, "lead_added", f"פנייה חדשה: {lead['name']}", ref_type="lead", ref_id=lead["id"], user_id=ctx.user_id)
+        return lead
+
+    @app.patch("/api/leads/{lead_id}")
+    def patch_lead(lead_id: str, body: LeadPatch, ctx: Ctx = Depends(current)):
+        if not studio.get_lead(db, lead_id, ctx.account_id):
+            raise HTTPException(404, "הפנייה לא נמצאה")
+        fields = {}
+        if body.status is not None:
+            if body.status not in studio.LEAD_STATUSES:
+                raise HTTPException(400, "סטטוס לא חוקי")
+            fields["status"] = body.status
+        if body.notes is not None:
+            fields["notes"] = body.notes[:2000]
+        if fields:
+            studio.update_lead(db, lead_id, ctx.account_id, **fields)
+        return studio.get_lead(db, lead_id, ctx.account_id)
+
+    @app.delete("/api/leads/{lead_id}", status_code=204)
+    def delete_lead(lead_id: str, ctx: Ctx = Depends(current)):
+        with db._conn() as c:
+            if not c.execute("DELETE FROM leads WHERE id=? AND account_id=?", (lead_id, ctx.account_id)).rowcount:
+                raise HTTPException(404, "הפנייה לא נמצאה")
+
+    @app.post("/api/leads/{lead_id}/triage")
+    async def triage_lead(lead_id: str, ctx: Ctx = Depends(current)):
+        from ..intelligence.client import IntelligenceError
+        lead = studio.get_lead(db, lead_id, ctx.account_id)
+        if not lead:
+            raise HTTPException(404, "הפנייה לא נמצאה")
+        try:
+            res = await studio.run(db, ctx.account, ctx.user_id, "lead_triage",
+                                   f"פנייה מ-{lead['name']} ({lead['channel']}): {lead['message']}")
+        except studio.NotConfigured as e:
+            raise HTTPException(503, str(e))
+        except IntelligenceError as e:
+            raise HTTPException(502, str(e))
+        studio.update_lead(db, lead_id, ctx.account_id, ai={**res["output"], "model": res["model"]})
+        return studio.get_lead(db, lead_id, ctx.account_id)
 
     # ------------------------------------------------------------ Agency Mode
     @app.get("/api/agency")
