@@ -60,11 +60,11 @@ def snapshot(db: Database, account: dict) -> dict:
 
 # ---------------------------------------------------------------- Business Health Score
 DOMAIN_NEEDS = {
-    "marketing": "חיבור Google Analytics / Google Ads / Meta Ads (עוד לא זמין במערכת)",
-    "sales": "חיבור לחנות (Shopify / WooCommerce) או למערכת CRM (עוד לא זמין במערכת)",
-    "support": "חיבור WhatsApp Business או מערכת פניות (עוד לא זמין במערכת)",
-    "profit": "נתוני הכנסות והוצאות מהנהלת החשבונות (עוד לא זמין במערכת)",
-    "operations": "חיבור מערכת תורים/הזמנות (עוד לא זמין במערכת)",
+    "marketing": "חיבור Google Analytics / Google Ads / Meta Ads · עוד לא זמין במערכת",
+    "sales": "חיבור לחנות (Shopify / WooCommerce) או למערכת CRM · עוד לא זמין במערכת",
+    "support": "חיבור WhatsApp Business או מערכת פניות · עוד לא זמין במערכת",
+    "profit": "נתוני הכנסות והוצאות מהנהלת החשבונות · עוד לא זמין במערכת",
+    "operations": "חיבור מערכת תורים/הזמנות · עוד לא זמין במערכת",
 }
 
 
@@ -129,7 +129,12 @@ def plan(snap: dict) -> dict:
                                impact="high", effort="low", confidence="high", minutes=3, kind="verify_fix",
                                payload={"site_id": site["id"], "audit_id": L["id"], "url": L.get("start_url") or site["url"],
                                         "finding_ids": [f["id"] for f in applied]}))
-        open_f = [f for f in snap["findings"] if f["source"] == "measured" and f.get("fix_status") in ("proposed", "approved")]
+        approved = [f for f in snap["findings"] if f["source"] == "measured" and f.get("fix_status") == "approved"]
+        if approved:
+            items.append(_item(f"apply:{L['id']}", f"ליישם באתר {len(approved)} תיקונים שאישרתם",
+                               "חבילות התיקון מוכנות. אחרי שמי שמתחזק את האתר מיישם אותן — סמנו 'יושם' ו-P1 יבדוק שהבעיה באמת נעלמה.",
+                               impact="high", effort="medium", confidence="high", minutes=30, kind="link", link="#/approvals"))
+        open_f = [f for f in snap["findings"] if f["source"] == "measured" and f.get("fix_status") == "proposed"]
         open_f.sort(key=lambda f: f.get("priority") or 999)
         for f in open_f[:5]:
             items.append(_item(f"fix:{f['id']}", f"לתקן: {f['title']}", f.get("why_it_matters") or f.get("detail") or "",

@@ -14,18 +14,27 @@ import { adminView } from "./views/admin.js";
 import { fixStudioView } from "./views/fixstudio.js";
 import { sitesView } from "./views/sites.js";
 import { demoView } from "./views/demo.js";
+import "./i18n-biz.js";
+import { commandView } from "./views/command.js";
+import { businessView } from "./views/business.js";
+import { approvalsView } from "./views/approvals.js";
+import { timelineView } from "./views/timeline.js";
 
 /** @typedef {{ status: any, me: any, account: any, cleanup: (() => void) | null }} AppState */
 /** @type {AppState} */
 export const app = { status: null, me: null, account: null, cleanup: null };
 
 const NAV = [
-  { path: "/", key: "overview", icon: "overview", group: "workspace" },
+  { path: "/", key: "command", icon: "home", group: "business" },
+  { path: "/approvals", key: "approvals", icon: "check", group: "business" },
+  { path: "/business", key: "business", icon: "account", group: "business", desktopOnly: true },
+  { path: "/timeline", key: "timeline", icon: "clock", group: "business", desktopOnly: true },
+  { path: "/site", key: "overview", icon: "overview", group: "workspace", desktopOnly: true },
   { path: "/sites", key: "sites", icon: "globe", group: "workspace" },
   { path: "/audits", key: "audits", icon: "audit", group: "workspace" },
   { path: "/fix", key: "fix", icon: "sparkle", group: "workspace", desktopOnly: true },
-  { path: "/tasks", key: "tasks", icon: "tasks", group: "workspace" },
-  { path: "/assistant", key: "assistant", icon: "chat", group: "workspace" },
+  { path: "/tasks", key: "tasks", icon: "tasks", group: "workspace", desktopOnly: true },
+  { path: "/assistant", key: "assistant", icon: "chat", group: "workspace", desktopOnly: true },
   { path: "/demo", key: "demo", icon: "play", group: "settings", desktopOnly: true },
   { path: "/integrations", key: "integrations", icon: "plug", group: "settings", desktopOnly: true },
   { path: "/account", key: "account", icon: "account", group: "settings" },
@@ -38,9 +47,9 @@ function route() {
   const fx = hash.match(/^\/fix(?:\/([a-f0-9]+))?$/);
   if (fx) return { view: fixStudioView, params: /** @type {any} */ ({ id: fx[1] || null }), nav: "/fix" };
   /** @type {Record<string, Function>} */
-  const table = { "/": dashboardView, "/audits": auditsView, "/tasks": tasksView, "/assistant": assistantView,
+  const table = { "/": commandView, "/site": dashboardView, "/business": businessView, "/approvals": approvalsView, "/timeline": timelineView, "/audits": auditsView, "/tasks": tasksView, "/assistant": assistantView,
     "/integrations": integrationsView, "/account": accountView, "/admin": adminView, "/sites": sitesView, "/demo": demoView };
-  return { view: table[hash] || dashboardView, params: /** @type {any} */ ({}), nav: table[hash] ? hash : "/" };
+  return { view: table[hash] || commandView, params: /** @type {any} */ ({}), nav: table[hash] ? hash : "/" };
 }
 
 function shell() {
@@ -80,7 +89,7 @@ function renderNav(active) {
     `<a href="#${n.path}" class="${n.path === active ? "active" : ""}" ${n.path === active ? 'aria-current="page"' : ""}>${icon(n.icon)}<span>${t((short ? "nav.short." : "nav.") + n.key)}</span></a>`;
   const admin = app.me.user.is_platform_admin ? item({ path: "/admin", key: "admin", icon: "admin" }, false) : "";
   const group = (/** @type {string} */ g) => NAV.filter((n) => n.group === g).map((n) => item(n, false)).join("");
-  $("#nav").innerHTML = `<div class="nav-label">${t("nav.group.workspace")}</div>${group("workspace")}<div class="nav-label">${t("nav.group.settings")}</div>${group("settings")}${admin}`;
+  $("#nav").innerHTML = `<div class="nav-label">${t("nav.group.business")}</div>${group("business")}<div class="nav-label">${t("nav.group.workspace")}</div>${group("workspace")}<div class="nav-label">${t("nav.group.settings")}</div>${group("settings")}${admin}`;
   $("#bottom-nav").innerHTML = NAV.filter((n) => !n.desktopOnly).map((n) => item(n, true)).join("");
 }
 

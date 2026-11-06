@@ -13,7 +13,7 @@ export async function demoView(view) {
   const A = demoAudit ? demoAudit.id : null;
   /** @type {[string, string|null, boolean][]} */
   const steps = [
-    ["demo.step1", "#/", true],
+    ["demo.step1", "#/site", true],
     ["demo.step2", "#/sites", true],
     ["demo.step3", running ? `#/audits/${running.id}` : null, !!demoAudit],
     ["demo.step4", running ? `#/audits/${running.id}` : A ? `#/audits/${A}` : null, !!demoAudit],

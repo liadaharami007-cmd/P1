@@ -566,3 +566,76 @@ dialog::backdrop { background: rgba(8, 8, 16, .5); backdrop-filter: blur(2px); }
   .agent-results { grid-template-columns: minmax(0, 1fr); }
   .fs-card { padding: 16px; }
 }
+
+/* ================================================================ Business OS — Command Center, אישורים, פרופיל, ציר זמן */
+.g-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.section-title { font-size: 14.5px; margin: 4px 2px 10px; }
+.eyebrow { font-size: 12px; font-weight: 600; letter-spacing: .02em; color: var(--brand-text); margin-bottom: 6px; }
+.cmd-hero { display: flex; gap: 24px; align-items: center; padding: 28px; border-radius: 16px; border: 1px solid var(--border);
+  background: radial-gradient(120% 140% at 100% 0%, var(--brand-soft) 0%, transparent 55%), var(--surface); box-shadow: var(--shadow); }
+.cmd-hero h2 { font-size: 26px; letter-spacing: -.02em; line-height: 1.2; }
+.cmd-hero .lead { color: var(--text-2); margin-top: 6px; max-width: 620px; font-size: 14.5px; }
+.cmd-score { display: flex; flex-direction: column; align-items: center; gap: 4px; color: var(--muted); text-decoration: none; flex-shrink: 0; }
+.next-list { display: flex; flex-direction: column; gap: 10px; }
+.next-card { display: flex; gap: 14px; padding: 14px 16px; border: 1px solid var(--border); border-radius: 12px; background: var(--surface);
+  transition: border-color .15s var(--ease), box-shadow .15s var(--ease); }
+.next-card:hover { border-color: var(--border-strong); box-shadow: var(--shadow-sm); }
+.next-num { width: 28px; height: 28px; flex-shrink: 0; border-radius: 50%; display: grid; place-items: center; font-weight: 700; font-size: 13px;
+  background: var(--brand-soft); color: var(--brand-text); }
+.next-body { flex: 1; min-width: 0; }
+.next-head { display: flex; align-items: center; gap: 8px; margin-bottom: 3px; }
+.next-head h3 { font-size: 14.5px; line-height: 1.35; }
+.next-ico svg { width: 16px; height: 16px; color: var(--muted); display: block; }
+.next-foot { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-top: 10px; }
+.chip { display: inline-flex; align-items: center; font-size: 11.5px; padding: 2px 8px; border-radius: 999px; background: var(--surface-2); color: var(--text-2); }
+.more-plan summary { cursor: pointer; color: var(--brand-text); margin-top: 12px; }
+.count-pill { display: inline-grid; place-items: center; min-width: 18px; height: 18px; padding: 0 5px; border-radius: 9px; font-size: 11px;
+  background: var(--brand); color: var(--on-brand); }
+.health-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; }
+.health-item { border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; background: var(--surface); min-width: 0; }
+.health-item.no_data { background: var(--surface-2); border-style: dashed; }
+.health-score { font-size: 24px; font-weight: 700; letter-spacing: -.02em; margin-top: 4px; }
+.health-score small { font-size: 12px; color: var(--muted); font-weight: 500; }
+.wk-lines { margin: 0; padding-inline-start: 18px; display: grid; gap: 6px; font-size: 13.5px; }
+.action-card { padding: 16px 18px; }
+.action-title { font-size: 15px; line-height: 1.35; }
+.action-meta { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; margin-top: 8px; color: var(--text-2); }
+.action-changes { margin-top: 12px; padding: 12px 14px; border-radius: 10px; background: var(--surface-2); }
+.action-changes ul { margin: 0; padding-inline-start: 18px; display: grid; gap: 4px; font-size: 13px; }
+.act-st { flex-shrink: 0; }
+.act-proposed { background: var(--warning-soft); color: var(--warning-text); }
+.act-executing { background: var(--brand-soft); color: var(--brand-text); }
+.act-done { background: var(--good-soft); color: var(--good-text); }
+.act-failed { background: var(--critical-soft); color: var(--critical-text); }
+.act-rejected { background: var(--surface-2); color: var(--muted); }
+.src-rules { background: var(--surface-2); color: var(--text-2); }
+.form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px 16px; }
+.form-grid fieldset, .form-grid .field:has(textarea) { grid-column: 1 / -1; }
+fieldset.field { border: 0; padding: 0; margin: 0; } fieldset.field legend { font-size: 12.5px; font-weight: 550; color: var(--text-2); margin-bottom: 6px; }
+textarea.input { height: auto; padding: 9px 12px; resize: vertical; line-height: 1.5; }
+.req { color: var(--critical-text); }
+.step-num { display: inline-grid; place-items: center; width: 22px; height: 22px; border-radius: 50%; background: var(--brand-soft);
+  color: var(--brand-text); font-size: 12px; margin-inline-end: 8px; }
+.chips-select { display: flex; flex-wrap: wrap; gap: 8px; }
+.chip-check { position: relative; cursor: pointer; }
+.chip-check input { position: absolute; opacity: 0; inset: 0; }
+.chip-check span { display: inline-flex; padding: 7px 12px; border-radius: 999px; border: 1px solid var(--border-strong); font-size: 13px;
+  transition: all .15s var(--ease); background: var(--surface); }
+.chip-check input:checked + span { background: var(--brand-soft); border-color: var(--brand); color: var(--brand-text); font-weight: 600; }
+.chip-check input:focus-visible + span { outline: 2px solid var(--brand); outline-offset: 2px; }
+.sticky-save { position: sticky; bottom: 12px; display: flex; justify-content: flex-end; z-index: 5; }
+.timeline { list-style: none; margin: 0; padding: 0; position: relative; }
+.timeline::before { content: ""; position: absolute; inset-inline-start: 7px; top: 6px; bottom: 6px; width: 2px; background: var(--border); }
+.tl-item { position: relative; display: flex; gap: 14px; padding: 0 0 16px; }
+.tl-dot { width: 16px; height: 16px; border-radius: 50%; flex-shrink: 0; margin-top: 2px; border: 3px solid var(--surface); box-shadow: 0 0 0 1px var(--border-strong);
+  background: var(--faint); position: relative; z-index: 1; }
+.tl-measured { background: var(--src-measured); } .tl-done { background: var(--good); } .tl-failed { background: var(--critical); }
+.tl-proposed { background: var(--warning); } .tl-brand { background: var(--brand); }
+.tl-body { flex: 1; min-width: 0; background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; }
+@media (max-width: 900px) {
+  .cmd-hero { flex-direction: column; align-items: flex-start; padding: 20px; }
+  .cmd-hero h2 { font-size: 22px; }
+  .form-grid, .g-2 { grid-template-columns: 1fr; }
+  .next-card { padding: 12px; gap: 10px; }
+  .sticky-save .btn { width: 100%; }
+}

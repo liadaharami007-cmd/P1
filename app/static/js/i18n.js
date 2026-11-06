@@ -318,5 +318,8 @@ export function t(key, vars) {
   return s;
 }
 
+/** הוספת מילון של מודול נוסף (למשל Business OS). @param {Record<"he"|"en", Record<string, string>>} d */
+export function extend(d) { Object.assign(DICT.he, d.he); Object.assign(DICT.en, d.en); }
+
 export const locale = () => (lang === "he" ? "he-IL" : "en-US");
 setLang(lang);

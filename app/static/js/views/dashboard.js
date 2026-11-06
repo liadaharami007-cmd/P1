@@ -94,7 +94,7 @@ export async function dashboardView(view, _p, app) {
   </div>`;
 
   animateRings(view);
-  view.querySelector("#site-switch")?.addEventListener("change", (e) => (location.hash = `#/?site=${/** @type {HTMLSelectElement} */ (e.target).value}`));
+  view.querySelector("#site-switch")?.addEventListener("change", (e) => (location.hash = `#/site?site=${/** @type {HTMLSelectElement} */ (e.target).value}`));
   const trendEl = /** @type {HTMLElement|null} */ (view.querySelector("#trend"));
   if (trendEl && d.trend.length >= 2) {
     const draw = (/** @type {string} */ k) => lineChart(trendEl, d.trend.map((/** @type {any} */ p) => ({ id: p.id, at: p.at,
