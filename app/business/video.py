@@ -35,7 +35,8 @@ def _scenes_html(scenes: list[dict], brand: str, color: str, cta: str) -> tuple[
     t, parts = 0.0, []
     for s in scenes[:8]:
         dur = _seconds(s.get("seconds"))
-        parts.append(f"<section style='animation-delay:{t:.2f}s;animation-duration:{dur:.2f}s'><p class='v'>{e(s.get('visual', ''))[:140]}</p>"
+        # הוראת הצילום (visual) נשארת בתסריט לצלם — בסרטון מוצג רק הטקסט לקהל
+        parts.append(f"<section style='animation-delay:{t:.2f}s;animation-duration:{dur:.2f}s'>"
                      f"<h2>{e(s.get('voiceover') or s.get('text') or '')[:160]}</h2></section>")
         t += dur
     end = 3.0
