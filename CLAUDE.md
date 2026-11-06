@@ -28,7 +28,8 @@ P1 AI היא **פלטפורמת SaaS ל-Commerce Intelligence**: בעל חנות
 SPA (vanilla ES modules + JSDoc/TypeScript check, i18n he/en, RTL/LTR) ── JSON + SSE + session cookie
 FastAPI (app/main.py): request-id, JSON logs, CSRF origin check, CSP, auth על כל endpoint, סינון לפי account_id
   saas/          auth (scrypt, sessions, rate limit) · plans (מכסות + תדירויות מעקב) · billing (ממשק — לא מחובר)
-  audit/         collector.py   ליבת המסלול: בית → אמון → קישורים → מוצר → סל → עגלה → קופה (עצירה) → חיפוש → iPhone
+  audit/         leads.py       ערוצי פנייה: טפסים, WhatsApp (פורמט מספר), tel — מחשב/iPhone/צור קשר. לא שולח טפסים
+                 collector.py   ליבת המסלול: בית → אמון → קישורים → מוצר → סל → עגלה → קופה (עצירה) → חיפוש → iPhone
                  rules.py       עובדות + תוצאות סוכנים → ממצאים measured (כולל Conversion Intelligence) · RULE_CATEGORY
                  priority.py    סדר עדיפות שקוף: חומרה × השפעה ÷ מאמץ
                  scoring.py · compare.py · personas.py (סימולציה מבוססת כללים — legacy, נשמר)
@@ -39,6 +40,9 @@ FastAPI (app/main.py): request-id, JSON logs, CSRF origin check, CSP, auth על 
                  sandbox.py (Chromium: טוען עמוד אמיתי → מסמן בעיה → מחיל ops על DOM מבודד → צילום לפני/אחרי) · service.py
   business/      Business OS: store.py (פרופיל/פעולות/יומן, מסונן לפי account) · brain.py (שדות פרופיל + אימות) ·
                  ceo.py (בריאות לפי תחום — ציון כולל רק עם ≥3 תחומים מדודים · תוכנית + top3 · הוכחת ערך · ציר זמן · דוח שבועי · ai_brief) ·
+                 missions.py (P1 CEO: כוונה → שאלות שחסרות → תוכנית עם סטטוס יכולת לכל צעד · "מה עושים היום") ·
+                 agency.py (Agency Mode + 15 לקוחות דמו ב-/demo-clients/<slug>/, לא נספרים במכסה) ·
+                 registry.py (מקור אמת: 6 מחלקות + סטטוס יכולות · חיבורים connected/not_configured/not_built) ·
                  actions.py (Approval Center: run_audit / verify_fix / enable_monitor / fix_package — אף אחד לא משנה אתר חי) · routes.py
   saas/billing.py  ממשק ספק + Paddle (Stripe לא תומך בישראל). webhook חתום (Paddle-Signature) + billing_events לאידמפוטנטיות
   saas/recovery.py שחזור סיסמה (אסימון hash חד-פעמי 30 דק', SMTP או קישור ממנהל)
@@ -47,7 +51,7 @@ FastAPI (app/main.py): request-id, JSON logs, CSRF origin check, CSP, auth על 
   monitor.py     Smart Monitor: tick כל דקה מה-worker, השוואה, התראות new/fixed/score
   report/        data.py · pdf.py (PDF ע"י Chromium)
   static/demo-store/  חנות דמו "סדנת פשתן" עם בעיות מכוונות (חלון קופץ, מדיניות דלה, כפתור לא בולט, קופה עם הרשמה כפויה, קישור שבור…)
-  db.py          SQLite + מיגרציות (user_version=4: business_profiles, actions, activity, password_resets, billing_events): agent_runs, fix_previews, monitors, notifications, findings.fix_status/priority…
+  db.py          SQLite + מיגרציות (user_version=4: business_profiles, actions, activity, missions, clients, password_resets, billing_events): agent_runs, fix_previews, monitors, notifications, findings.fix_status/priority…
 ```
 - **מנועי AI (engines.py):** `P1_AI_ENGINE=auto|anthropic|ollama|rules`. Ollama: `P1_OLLAMA_URL`, `P1_OLLAMA_MODEL` (ברירת מחדל qwen2.5:7b-instruct), `P1_OLLAMA_VISION=1`.
   Claude: `claude-opus-5-5`, adaptive thinking, structured outputs, `fallbacks: "default"`. כל קריאה ב-`ai_runs` (Ollama = עלות 0).
@@ -67,6 +71,9 @@ FastAPI (app/main.py): request-id, JSON logs, CSRF origin check, CSP, auth על 
 | `GET/POST /api/actions` · `POST /api/actions/{id}/approve` · `/reject` · `GET /api/actions/{id}/package.html` | מרכז אישורים |
 | `GET /api/billing` · `POST /api/billing/checkout` · `/portal` · `/webhook` | תשלומים (Paddle) |
 | `POST /api/auth/forgot` · `/api/auth/reset` · `POST /api/admin/reset-link` | שחזור סיסמה |
+| `POST /api/ceo/intent` · `GET /api/ceo/today` · `GET/POST /api/missions` | P1 CEO |
+| `GET /api/agency` · `POST /api/agency/clients` · `/clients/{id}/audit` · `POST/DELETE /api/agency/demo` | סוכנות |
+| `GET /api/business/value` · `GET /api/departments` · `GET /api/integrations` | ערך · מחלקות · חיבורים |
 | `GET /welcome` · `GET /api/public/plans` · `/manifest.webmanifest` · `/sw.js` | ציבורי |
 (קיימים: auth, audits, report.pdf, compare, methodology, tasks, dashboard, account, admin, conversations.)
 
@@ -87,6 +94,7 @@ python -m pytest -q                       # ~3 דק' — כולל מסעות ר�
   Live Mission Control (SSE) · Conversion Intelligence + סדר עדיפויות · Design System 3.0 · Smart Monitor + התראות · Demo Experience · מנועי AI מודולריים
 - ✅ **Business OS (נוכחי):** מרכז פיקוד (3 הפעולות הבאות) · פרופיל עסק · מרכז אישורים · אימות תיקון במדידה · ציר צמיחה · דוח שבועי ·
   PWA לאייפון · אתר שיווקי + מחשבון חיסכון · Paddle (מוק) · שחזור סיסמה · Dockerfile (לא נבנה). פירוט: `PROGRESS.md`. מה חסר מהמשתמש: `REQUIREMENTS.md`.
+- ✅ **CEO v2 (נוכחי):** מסך "מה תרצה להשיג היום?" + שיחת P1 CEO · בדיקת טפסים/WhatsApp · Agency Mode + 15 לקוחות דמו · מרכז הערך · 6 מחלקות · מרכז חיבורים.
 - **הבא:** פריסה (באישור) · בדיקת טפסי לידים/וואטסאפ · התראות וואטסאפ/מייל · ModelBrain לסוכנים (Ollama/Claude מחליטים על הצעד הבא) · שכתוב AI ב-Fix Studio כשמנוע זמין · Postgres + worker נפרד + Redis ·
   אימות בעלות (meta/DNS) · איפוס סיסמה/אימות מייל · צוותים · אחסון S3 · Shopify OAuth (store_data) · ספק תשלומים · פריסה (Docker) · תרגום טקסטי כללים לאנגלית.
 

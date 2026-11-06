@@ -1,6 +1,6 @@
 # P1 AI — יומן התקדמות (להמשכיות בין שיחות)
 
-עדכון אחרון: 2026-11-06 · ענף: `claude/p1-ai-initial-setup-2jx3ei` · נקודת שחזור לפני Business OS: tag `restore-point-before-business-os`
+עדכון אחרון: 2026-11-06 · ענף: `claude/p1-ai-initial-setup-2jx3ei` · נקודות שחזור: tag `restore-point-before-business-os`, commit `136e156` (לפני סבב CEO v2)
 
 ## מה נבנה בסבב "Business OS" (נבדק בפועל)
 | שלב | מה | איך נבדק |
@@ -20,9 +20,24 @@
 
 סה"כ בדיקות אוטומטיות: ראו `python -m pytest -q` (כולל דפדפן אמיתי).
 
+## סבב "P1 CEO + מחלקות + סוכנות" (נבדק בפועל)
+| מה | איך נבדק |
+|---|---|
+| מסך פתיחה "מה תרצה להשיג היום?" (6 מסלולים + סוכנות + טקסט חופשי) → שיחה מונחית עם P1 CEO (`app/business/missions.py`, `views/start.js`, `views/ceo.js`) | test_ceo + E2E iPhone: הרשמה → שיחה → תוכנית → אישור → בדיקה אמיתית (24 שנ') → מרכז פיקוד |
+| כל צעד בתוכנית מסומן works / partial / unavailable + מה חסר; שאלות רק על מה שחסר בפרופיל; בדיקת מוכנות לרעיון (rules) | test_ceo |
+| "מה עושים היום?" — 3 המלצות עם למה / תוצאה / זמן / עלות / מי מבצע / האם צריך אישור | test_ceo + E2E |
+| **בדיקת ערוצי פנייה** (`app/audit/leads.py`): טפסי לידים, WhatsApp (פורמט מספר), tel/mailto, מחשב + iPhone + עמוד צור קשר. לא שולח טפסים | test_leads (כולל בדיקה אמיתית על חנות הדמו) |
+| **Agency Mode** (`app/business/agency.py`, `views/agency.js`): לקוחות, מי דורש טיפול, דוחות + PDF, אישורים, זמן מכונה (נמדד) מול זמן ידני (אומדן) | test_agency + E2E: 15 לקוחות דמו נבדקו באמת (6 דק' מכונה) |
+| סביבת הדגמה לסוכנות: 15 לקוחות פיקטיביים מסומנים "לקוח דמו", אתרים = גרסאות של חנות הדמו (`/demo-clients/<slug>/`), לא נספרים במכסה | test_agency |
+| **מרכז הערך** (`/api/business/value`, `views/value.js`): נמדד / אומדן / דמו — בנפרד. מחשבון ROI (שעה, עובדים, משימות). אין ייחוס מכירות בלי נתונים | test_ceo + E2E |
+| **מפת 6 מחלקות** (`app/business/registry.py`, `views/departments.js`) + **מרכז חיבורים** אמיתי (connected / not_configured / not_built) | test_audit + E2E |
+| תיקוני iPhone שנמצאו ב-E2E: חלון ההתקנה כיסה את כפתורי השיחה; כתובת בבועה התהפכה | E2E |
+
+ידוע: בסביבת הפיתוח האתרים רצים על http, לכן "אין HTTPS" (קריטי) מגביל את הציון ל-49 בכל לקוחות הדמו. בפריסה עם HTTPS הציונים יתפזרו.
+
 ## מה עדיין לא קיים (ולא מוצג כקיים)
 - מודל שפה פעיל (חסר מפתח / Ollama) · אחסון באוויר · Paddle אמיתי · SMTP אמיתי — ראו `REQUIREMENTS.md`.
-- Website Builder, Marketing Studio, Competitor Research, Sales/Leads, Customer Support, Profit Doctor, Integrations (Shopify/GA/WhatsApp), צוותים והרשאות מרובות משתמשים בחשבון, אימות מייל.
+- Website Builder, Video Studio, ניתוח קמפיינים, ניהול לידים/CRM, שירות לקוחות, Profit Doctor, Experiment Lab, חיבורי Shopify/WordPress/GA/Ads/WhatsApp, מצב אוטומטי מבוקר (autopilot), צוותים והרשאות, אימות מייל.
 - ModelBrain לסוכנים (היום rules), אימות בעלות אוטומטי (meta/DNS).
 
 ## הצעדים הבאים לפי סדר
