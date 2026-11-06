@@ -74,3 +74,22 @@ def test_webhook_signature_replay_and_plan_change(make_client, monkeypatch):
     c.post("/api/billing/webhook", content=cancel, headers={"Paddle-Signature": _sign(cancel)})
     a = c.get("/api/account").json()["account"]
     assert a["plan"] == "free" and a["subscription_status"] == "canceled"
+
+
+def test_password_reset_flow(make_client, monkeypatch):
+    from urllib.parse import parse_qs, urlparse
+    monkeypatch.delenv("P1_SMTP_HOST", raising=False)
+    c = make_client()
+    register(c, "admin@p1.co")  # המשתמש הראשון = מנהל פלטפורמה
+    u = make_client(db=c.app.state.db)
+    register(u, "user@p1.co")
+    assert c.get("/api/auth/config").json()["email_configured"] is False
+    assert u.post("/api/auth/forgot", json={"email": "user@p1.co"}).status_code == 503  # לא מעמידים פנים ששלחנו
+    assert u.post("/api/admin/reset-link", json={"email": "user@p1.co"}).status_code == 403
+    link = c.post("/api/admin/reset-link", json={"email": "user@p1.co"}).json()["link"]
+    token = parse_qs(urlparse(link.replace("#/reset", "reset")).query)["token"][0]
+    assert u.post("/api/auth/reset", json={"token": token, "password": "short"}).status_code == 400
+    assert u.post("/api/auth/reset", json={"token": token, "password": "brand-new-password-1"}).json()["ok"]
+    assert u.get("/api/auth/me").status_code == 401  # הסשנים הישנים בוטלו
+    assert u.post("/api/auth/reset", json={"token": token, "password": "another-password-2"}).status_code == 400  # חד-פעמי
+    assert u.post("/api/auth/login", json={"email": "user@p1.co", "password": "brand-new-password-1"}).status_code == 200

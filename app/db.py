@@ -282,6 +282,13 @@ CREATE TABLE IF NOT EXISTS activity (
     created_at TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_activity_account ON activity(account_id, created_at);
+CREATE TABLE IF NOT EXISTS password_resets (    -- אסימוני שחזור סיסמה (רק hash), חד-פעמיים
+    token_hash TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL,
+    expires_at TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    used_at TEXT
+);
 CREATE TABLE IF NOT EXISTS billing_events (     -- אירועי ספק התשלומים (אידמפוטנטיות + תיעוד)
     id TEXT PRIMARY KEY,
     type TEXT NOT NULL,

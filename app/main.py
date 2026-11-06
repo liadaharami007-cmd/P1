@@ -72,6 +72,15 @@ class PlanIn(BaseModel):
     plan: str
 
 
+class ForgotIn(BaseModel):
+    email: str
+
+
+class ResetIn(BaseModel):
+    token: str
+    password: str
+
+
 class CheckoutIn(BaseModel):
     plan: str
     interval: str = "monthly"
@@ -178,7 +187,36 @@ def create_app(db: Database | None = None, agent: Agent | None = None, runner: A
 
     @app.get("/api/auth/config")
     def auth_config():
-        return {"signup_allowed": auth.ALLOW_SIGNUP, "has_users": database.count_users() > 0}
+        from .saas import recovery
+        return {"signup_allowed": auth.ALLOW_SIGNUP, "has_users": database.count_users() > 0,
+                "email_configured": recovery.email_configured()}
+
+    @app.post("/api/auth/forgot")
+    def forgot(body: ForgotIn, request: Request):
+        from .saas import recovery
+        if not recovery.email_configured():
+            raise HTTPException(503, "שליחת מיילים לא מחוברת במערכת הזו. פנו למנהל המערכת לקבלת קישור איפוס.")
+        if not auth.signup_limiter.hit("forgot|" + auth.client_ip(request)):
+            raise HTTPException(429, "יותר מדי בקשות. נסו שוב מאוחר יותר")
+        user = database.get_user_by_email(body.email.strip().lower())
+        if user:  # תשובה זהה גם כשהמשתמש לא קיים — לא חושפים אילו מיילים רשומים
+            token = recovery.create_reset(database, user["id"])
+            try:
+                recovery.send_email(user["email"], "איפוס סיסמה · P1 AI",
+                                    f"לאיפוס הסיסמה (תקף {recovery.TTL_MINUTES} דקות):\n{recovery.reset_link(token)}\n\nאם לא ביקשתם — התעלמו מההודעה.")
+            except Exception:  # noqa: BLE001
+                log.exception("reset email failed")
+                raise HTTPException(502, "שליחת המייל נכשלה. נסו שוב מאוחר יותר")
+        return {"ok": True}
+
+    @app.post("/api/auth/reset")
+    def reset(body: ResetIn):
+        from .saas import recovery
+        if len(body.password or "") < 10:
+            raise HTTPException(400, "הסיסמה חייבת להכיל לפחות 10 תווים")
+        if not recovery.consume(database, body.token, auth.hash_password(body.password)):
+            raise HTTPException(400, "הקישור לא תקין או שפג תוקפו")
+        return {"ok": True}
 
     @app.post("/api/auth/register", status_code=201)
     def register(body: RegisterIn, request: Request, response: Response):
@@ -632,6 +670,16 @@ def create_app(db: Database | None = None, agent: Agent | None = None, runner: A
     @app.get("/api/admin/overview")
     def admin_overview(ctx: Ctx = Depends(require_admin)):
         return {**database.admin_overview(), "plans": plans.PLANS}
+
+    @app.post("/api/admin/reset-link")
+    def admin_reset_link(body: ForgotIn, ctx: Ctx = Depends(require_admin)):
+        """כשאין שרת מייל: מנהל הפלטפורמה מפיק קישור איפוס חד-פעמי ומעביר אותו למשתמש בעצמו."""
+        from .saas import recovery
+        user = database.get_user_by_email(body.email.strip().lower())
+        if not user:
+            raise HTTPException(404, "משתמש לא נמצא")
+        log.info("admin reset link", extra={"user_id": user["id"], "by": ctx.user_id})
+        return {"link": recovery.reset_link(recovery.create_reset(database, user["id"])), "expires_minutes": recovery.TTL_MINUTES}
 
     @app.patch("/api/admin/accounts/{account_id}")
     def admin_set_plan(account_id: str, body: PlanIn, ctx: Ctx = Depends(require_admin)):
