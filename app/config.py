@@ -25,6 +25,9 @@ DB_PATH = Path(os.environ.get("P1_DB_PATH", ROOT / "data" / "p1.db"))
 MAX_AGENT_STEPS = int(os.environ.get("P1_MAX_AGENT_STEPS", "8"))
 DATA_DIR = Path(os.environ.get("P1_DATA_DIR", ROOT / "data"))
 SCREENSHOT_DIR = DATA_DIR / "screenshots"
+# הכתובת הציבורית של השרת. משמשת לבניית כתובת חנות הדמו — לעולם לא מכותרת Host של בקשה (הגנת SSRF).
+PUBLIC_URL = os.environ.get("P1_PUBLIC_URL", "http://127.0.0.1:8000").rstrip("/")
+DEMO_STORE_URL = PUBLIC_URL + "/demo-store/"
 # לפיתוח בלבד: מאפשר לבדוק אתרים ברשת המקומית (למשל חנות הבדיקה). לעולם לא בייצור.
 DEV_ALLOW_PRIVATE_TARGETS = os.environ.get("P1_DEV_ALLOW_PRIVATE_TARGETS") == "1"
 MAX_CONCURRENT_AUDITS = int(os.environ.get("P1_MAX_CONCURRENT_AUDITS", "2"))

@@ -137,6 +137,11 @@ def test_demo_store_is_served_and_labeled(make_client):
     register(c, "d@d.co")
     a = c.post("/api/demo/start").json()
     assert a["trigger"] == "demo"
+    # אבטחה: כותרת Host מזויפת לא משנה את כתובת הבדיקה (SSRF)
+    forged = c.post("/api/demo/start", headers={"Host": "169.254.169.254"})
+    assert forged.status_code in (202, 402)
+    if forged.status_code == 202:
+        assert "169.254" not in forged.json()["start_url"]
     assert c.get("/api/sites").json()["sites"][0]["is_demo"] == 1
 
 

@@ -567,9 +567,11 @@ def create_app(db: Database | None = None, agent: Agent | None = None, runner: A
 
     # ---------------------------------------------------------------- Demo Experience
     @app.post("/api/demo/start", status_code=202)
-    def demo_start(request: Request, ctx: Ctx = Depends(current)):
-        """בדיקה אמיתית של חנות הדמו של P1 (מסומנת כדמו בכל מקום)."""
-        url = str(request.base_url).rstrip("/") + "/demo-store/"
+    def demo_start(ctx: Ctx = Depends(current)):
+        """בדיקה אמיתית של חנות הדמו של P1 (מסומנת כדמו בכל מקום).
+        אבטחה: הכתובת נלקחת מהגדרות השרת בלבד — לא מכותרת Host של הבקשה (שהלקוח שולט בה),
+        אחרת אפשר היה לכוון את הדפדפן לכתובת פנימית (SSRF)."""
+        url = config.DEMO_STORE_URL
         try:
             return the_runner.enqueue(url, ctx.account, ctx.user_id, demo=True)
         except plans.QuotaError as e:
