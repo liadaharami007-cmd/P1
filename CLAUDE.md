@@ -44,7 +44,12 @@ FastAPI (app/main.py): request-id, JSON logs, CSRF origin check, CSP, auth על 
                  agency.py (Agency Mode + 15 לקוחות דמו ב-/demo-clients/<slug>/, לא נספרים במכסה) ·
                  registry.py (מקור אמת: 6 מחלקות + סטטוס יכולות · חיבורים connected/not_configured/not_built) ·
                  studio.py (סוכני מחלקות על מנוע מודל בלבד: שיווק/מודעות/תוכן/וידאו/שירות/ייעוץ + לידים) ·
+                 autopilot.py (בקשה אחת → מתכנן (Gemini / כללים) → סוכנים ברצף עם handoff; בדיקה/פרסום/שליחה → אישור) ·
+                 pages.py (בונה דפי נחיתה: מפרט JSON → HTML בלי סקריפטים · עריכה בשיחה · גרסאות · פרסום באישור ב-/p/<id>/ · טופס → ליד) ·
+                 video.py (תסריט → סצנות HTML → פריימים ב-Chromium → MP4 ע"י ffmpeg; בלי קריינות) ·
                  actions.py (Approval Center: run_audit / verify_fix / enable_monitor / fix_package — אף אחד לא משנה אתר חי) · routes.py
+  integrations/connectors.py  רשמיים בלבד: WhatsApp Cloud API (webhook חתום → ליד · שליחה רק באישור) · Shopify Admin (קריאה) ·
+                 WordPress REST (קריאה). מוגדרים במשתני סביבה; בלי הגדרה → not_configured
   saas/billing.py  ממשק ספק + Paddle (Stripe לא תומך בישראל). webhook חתום (Paddle-Signature) + billing_events לאידמפוטנטיות
   saas/recovery.py שחזור סיסמה (אסימון hash חד-פעמי 30 דק', SMTP או קישור ממנהל)
   static/welcome.html  אתר שיווקי ציבורי (/welcome) · static/sw.js + manifest.webmanifest = PWA
@@ -76,6 +81,10 @@ FastAPI (app/main.py): request-id, JSON logs, CSRF origin check, CSP, auth על 
 | `GET /api/agency` · `POST /api/agency/clients` · `/clients/{id}/audit` · `POST/DELETE /api/agency/demo` | סוכנות |
 | `GET /api/business/value` · `GET /api/departments` · `GET /api/integrations` | ערך · מחלקות · חיבורים |
 | `POST /api/studio/run` · `GET /api/studio/history` · `GET/POST /api/leads` · `PATCH/DELETE /api/leads/{id}` · `POST /api/leads/{id}/triage` | סוכני מחלקות + לידים |
+| `POST/GET /api/autopilot` · `GET /api/autopilot/{id}` | Autopilot |
+| `GET/POST /api/pages` · `/{id}/edit` · `/restore` · `/preview` · `/export` · `/publish` · `/unpublish` · `GET /p/{id}/` · `POST /p/{id}/lead` | דפי נחיתה |
+| `POST/GET /api/videos` · `GET /api/videos/{id}.mp4` | וידאו |
+| `POST /api/leads/{id}/send` (באישור) · `GET /api/leads/export.csv` · `GET/POST /api/whatsapp/webhook` · `GET /api/integrations/{shopify|wordpress}/test` | CRM + חיבורים |
 | `GET /welcome` · `GET /api/public/plans` · `/manifest.webmanifest` · `/sw.js` | ציבורי |
 (קיימים: auth, audits, report.pdf, compare, methodology, tasks, dashboard, account, admin, conversations.)
 
@@ -98,6 +107,8 @@ python -m pytest -q                       # ~3 דק' — כולל מסעות ר�
   PWA לאייפון · אתר שיווקי + מחשבון חיסכון · Paddle (מוק) · שחזור סיסמה · Dockerfile (לא נבנה). פירוט: `PROGRESS.md`. מה חסר מהמשתמש: `REQUIREMENTS.md`.
 - ✅ **CEO v2 (נוכחי):** מסך "מה תרצה להשיג היום?" + שיחת P1 CEO · בדיקת טפסים/WhatsApp · Agency Mode + 15 לקוחות דמו · מרכז הערך · 6 מחלקות · מרכז חיבורים.
 - ✅ **AI חינמי:** מנוע Gemini (פעיל ונבדק אמיתי) · סטודיו סוכנים · לידים · פריסה ל-HF דרך GitHub Action (`DEPLOY.md`). מחכה: HF_TOKEN מהמשתמש.
+- ✅ **מנהל עסק מבצע:** Autopilot (סוכנים ברצף + handoff) · בונה דפי נחיתה · סרטוני MP4 · CRM (תזכורות, משפך, שליחה באישור) · WhatsApp/Shopify/WordPress (מוכנים, לא מחוברים) · מחקר מתחרים (ביקור באתרים מהפרופיל).
+  ידוע: חיפוש Google בתוך Gemini לא כלול במסלול החינמי (quota 0).
 - **הבא:** פריסה (באישור) · בדיקת טפסי לידים/וואטסאפ · התראות וואטסאפ/מייל · ModelBrain לסוכנים (Ollama/Claude מחליטים על הצעד הבא) · שכתוב AI ב-Fix Studio כשמנוע זמין · Postgres + worker נפרד + Redis ·
   אימות בעלות (meta/DNS) · איפוס סיסמה/אימות מייל · צוותים · אחסון S3 · Shopify OAuth (store_data) · ספק תשלומים · פריסה (Docker) · תרגום טקסטי כללים לאנגלית.
 
