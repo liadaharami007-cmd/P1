@@ -18,6 +18,8 @@ from pathlib import Path
 from typing import Awaitable, Callable
 from urllib.parse import urljoin, urlparse
 
+from . import leads
+from .leads import CONTACT_JS
 from playwright.async_api import BrowserContext, Page, async_playwright
 from playwright.async_api import Error as PWError
 from playwright.async_api import TimeoutError as PWTimeout
@@ -355,6 +357,8 @@ class Collector:
                     await self._mobile(mobile, f.get("product", {}).get("url"))
                     await mobile.close()
                     await self._flush_steps()
+                    await self._contact(desktop)
+                    await self._flush_steps()
                 await desktop.close()
             finally:
                 await browser.close()
@@ -382,6 +386,10 @@ class Collector:
             self.out.facts["home_error"] = err
             return False
         data = await page.evaluate(PAGE_FACTS_JS)
+        try:
+            self.contact_desktop = await page.evaluate(CONTACT_JS)
+        except Exception:  # noqa: BLE001 — בדיקת ערוצי פנייה לא חוסמת את שאר הבדיקה
+            self.contact_desktop = None
         html = await page.content()
         html_facts, html_issues = analyze_html(html, page.url)
         self.out.facts["home"] = {**data, "url": page.url, "load_ms": ms, "html": html_facts,
@@ -723,6 +731,33 @@ class Collector:
         st.status = "passed" if works else "failed"
         st.detail = f"חיפוש '{term}' החזיר תוצאות" if works else f"חיפוש '{term}' (שם של מוצר קיים) לא החזיר תוצאות רלוונטיות"
 
+    async def _contact(self, ctx: BrowserContext):
+        """ערוצי פנייה: טפסים, WhatsApp, טלפון — בעמוד הבית, בעמוד צור קשר ובטלפון. לא ממלאים ולא שולחים."""
+        await self._report("contact_channels", "בודק טפסי פנייה, WhatsApp וטלפון…")
+        st = self._step("contact_channels", "ערוצי פנייה: טפסים, WhatsApp, טלפון")
+        contact_page = None
+        links = (self.out.facts.get("home") or {}).get("links") or []
+        target = next((l["href"] for l in links if re.search(r"contact|צור.?קשר|צרו.?קשר|פנו.?אלינו", (l.get("href") or "") + " " + (l.get("text") or ""), re.I)
+                       and l["href"].startswith(("http://", "https://"))), None)
+        if target:
+            page = await ctx.new_page()
+            ok, _, ms = await self._goto(page, target)
+            if ok:
+                try:
+                    contact_page = await page.evaluate(CONTACT_JS)
+                except Exception:  # noqa: BLE001
+                    contact_page = None
+                st.page_url, st.duration_ms = page.url, ms
+                st.screenshot_id = await self._shot(page, "contact", "desktop")
+            await page.close()
+        c = leads.summarize(getattr(self, "contact_desktop", None), getattr(self, "contact_mobile", None), contact_page)
+        self.out.facts["contact"] = c
+        bad_wa = [w for w in c["whatsapp"] if not w["valid"]]
+        st.status = "warning" if bad_wa or (c["checked_mobile"] and not c["mobile_has_quick_contact"]) else "passed"
+        st.detail = (f"{len(c['lead_forms'])} טפסי פנייה · {len(c['whatsapp'])} קישורי WhatsApp"
+                     f"{f' ({len(bad_wa)} שבורים)' if bad_wa else ''} · {c['tel_links']} קישורי טלפון · לא נשלח אף טופס")
+        await self._log("info", st.detail, st.page_url)
+
     async def _mobile(self, ctx: BrowserContext, product_url: str | None):
         await self._report("mobile", "בודק את האתר בטלפון (iPhone)…")
         st = self._step("mobile", "חוויית מובייל")
@@ -736,6 +771,10 @@ class Collector:
         data = await page.evaluate(PAGE_FACTS_JS)
         data.pop("links", None)
         data.pop("text", None)
+        try:
+            self.contact_mobile = await page.evaluate(CONTACT_JS)
+        except Exception:  # noqa: BLE001
+            self.contact_mobile = None
         mob = {**data, "load_ms": ms}
         if product_url:
             ok, _, pms = await self._goto(page, product_url)

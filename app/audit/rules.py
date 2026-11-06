@@ -44,6 +44,9 @@ RULE_CATEGORY = {
     "shipping_unclear": "checkout", "too_many_steps": "checkout",
     "agent_trust_thin_policy": "trust", "agent_no_business_details": "trust", "agent_price_hidden_costs": "checkout",
     "agent_info_missing": "conversion", "agent_mobile_landing": "ux_mobile",
+    "whatsapp_link_invalid": "conversion", "lead_form_no_submit": "conversion", "lead_form_too_long": "conversion",
+    "lead_form_no_contact_field": "conversion", "lead_form_unlabeled": "ux_mobile", "no_quick_contact_mobile": "conversion",
+    "quick_contact_below_fold_mobile": "ux_mobile",
 }
 _HTML_CATEGORY = {"SEO": "technical", "תוכן": "conversion", "מובייל": "ux_mobile", "המרות": "conversion",
                   "שיווק": "technical", "נגישות": "ux_mobile", "מהירות": "technical", "אמון": "trust",
@@ -395,6 +398,10 @@ def evaluate(facts: dict, steps: list[dict]) -> list[dict]:
         f["category"] = RULE_CATEGORY.get(f["rule_id"], f["category"])
         if f["category"] not in CATEGORIES:
             f["category"] = "technical"
+    # ---------------- ערוצי פנייה (טפסי לידים, WhatsApp, טלפון) — נמדד בדפדפן, בלי שליחת טפסים
+    if facts.get("contact"):
+        from .leads import rules as lead_rules
+        out.extend(lead_rules(facts["contact"], ev("contact_channels"), ev("mobile"), _f))
     order = {"critical": 0, "high": 1, "medium": 2, "low": 3}
     out.sort(key=lambda f: (order[f["severity"]], f["category"]))
     return out

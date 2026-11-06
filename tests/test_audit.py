@@ -120,7 +120,7 @@ def test_full_journey_good_shop(tmp_path):
     assert a["status"] == "done", a["error"]
     steps = {s["key"]: s["status"] for s in db.get_steps(aid)}
     assert steps == {"home": "passed", "trust": "passed", "product": "passed", "add_to_cart": "passed",
-                     "cart": "passed", "checkout": "passed", "search": "passed", "mobile": "passed",
+                     "cart": "passed", "checkout": "passed", "search": "passed", "mobile": "passed", "contact_channels": "passed",
                      "links": "passed"}
     assert a["facts"]["checkout"]["login_required"] is False
     assert a["facts"]["product"]["price_visible"] is True
