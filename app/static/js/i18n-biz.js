@@ -48,6 +48,9 @@ extend({
     "tl.title": "ציר הצמיחה", "tl.sub": "מה זוהה, מה הוצע, מה בוצע ומה נמדד — לפי סדר הזמן.", "tl.none": "עוד אין אירועים.",
     "pwa.title": "התקנת P1 באייפון", "pwa.howto": "בספארי: לוחצים על כפתור השיתוף ⎋ ואז \"הוספה למסך הבית\".",
     "auth.learnMore": "מה זה P1?",
+    "bill.off": "תשלום מקוון עוד לא מחובר. כדי לחבר צריך חשבון Paddle והגדרות בקובץ ‎.env:", "bill.on": "תשלומים מחוברים דרך {p}",
+    "bill.sandbox": "סביבת בדיקות — אין חיוב אמיתי", "bill.status": "מצב מנוי", "bill.portal": "ניהול מנוי וחשבוניות",
+    "bill.monthly": "שדרוג · חודשי", "bill.yearly": "שנתי",
     "wk.title": "דוח שבועי", "wk.period": "7 הימים האחרונים", "wk.audits": "בדיקות בתקופה", "wk.next": "השבוע כדאי",
   },
   en: {
@@ -95,6 +98,9 @@ extend({
     "tl.title": "Growth timeline", "tl.sub": "What was detected, proposed, done and measured — in time order.", "tl.none": "No events yet.",
     "pwa.title": "Install P1 on your iPhone", "pwa.howto": "In Safari: tap Share ⎋, then \"Add to Home Screen\".",
     "auth.learnMore": "What is P1?",
+    "bill.off": "Online payment is not connected yet. It needs a Paddle account and these .env settings:", "bill.on": "Payments connected via {p}",
+    "bill.sandbox": "Sandbox — no real charges", "bill.status": "Subscription", "bill.portal": "Manage subscription & invoices",
+    "bill.monthly": "Upgrade · monthly", "bill.yearly": "Yearly",
     "wk.title": "Weekly report", "wk.period": "Last 7 days", "wk.audits": "Audits in period", "wk.next": "This week",
   },
 });

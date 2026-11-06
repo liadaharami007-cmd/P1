@@ -72,6 +72,11 @@ class PlanIn(BaseModel):
     plan: str
 
 
+class CheckoutIn(BaseModel):
+    plan: str
+    interval: str = "monthly"
+
+
 class FixStatusIn(BaseModel):
     status: str
 
@@ -500,6 +505,44 @@ def create_app(db: Database | None = None, agent: Agent | None = None, runner: A
         if not database.set_fix_status(finding_id, body.status, ctx.account_id):
             raise HTTPException(404, "הממצא לא נמצא")
         return {"id": finding_id, "fix_status": body.status}
+
+    # ---------------------------------------------------------------- תשלומים ומנויים (ספק חיצוני; P1 לא נוגע בפרטי כרטיס)
+    @app.get("/api/billing")
+    def billing_status(ctx: Ctx = Depends(current)):
+        prov = billing.get_provider()
+        return {"provider": prov.name, "configured": prov.configured(), "missing": prov.missing(),
+                "sandbox": getattr(prov, "sandbox", None), "plan": ctx.account.get("plan"),
+                "subscription_status": ctx.account.get("subscription_status"), "has_customer": bool(ctx.account.get("billing_customer_id"))}
+
+    @app.post("/api/billing/checkout")
+    def billing_checkout(body: CheckoutIn, ctx: Ctx = Depends(current)):
+        if ctx.role not in ("owner", "admin"):
+            raise HTTPException(403, "רק בעלים/מנהל של החשבון יכולים לשנות מנוי")
+        try:
+            return {"url": billing.get_provider().create_checkout_url(ctx.account, body.plan, body.interval, ctx.user.get("email"))}
+        except billing.BillingError as e:
+            raise HTTPException(e.status, e.message)
+
+    @app.post("/api/billing/portal")
+    def billing_portal(ctx: Ctx = Depends(current)):
+        if ctx.role not in ("owner", "admin"):
+            raise HTTPException(403, "רק בעלים/מנהל של החשבון יכולים לנהל מנוי")
+        try:
+            return {"url": billing.get_provider().customer_portal_url(ctx.account)}
+        except billing.BillingError as e:
+            raise HTTPException(e.status, e.message)
+
+    @app.post("/api/billing/webhook")
+    async def billing_webhook(request: Request):
+        body = await request.body()
+        try:
+            event = billing.get_provider().parse_webhook(body, {k.lower(): v for k, v in request.headers.items()})
+        except billing.BillingError as e:
+            log.warning("billing webhook rejected", extra={"reason": e.message})
+            raise HTTPException(e.status, e.message)
+        res = billing.apply_event(database, event)
+        log.info("billing webhook", extra={"type": event.get("event_type"), "result": res.get("status")})
+        return res
 
     # ---------------------------------------------------------------- Business OS: פרופיל, CEO, אישורים, ציר זמן
     from .business.routes import register as register_business
