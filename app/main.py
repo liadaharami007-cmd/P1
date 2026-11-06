@@ -166,9 +166,13 @@ def create_app(db: Database | None = None, agent: Agent | None = None, runner: A
             response = JSONResponse({"detail": "שגיאה פנימית בשרת", "request_id": rid}, status_code=500)
         response.headers["X-Request-ID"] = rid
         response.headers["X-Content-Type-Options"] = "nosniff"
-        response.headers["X-Frame-Options"] = "DENY"
+        framable = request.url.path.startswith("/api/pages/") and request.url.path.endswith("/preview")
+        response.headers["X-Frame-Options"] = "SAMEORIGIN" if framable else "DENY"
         response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
-        if request.url.path.startswith(("/demo-store", "/demo-clients")):  # חנות הדמו: דפים פשוטים עם סקריפטים פנימיים, בלי גישה ל-API
+        if framable or request.url.path.startswith("/p/"):  # דפי נחיתה של P1: בלי סקריפטים בכלל
+            response.headers["Content-Security-Policy"] = ("default-src 'none'; style-src 'unsafe-inline'; img-src 'self' data:; "
+                                                           f"form-action 'self'; frame-ancestors {'\'self\'' if framable else '\'none\''}")
+        elif request.url.path.startswith(("/demo-store", "/demo-clients")):  # חנות הדמו: דפים פשוטים עם סקריפטים פנימיים, בלי גישה ל-API
             response.headers["Content-Security-Policy"] = ("default-src 'self'; script-src 'self' 'unsafe-inline'; "
                                                            "style-src 'self' 'unsafe-inline'; img-src 'self' data:; frame-ancestors 'none'")
         else:

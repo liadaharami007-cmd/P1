@@ -309,6 +309,35 @@ CREATE TABLE IF NOT EXISTS leads (              -- פניות/לידים (מוז
     updated_at TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_leads_account ON leads(account_id, created_at);
+CREATE TABLE IF NOT EXISTS pages (              -- דפי נחיתה שנבנו ע"י P1 (מפרט JSON → HTML בטוח)
+    id TEXT PRIMARY KEY,
+    account_id TEXT NOT NULL,
+    title TEXT NOT NULL,
+    spec_json TEXT NOT NULL,
+    version INTEGER NOT NULL,
+    status TEXT NOT NULL,              -- draft / published
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS page_versions (
+    page_id TEXT NOT NULL,
+    version INTEGER NOT NULL,
+    spec_json TEXT NOT NULL,
+    note TEXT,
+    created_at TEXT NOT NULL,
+    PRIMARY KEY (page_id, version)
+);
+CREATE TABLE IF NOT EXISTS runs (               -- Autopilot: בקשה אחת → כמה סוכנים ברצף, עם העברת תוצרים ביניהם
+    id TEXT PRIMARY KEY,
+    account_id TEXT NOT NULL,
+    request TEXT NOT NULL,
+    plan_json TEXT NOT NULL,
+    status TEXT NOT NULL,              -- running / done / failed
+    planner TEXT,
+    created_by TEXT,
+    created_at TEXT NOT NULL,
+    finished_at TEXT
+);
 CREATE TABLE IF NOT EXISTS missions (           -- P1 CEO: משימה = כוונה + תשובות + תוכנית
     id TEXT PRIMARY KEY,
     account_id TEXT NOT NULL,

@@ -27,6 +27,8 @@ KINDS = {
     "enable_monitor": {"risk": "low", "changes": ["תופעל בדיקה אוטומטית קבועה של האתר לפי התדירות שבחרתם",
                                                   "כל בדיקה נספרת במכסה החודשית", "תקבלו התראה על בעיות חדשות, תיקונים ושינויי ציון",
                                                   "אפשר לכבות בכל רגע במסך 'אתרים'"]},
+    "publish_page": {"risk": "medium", "changes": ["הדף יפורסם בכתובת ציבורית בשרת של P1 (/p/…) — כל מי שיש לו את הקישור יוכל לראות אותו",
+                                                   "הטופס בדף יתחיל לקלוט פניות אמיתיות ל-CRM", "אפשר לבטל פרסום בכל רגע"]},
     "fix_package": {"risk": "none", "changes": ["תיווצר חבילת תיקון להורדה: מה לשנות, טקסטים מוכנים וקוד לדוגמה",
                                                  "סטטוס התיקון יסומן 'אושר'", "האתר החי לא משתנה — את השינוי מבצע מי שמתחזק את האתר"]},
 }
@@ -100,6 +102,14 @@ def _execute(db: Database, runner, account: dict, user_id: str | None, action: d
             raise ValueError("התדירות הזו לא כלולה במסלול")
         db.upsert_monitor(site["id"], account["id"], freq, True, mon.next_run(freq))
         return {"frequency": freq, "next_run_at": db.get_monitor(site["id"])["next_run_at"]}, "done"
+    if k == "publish_page":
+        from . import pages
+        pg = pages.get(db, p["page_id"], account["id"])
+        if not pg:
+            raise ValueError("הדף לא נמצא")
+        pages.set_status(db, pg["id"], account["id"], "published")
+        from .. import config
+        return {"url": f"{config.PUBLIC_URL}/p/{pg['id']}/", "page_id": pg["id"]}, "done"
     if k == "fix_package":
         f = db.get_finding(p["finding_id"], account["id"])
         if not f:

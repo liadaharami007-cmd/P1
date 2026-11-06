@@ -78,14 +78,20 @@ async def run(db: Database, account: dict, user_id: str | None, kind: str, user_
               engine=None) -> dict:
     if kind not in TASKS:
         raise ValueError("סוג משימה לא מוכר")
+    t = TASKS[kind]
+    return await run_custom(db, account, user_id, kind, t["system"], t["schema"], user_input, extra=extra, engine=engine)
+
+
+async def run_custom(db: Database, account: dict, user_id: str | None, kind: str, system: str, schema: dict, user_input: str,
+                     extra: dict | None = None, engine=None) -> dict:
+    """הרצת סוכן על מנוע אמיתי עם הקשר עסקי אמיתי. extra = הקשר נוסף (למשל תוצרים של סוכנים קודמים)."""
     eng = engine or engines.active_engine()
     if eng is None:
         raise NotConfigured("אין מנוע מודל פעיל. חברו Gemini (חינם) או Claude במסך 'חיבורים'.")
-    t = TASKS[kind]
     kb = knowledge(db, account)
     payload = {"business_context": kb, "request": user_input[:4000], **(extra or {})}
-    data, usage = await eng.structured(system=t["system"] + "\n" + GUARD, schema=t["schema"], max_tokens=6000,
-                                       content=[{"type": "text", "text": json.dumps(payload, ensure_ascii=False)}])
+    data, usage = await eng.structured(system=system + "\n" + GUARD, schema=schema, max_tokens=8000,
+                                       content=[{"type": "text", "text": json.dumps(payload, ensure_ascii=False)[:60000]}])
     db.record_ai_run(audit_id=None, account_id=account["id"], kind=f"studio:{kind}", status="done", usage=usage, result=data)
     oid = uuid.uuid4().hex
     with db._conn() as c:

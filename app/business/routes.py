@@ -3,14 +3,14 @@ from __future__ import annotations
 
 from typing import Any, Callable
 
-from fastapi import Depends, FastAPI, HTTPException
+from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
 
 from ..db import Database
 from ..intelligence import engines
 from ..saas.auth import Ctx, current
-from . import actions, agency, brain, ceo, missions, store, studio
+from . import actions, agency, autopilot, brain, ceo, missions, pages, store, studio
 
 
 class ProfileIn(BaseModel):
@@ -46,6 +46,22 @@ class LeadIn(BaseModel):
 class LeadPatch(BaseModel):
     status: str | None = None
     notes: str | None = None
+
+
+class RunIn(BaseModel):
+    request: str
+
+
+class PageIn(BaseModel):
+    brief: str = ""
+
+
+class PageEditIn(BaseModel):
+    instruction: str
+
+
+class VersionIn(BaseModel):
+    version: int
 
 
 class ClientIn(BaseModel):
@@ -225,6 +241,123 @@ def register(app: FastAPI, db: Database, runner, browser_available: Callable[[],
             raise HTTPException(502, str(e))
         studio.update_lead(db, lead_id, ctx.account_id, ai={**res["output"], "model": res["model"]})
         return studio.get_lead(db, lead_id, ctx.account_id)
+
+    # ------------------------------------------------------------ Autopilot: בקשה אחת → כמה סוכנים ברצף
+    @app.post("/api/autopilot", status_code=202)
+    async def autopilot_run(body: RunIn, ctx: Ctx = Depends(current)):
+        if not body.request.strip():
+            raise HTTPException(400, "כתבו מה תרצו ש-P1 יעשה")
+        steps, planner, reply = await autopilot.plan(db, ctx.account, body.request)
+        run = autopilot.create(db, ctx.account, ctx.user_id, body.request, steps, planner, reply)
+        autopilot.start_background(db, runner, ctx.account, ctx.user_id, run["id"])
+        return run
+
+    @app.get("/api/autopilot")
+    def autopilot_list(ctx: Ctx = Depends(current)):
+        return {"items": autopilot.list_runs(db, ctx.account_id), "ai": missions.ceo_engine_active()}
+
+    @app.get("/api/autopilot/{rid}")
+    def autopilot_get(rid: str, ctx: Ctx = Depends(current)):
+        r = autopilot.get(db, rid, ctx.account_id)
+        if not r:
+            raise HTTPException(404, "לא נמצא")
+        return r
+
+    # ------------------------------------------------------------ בונה דפי נחיתה
+    def _page(pid: str, ctx: Ctx) -> dict:
+        pg = pages.get(db, pid, ctx.account_id)
+        if not pg:
+            raise HTTPException(404, "הדף לא נמצא")
+        return pg
+
+    async def _ai(coro):
+        from ..intelligence.client import IntelligenceError
+        try:
+            return await coro
+        except studio.NotConfigured as e:
+            raise HTTPException(503, str(e))
+        except IntelligenceError as e:
+            raise HTTPException(502, str(e))
+
+    @app.get("/api/pages")
+    def list_pages(ctx: Ctx = Depends(current)):
+        return {"items": pages.list_pages(db, ctx.account_id), "ai": missions.ceo_engine_active()}
+
+    @app.post("/api/pages", status_code=201)
+    async def create_page(body: PageIn, ctx: Ctx = Depends(current)):
+        return await _ai(pages.generate(db, ctx.account, ctx.user_id, body.brief))
+
+    @app.get("/api/pages/{pid}")
+    def get_page(pid: str, ctx: Ctx = Depends(current)):
+        return _page(pid, ctx)
+
+    @app.post("/api/pages/{pid}/edit")
+    async def edit_page(pid: str, body: PageEditIn, ctx: Ctx = Depends(current)):
+        if not body.instruction.strip():
+            raise HTTPException(400, "כתבו מה לשנות")
+        return await _ai(pages.edit(db, ctx.account, ctx.user_id, _page(pid, ctx), body.instruction))
+
+    @app.post("/api/pages/{pid}/restore")
+    def restore_page(pid: str, body: VersionIn, ctx: Ctx = Depends(current)):
+        res = pages.restore(db, _page(pid, ctx), body.version)
+        if not res:
+            raise HTTPException(404, "הגרסה לא נמצאה")
+        return res
+
+    @app.get("/api/pages/{pid}/preview")
+    def preview_page(pid: str, ctx: Ctx = Depends(current)):
+        from fastapi.responses import HTMLResponse as H
+        return H(pages.render(_page(pid, ctx)["spec"], pid, "preview"))
+
+    @app.get("/api/pages/{pid}/export")
+    def export_page(pid: str, ctx: Ctx = Depends(current)):
+        from fastapi.responses import HTMLResponse as H
+        pg = _page(pid, ctx)
+        return H(pages.render(pg["spec"], pid, "public"), headers={"Content-Disposition": f'attachment; filename="landing-{pid[:8]}.html"'})
+
+    @app.post("/api/pages/{pid}/publish", status_code=201)
+    def publish_page(pid: str, ctx: Ctx = Depends(current)):
+        pg = _page(pid, ctx)
+        return actions.propose(db, ctx.account, ctx.user_id, {"key": f"publish:{pid}", "kind": "publish_page", "title": f"פרסום דף: {pg['title']}",
+                                                              "why": "הדף יהיה זמין בקישור ציבורי והטופס יקלוט פניות ל-CRM.", "payload": {"page_id": pid}})
+
+    @app.post("/api/pages/{pid}/unpublish")
+    def unpublish_page(pid: str, ctx: Ctx = Depends(current)):
+        _page(pid, ctx)
+        pages.set_status(db, pid, ctx.account_id, "draft")
+        return {"status": "draft"}
+
+    @app.get("/p/{pid}/")
+    def public_page(pid: str):
+        from fastapi.responses import HTMLResponse as H
+        pg = pages.get(db, pid, None)
+        if not pg or pg["status"] != "published":
+            raise HTTPException(404, "לא נמצא")
+        return H(pages.render(pg["spec"], pid, "public"))
+
+    @app.post("/p/{pid}/lead")
+    async def public_lead(pid: str, request: Request):
+        from fastapi.responses import HTMLResponse as H
+        from ..saas import auth as _auth
+        pg = pages.get(db, pid, None)
+        if not pg or pg["status"] != "published":
+            raise HTTPException(404, "לא נמצא")
+        if not _auth.signup_limiter.hit("pagelead|" + _auth.client_ip(request)):
+            raise HTTPException(429, "יותר מדי פניות. נסו שוב מאוחר יותר")
+        from urllib.parse import parse_qs
+        raw = parse_qs((await request.body())[:20000].decode("utf-8", "replace"))
+        form = {k: v[0] for k, v in raw.items()}
+        if (form.get("website") or "").strip():  # מלכודת בוטים
+            return H("<p>תודה!</p>")
+        name, phone = str(form.get("name") or "").strip()[:120], str(form.get("phone") or "").strip()[:40]
+        if not name or not phone:
+            raise HTTPException(400, "חסרים שם וטלפון")
+        contact = phone + (" · " + str(form.get("email"))[:120] if form.get("email") else "")
+        lead = studio.add_lead(db, pg["account_id"], name, contact, "landing_page", f"[{pg['title']}] " + str(form.get("message") or "")[:2000])
+        store.log(db, pg["account_id"], "lead_added", f"פנייה חדשה מדף הנחיתה: {name}", ref_type="lead", ref_id=lead["id"])
+        db.add_notification(pg["account_id"], "new_lead", f"פנייה חדשה: {name}", f"מדף הנחיתה '{pg['title']}'")
+        return H("<!doctype html><html lang='he' dir='rtl'><meta charset='utf-8'><meta name='viewport' content='width=device-width'>"
+                 "<body style='font:18px system-ui;text-align:center;padding:60px 20px'><h1>תודה! קיבלנו את הפרטים</h1><p>נחזור אליכם בהקדם.</p></body></html>")
 
     # ------------------------------------------------------------ Agency Mode
     @app.get("/api/agency")
