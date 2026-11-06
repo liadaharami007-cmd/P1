@@ -179,5 +179,16 @@ async def _step(db, runner, account, user_id, step, handoff, request, engine) ->
     raise ValueError("סוכן לא מוכר")
 
 
+async def plan_and_execute(db: Database, runner, account: dict, user_id: str | None, rid: str, engine=None) -> None:
+    run = get(db, rid, account["id"])
+    steps, planner, reply = await plan(db, account, run["request"], engine=engine)
+    run["plan"] = {"reply": reply, "steps": [{**s, "status": "pending", "summary": None, "ref": None, "error": None} for s in steps]}
+    with db._conn() as c:
+        c.execute("UPDATE runs SET planner=? WHERE id=?", (planner, rid))
+    _save(db, run)
+    await execute(db, runner, account, user_id, rid, engine=engine)
+
+
 def start_background(db: Database, runner, account: dict, user_id: str | None, rid: str) -> None:
-    asyncio.get_running_loop().create_task(execute(db, runner, account, user_id, rid))
+    """התכנון והביצוע רצים ברקע — המסך מתעדכן בזמן אמת ולא מחכה למודל."""
+    asyncio.get_running_loop().create_task(plan_and_execute(db, runner, account, user_id, rid))

@@ -84,3 +84,15 @@ def test_autopilot_runs_agents_in_sequence_with_handoff(make_client, monkeypatch
     asyncio.run(autopilot.execute(db, None, acc, None, run2["id"]))
     r2 = c.get(f"/api/autopilot/{run2['id']}").json()
     assert r2["plan"]["steps"][0]["status"] == "failed" and "Gemini" in r2["plan"]["steps"][0]["error"]
+
+
+def test_plan_and_execute_in_background(make_client):
+    c = make_client()
+    register(c, "bg@p1.co")
+    db = c.app.state.db
+    acc = db.get_account(c.get("/api/account").json()["account"]["id"])
+    run = autopilot.create(db, acc, None, "תכין מודעות ותנהל משימות", [], "pending", "")
+    assert run["plan"]["steps"] == []
+    asyncio.run(autopilot.plan_and_execute(db, None, acc, None, run["id"], engine=SpecEngine()))
+    r = autopilot.get(db, run["id"], acc["id"])
+    assert r["status"] == "done" and r["planner"] in ("ai", "rules") and r["plan"]["steps"]

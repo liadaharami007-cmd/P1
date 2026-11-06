@@ -247,8 +247,7 @@ def register(app: FastAPI, db: Database, runner, browser_available: Callable[[],
     async def autopilot_run(body: RunIn, ctx: Ctx = Depends(current)):
         if not body.request.strip():
             raise HTTPException(400, "כתבו מה תרצו ש-P1 יעשה")
-        steps, planner, reply = await autopilot.plan(db, ctx.account, body.request)
-        run = autopilot.create(db, ctx.account, ctx.user_id, body.request, steps, planner, reply)
+        run = autopilot.create(db, ctx.account, ctx.user_id, body.request, [], "pending", "")
         autopilot.start_background(db, runner, ctx.account, ctx.user_id, run["id"])
         return run
 

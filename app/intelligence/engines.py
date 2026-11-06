@@ -160,7 +160,7 @@ class GeminiEngine:
         last = ""
         queue = list(self.models)
         tried = 0
-        async with httpx.AsyncClient(timeout=120, transport=self.transport) as c:
+        async with httpx.AsyncClient(timeout=httpx.Timeout(45, connect=10), transport=self.transport) as c:
             while queue and tried < 8:
                 model = queue[0]
                 tried += 1

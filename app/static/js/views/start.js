@@ -22,7 +22,8 @@ export async function startView(view, _p, app) {
       <p class="lead">${t("start.sub")}</p>
       <form id="free" class="start-free" novalidate>
         <textarea class="input" name="text" rows="2" placeholder="${t("start.placeholder")}" aria-label="${t("start.q")}"></textarea>
-        <button class="btn btn-primary" type="submit">${icon("sparkle")}${t("start.go")}</button>
+        <div class="start-btns"><button class="btn btn-primary" type="submit">${icon("sparkle")}${t("start.go")}</button>
+        <button class="btn" type="button" id="autopilot">${icon("play")}${t("start.autopilot")}</button></div>
       </form>
       <div class="start-examples">${["start.ex1", "start.ex2", "start.ex3", "start.ex4"].map((k) => `<button class="chip-btn" data-ex="${esc(t(k))}">${t(k)}</button>`).join("")}</div>
     </section>
@@ -41,6 +42,11 @@ export async function startView(view, _p, app) {
       sessionStorage.setItem("p1.ceoText", text);
       location.hash = `#/ceo?intent=${r.intent}`;
     } catch (e) { toast(/** @type {Error} */ (e).message, "error"); }
+  };
+  /** @type {HTMLElement} */ (view.querySelector("#autopilot")).onclick = async () => {
+    const v = String(new FormData(form).get("text") || "").trim() || t("ap.example");
+    try { const r = await api("/api/autopilot", { method: "POST", body: JSON.stringify({ request: v }) }); location.hash = `#/run?id=${r.id}`; }
+    catch (e) { toast(/** @type {Error} */ (e).message, "error"); }
   };
   form.onsubmit = (e) => { e.preventDefault(); const v = String(new FormData(form).get("text") || "").trim(); if (v) go(v); };
   view.querySelectorAll("[data-ex]").forEach((b) => b.addEventListener("click", () => go(/** @type {HTMLElement} */ (b).dataset.ex || "")));

@@ -26,6 +26,8 @@ import { ceoView } from "./views/ceo.js";
 import { valueView } from "./views/value.js";
 import { studioView } from "./views/studio.js";
 import { leadsView } from "./views/leads.js";
+import { pagesView } from "./views/pages.js";
+import { runView } from "./views/run.js";
 
 /** @typedef {{ status: any, me: any, account: any, cleanup: (() => void) | null }} AppState */
 /** @type {AppState} */
@@ -33,8 +35,10 @@ export const app = { status: null, me: null, account: null, cleanup: null };
 
 const NAV = [
   { path: "/", key: "command", icon: "home", group: "business" },
-  { path: "/start", key: "start", icon: "sparkle", group: "business" },
+  { path: "/start", key: "start", icon: "sparkle", group: "business", desktopOnly: true },
   { path: "/approvals", key: "approvals", icon: "check", group: "business" },
+  { path: "/run", key: "run", icon: "play", group: "business" },
+  { path: "/pages", key: "pages", icon: "globe", group: "business", desktopOnly: true },
   { path: "/studio", key: "studio", icon: "wand", group: "business", desktopOnly: true },
   { path: "/leads", key: "leads", icon: "users", group: "business", desktopOnly: true },
   { path: "/value", key: "value", icon: "sparkle", group: "business", desktopOnly: true },
@@ -60,7 +64,7 @@ function route() {
   const fx = hash.match(/^\/fix(?:\/([a-f0-9]+))?$/);
   if (fx) return { view: fixStudioView, params: /** @type {any} */ ({ id: fx[1] || null }), nav: "/fix" };
   /** @type {Record<string, Function>} */
-  const table = { "/": commandView, "/site": dashboardView, "/business": businessView, "/approvals": approvalsView, "/timeline": timelineView, "/agency": agencyView, "/departments": departmentsView, "/start": startView, "/value": valueView, "/studio": studioView, "/leads": leadsView, "/ceo": ceoView, "/audits": auditsView, "/tasks": tasksView, "/assistant": assistantView,
+  const table = { "/": commandView, "/site": dashboardView, "/business": businessView, "/approvals": approvalsView, "/timeline": timelineView, "/agency": agencyView, "/departments": departmentsView, "/start": startView, "/value": valueView, "/studio": studioView, "/pages": pagesView, "/run": runView, "/leads": leadsView, "/ceo": ceoView, "/audits": auditsView, "/tasks": tasksView, "/assistant": assistantView,
     "/integrations": integrationsView, "/account": accountView, "/admin": adminView, "/sites": sitesView, "/demo": demoView };
   return { view: table[hash] || commandView, params: /** @type {any} */ ({}), nav: table[hash] ? hash : "/" };
 }
