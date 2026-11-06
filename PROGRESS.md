@@ -35,6 +35,14 @@
 
 ידוע: בסביבת הפיתוח האתרים רצים על http, לכן "אין HTTPS" (קריטי) מגביל את הציון ל-49 בכל לקוחות הדמו. בפריסה עם HTTPS הציונים יתפזרו.
 
+## סבב "AI חינמי + מחלקות" (נבדק)
+| מה | איך נבדק |
+|---|---|
+| **מנוע Gemini** (`engines.GeminiEngine`): בדיקת זמינות אמיתית מול ה-API, בחירת מודל Flash, JSON לפי סכימה, ניסיון חוזר במגבלת קצב, עלות 0. נכנס אוטומטית לכל מקום שמשתמש במנוע (ניתוח בדיקות, סוכנים, CEO) | test_studio (מוק HTTP). **לא נבדק מול Google אמיתי — המשתמש עוד לא הזין מפתח** |
+| **סטודיו סוכנים** (`app/business/studio.py`, `views/studio.js`): אסטרטגיית שיווק, מודעות, לוח תוכן, תסריט וידאו, שירות לקוחות על מידע העסק, ייעוץ CEO. הקשר = פרופיל + טקסט מהאתר + ממצאים. בלי מנוע → 503 + "לא מחובר" | test_studio + E2E (כפתור מושבת + הודעה) |
+| **לידים** (`/api/leads`, `views/leads.js`): הוספה, סטטוסים, פניות שמחכות >24ש' → פריט בתוכנית CEO, סיווג + טיוטת תשובה ע"י AI (לא נשלחת) | test_studio + E2E |
+| **פריסה חינמית**: GitHub Action → Hugging Face Space (`.github/workflows/deploy-hf.yml`, `DEPLOY.md`), `P1_BOOTSTRAP_EMAIL` | test_saas. הפריסה עצמה מחכה ל-HF_TOKEN/HF_SPACE מהמשתמש |
+
 ## מה עדיין לא קיים (ולא מוצג כקיים)
 - מודל שפה פעיל (חסר מפתח / Ollama) · אחסון באוויר · Paddle אמיתי · SMTP אמיתי — ראו `REQUIREMENTS.md`.
 - Website Builder, Video Studio, ניתוח קמפיינים, ניהול לידים/CRM, שירות לקוחות, Profit Doctor, Experiment Lab, חיבורי Shopify/WordPress/GA/Ads/WhatsApp, מצב אוטומטי מבוקר (autopilot), צוותים והרשאות, אימות מייל.

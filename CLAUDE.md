@@ -43,6 +43,7 @@ FastAPI (app/main.py): request-id, JSON logs, CSRF origin check, CSP, auth על 
                  missions.py (P1 CEO: כוונה → שאלות שחסרות → תוכנית עם סטטוס יכולת לכל צעד · "מה עושים היום") ·
                  agency.py (Agency Mode + 15 לקוחות דמו ב-/demo-clients/<slug>/, לא נספרים במכסה) ·
                  registry.py (מקור אמת: 6 מחלקות + סטטוס יכולות · חיבורים connected/not_configured/not_built) ·
+                 studio.py (סוכני מחלקות על מנוע מודל בלבד: שיווק/מודעות/תוכן/וידאו/שירות/ייעוץ + לידים) ·
                  actions.py (Approval Center: run_audit / verify_fix / enable_monitor / fix_package — אף אחד לא משנה אתר חי) · routes.py
   saas/billing.py  ממשק ספק + Paddle (Stripe לא תומך בישראל). webhook חתום (Paddle-Signature) + billing_events לאידמפוטנטיות
   saas/recovery.py שחזור סיסמה (אסימון hash חד-פעמי 30 דק', SMTP או קישור ממנהל)
@@ -53,7 +54,7 @@ FastAPI (app/main.py): request-id, JSON logs, CSRF origin check, CSP, auth על 
   static/demo-store/  חנות דמו "סדנת פשתן" עם בעיות מכוונות (חלון קופץ, מדיניות דלה, כפתור לא בולט, קופה עם הרשמה כפויה, קישור שבור…)
   db.py          SQLite + מיגרציות (user_version=4: business_profiles, actions, activity, missions, clients, password_resets, billing_events): agent_runs, fix_previews, monitors, notifications, findings.fix_status/priority…
 ```
-- **מנועי AI (engines.py):** `P1_AI_ENGINE=auto|anthropic|ollama|rules`. Ollama: `P1_OLLAMA_URL`, `P1_OLLAMA_MODEL` (ברירת מחדל qwen2.5:7b-instruct), `P1_OLLAMA_VISION=1`.
+- **מנועי AI (engines.py):** `P1_AI_ENGINE=auto|anthropic|gemini|ollama|rules` (auto: anthropic → gemini → ollama). Gemini: `GEMINI_API_KEY` (חינם), `P1_GEMINI_MODEL`, בענן Claude Code: `P1_GEMINI_PROXY_KEY=1` כשהמפתח מוזרק ע"י ה-proxy. Ollama: `P1_OLLAMA_URL`, `P1_OLLAMA_MODEL` (ברירת מחדל qwen2.5:7b-instruct), `P1_OLLAMA_VISION=1`.
   Claude: `claude-opus-5-5`, adaptive thinking, structured outputs, `fallbacks: "default"`. כל קריאה ב-`ai_runs` (Ollama = עלות 0).
 - **Live Mission Control:** `GET /api/audits/{id}/stream` (SSE, נתונים מה-DB בלבד, אירוע `end` בסיום).
 - **אירועי יומן:** `audit_events(kind, message, page_url, screenshot_id, ref=step, agent)`.
@@ -74,6 +75,7 @@ FastAPI (app/main.py): request-id, JSON logs, CSRF origin check, CSP, auth על 
 | `POST /api/ceo/intent` · `GET /api/ceo/today` · `GET/POST /api/missions` | P1 CEO |
 | `GET /api/agency` · `POST /api/agency/clients` · `/clients/{id}/audit` · `POST/DELETE /api/agency/demo` | סוכנות |
 | `GET /api/business/value` · `GET /api/departments` · `GET /api/integrations` | ערך · מחלקות · חיבורים |
+| `POST /api/studio/run` · `GET /api/studio/history` · `GET/POST /api/leads` · `PATCH/DELETE /api/leads/{id}` · `POST /api/leads/{id}/triage` | סוכני מחלקות + לידים |
 | `GET /welcome` · `GET /api/public/plans` · `/manifest.webmanifest` · `/sw.js` | ציבורי |
 (קיימים: auth, audits, report.pdf, compare, methodology, tasks, dashboard, account, admin, conversations.)
 
@@ -95,6 +97,7 @@ python -m pytest -q                       # ~3 דק' — כולל מסעות ר�
 - ✅ **Business OS (נוכחי):** מרכז פיקוד (3 הפעולות הבאות) · פרופיל עסק · מרכז אישורים · אימות תיקון במדידה · ציר צמיחה · דוח שבועי ·
   PWA לאייפון · אתר שיווקי + מחשבון חיסכון · Paddle (מוק) · שחזור סיסמה · Dockerfile (לא נבנה). פירוט: `PROGRESS.md`. מה חסר מהמשתמש: `REQUIREMENTS.md`.
 - ✅ **CEO v2 (נוכחי):** מסך "מה תרצה להשיג היום?" + שיחת P1 CEO · בדיקת טפסים/WhatsApp · Agency Mode + 15 לקוחות דמו · מרכז הערך · 6 מחלקות · מרכז חיבורים.
+- ✅ **AI חינמי:** מנוע Gemini · סטודיו סוכנים · לידים · פריסה ל-HF דרך GitHub Action (`DEPLOY.md`). מחכה: מפתח Gemini + HF_TOKEN מהמשתמש.
 - **הבא:** פריסה (באישור) · בדיקת טפסי לידים/וואטסאפ · התראות וואטסאפ/מייל · ModelBrain לסוכנים (Ollama/Claude מחליטים על הצעד הבא) · שכתוב AI ב-Fix Studio כשמנוע זמין · Postgres + worker נפרד + Redis ·
   אימות בעלות (meta/DNS) · איפוס סיסמה/אימות מייל · צוותים · אחסון S3 · Shopify OAuth (store_data) · ספק תשלומים · פריסה (Docker) · תרגום טקסטי כללים לאנגלית.
 
