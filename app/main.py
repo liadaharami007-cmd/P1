@@ -220,7 +220,11 @@ def create_app(db: Database | None = None, agent: Agent | None = None, runner: A
 
     @app.post("/api/auth/register", status_code=201)
     def register(body: RegisterIn, request: Request, response: Response):
-        if not auth.ALLOW_SIGNUP:
+        bootstrap = os.environ.get("P1_BOOTSTRAP_EMAIL", "").strip().lower()
+        no_users = database.count_users() == 0
+        if no_users and bootstrap and body.email.strip().lower() != bootstrap:
+            raise HTTPException(403, "ההרשמה הראשונה שמורה לבעל המערכת")  # בפריסה ציבורית: רק המייל שהוגדר הופך למנהל
+        if not auth.ALLOW_SIGNUP and not (no_users and bootstrap):
             raise HTTPException(403, "ההרשמה סגורה")
         if not auth.signup_limiter.hit(auth.client_ip(request)):
             raise HTTPException(429, "יותר מדי ניסיונות הרשמה. נסו שוב מאוחר יותר")

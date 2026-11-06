@@ -1,0 +1,28 @@
+# פריסה חינמית ל-Hugging Face Spaces (Docker). רצה רק כשמגדירים ב-GitHub:
+#   Secret HF_TOKEN (טוקן כתיבה מ-huggingface.co/settings/tokens) + Variable HF_SPACE (למשל username/p1-ai)
+# אף סוד לא נכתב לקוד. מפתח Gemini והגדרות השרת מוגדרים בהגדרות ה-Space עצמו.
+name: Deploy to Hugging Face Space
+on:
+  workflow_dispatch:
+  push:
+    branches: [claude/p1-ai-initial-setup-2jx3ei]
+jobs:
+  deploy:
+    if: ${{ vars.HF_SPACE != '' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Push to Space
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+          HF_SPACE: ${{ vars.HF_SPACE }}
+        run: |
+          set -e
+          test -n "$HF_TOKEN" || { echo "HF_TOKEN secret missing"; exit 1; }
+          rm -rf /tmp/space && mkdir /tmp/space
+          cp -r app Dockerfile requirements.txt .dockerignore /tmp/space/
+          cp deploy/hf-README.md /tmp/space/README.md
+          cd /tmp/space
+          git init -q -b main && git add -A
+          git -c user.name="p1-deploy" -c user.email="deploy@users.noreply.github.com" commit -qm "Deploy ${GITHUB_SHA::7}"
+          git push -f "https://user:${HF_TOKEN}@huggingface.co/spaces/${HF_SPACE}" main

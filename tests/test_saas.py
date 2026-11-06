@@ -114,3 +114,16 @@ def test_migration_from_v1_schema(tmp_path):
     assert db.get_audit("a1", acc["id"])["site_url"] == "https://old.co.il"
     from app.db import SCHEMA_VERSION
     assert sqlite3.connect(path).execute("PRAGMA user_version").fetchone()[0] == SCHEMA_VERSION
+
+
+def test_bootstrap_email_guards_first_admin(make_client, monkeypatch):
+    monkeypatch.setenv("P1_BOOTSTRAP_EMAIL", "owner@p1.co")
+    from app.saas import auth
+    monkeypatch.setattr(auth, "ALLOW_SIGNUP", False)
+    c = make_client()
+    r = c.post("/api/auth/register", json={"email": "attacker@x.co", "password": "correct-horse-battery"})
+    assert r.status_code == 403
+    assert c.post("/api/auth/register", json={"email": "owner@p1.co", "password": "correct-horse-battery"}).status_code == 201
+    assert c.get("/api/auth/me").json()["user"]["is_platform_admin"]
+    d = make_client(db=c.app.state.db)
+    assert d.post("/api/auth/register", json={"email": "late@x.co", "password": "correct-horse-battery"}).status_code == 403
