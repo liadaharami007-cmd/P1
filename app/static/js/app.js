@@ -217,6 +217,7 @@ function installHint() {
   let dismissed = false;
   try { dismissed = localStorage.getItem("p1.installHint") === "0"; } catch { /* פרטיות */ }
   if (!ios || standalone || dismissed || document.getElementById("install-hint")) return;
+  if (/^#\/(ceo|start|business)/.test(location.hash)) { setTimeout(installHint, 20000); return; }  // לא מעל טפסים ושיחה
   const el = document.createElement("div");
   el.id = "install-hint";
   el.className = "install-hint";
@@ -224,5 +225,6 @@ function installHint() {
     <button class="icon-btn" aria-label="${t("common.close")}">✕</button>`;
   /** @type {HTMLElement} */ (el.querySelector("button")).onclick = () => { el.remove(); try { localStorage.setItem("p1.installHint", "0"); } catch { /* */ } };
   document.body.appendChild(el);
+  setTimeout(() => el.remove(), 15000);  // לא נשאר להסתיר תוכן
 }
 setTimeout(installHint, 2500);

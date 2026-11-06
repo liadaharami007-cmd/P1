@@ -45,7 +45,7 @@ export async function ceoView(view) {
   const chat = /** @type {HTMLElement} */ (view.querySelector("#chat"));
   const composer = /** @type {HTMLElement} */ (view.querySelector("#composer"));
   const say = (/** @type {string} */ html, who = "ceo") => { chat.insertAdjacentHTML("beforeend", who === "ceo"
-    ? `<div class="bubble ceo"><div class="bubble-who">P1 CEO</div>${html}</div>` : `<div class="bubble me">${html}</div>`); chat.lastElementChild?.scrollIntoView({ behavior: "smooth", block: "end" }); };
+    ? `<div class="bubble ceo"><div class="bubble-who">P1 CEO</div>${html}</div>` : `<div class="bubble me" dir="auto">${html}</div>`); chat.lastElementChild?.scrollIntoView({ behavior: "smooth", block: "end" }); };
   const bindPlan = (/** @type {any} */ m) => chat.querySelectorAll("[data-act]").forEach((b) => b.addEventListener("click", async () => {
     try { openActionModal(await api(`/api/actions/${/** @type {HTMLElement} */ (b).dataset.act}`), async () => {
       const fresh = await api(`/api/missions/${m.id}`); chat.lastElementChild?.remove(); chat.insertAdjacentHTML("beforeend", planHtml(fresh)); bindPlan(fresh); }); }
