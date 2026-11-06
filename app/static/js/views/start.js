@@ -3,6 +3,10 @@
 import { setTitle } from "../app.js";
 import { t } from "../i18n.js";
 import { api, esc, icon, toast } from "../ui.js";
+import { AGENT } from "../agents-meta.js";
+
+/** אריח אייקון בצבע הסוכן. @param {string} key */
+export const tile = (key) => { const a = AGENT[key] || AGENT.consult; return `<span class="tile" style="--hue:${a.hue}">${icon(a.icon)}</span>`; };
 
 const PATHS = [
   ["start", "🚀", "start.p.start", "start.p.startT"], ["grow", "📈", "start.p.grow", "start.p.growT"],
@@ -16,8 +20,9 @@ export async function startView(view, _p, app) {
   const ms = await api("/api/missions");
   const name = app.me.user.name ? app.me.user.name.split(" ")[0] : "";
   view.innerHTML = `<div class="start">
-    <section class="start-hero">
+    <section class="start-hero aurora">
       <div class="start-mark" aria-hidden="true">P1</div>
+      <div class="eyebrow-light">${t("start.eyebrow")}</div>
       <h2>${name ? esc(name) + ", " : ""}${t("start.q")}</h2>
       <p class="lead">${t("start.sub")}</p>
       <form id="free" class="start-free" novalidate>
@@ -27,9 +32,10 @@ export async function startView(view, _p, app) {
       </form>
       <div class="start-examples">${["start.ex1", "start.ex2", "start.ex3", "start.ex4"].map((k) => `<button class="chip-btn" data-ex="${esc(t(k))}">${t(k)}</button>`).join("")}</div>
     </section>
-    <div class="path-grid">${PATHS.map(([id, emo, ti, tx]) => `<a class="path-card" href="#/ceo?intent=${id}">
-      <span class="path-emo">${emo}</span><strong>${t(ti)}</strong><span class="small muted">${t(tx)}</span></a>`).join("")}
-      <a class="path-card path-agency" href="#/ceo?intent=agency"><span class="path-emo">🏢</span><strong>${t("start.p.agency")}</strong><span class="small muted">${t("start.p.agencyT")}</span></a>
+    <h2 class="section-title center-title">${t("start.orPick")}</h2>
+    <div class="path-grid">${PATHS.map(([id, , ti, tx]) => `<a class="path-card" href="#/ceo?intent=${id}">
+      ${tile(id)}<strong>${t(ti)}</strong><span class="small muted">${t(tx)}</span><span class="path-go">${icon("chevron")}</span></a>`).join("")}
+      <a class="path-card path-agency" href="#/ceo?intent=agency">${tile("agency")}<strong>${t("start.p.agency")}</strong><span class="small muted">${t("start.p.agencyT")}</span><span class="path-go">${icon("chevron")}</span></a>
     </div>
     ${ms.items.length ? `<section class="card"><div class="card-head"><h2>${t("start.missions")}</h2><a class="btn btn-sm btn-ghost" href="#/">${t("nav.command")}</a></div>
       <div class="list">${ms.items.slice(0, 5).map((/** @type {any} */ m) => `<a class="list-item" href="#/ceo?mission=${m.id}"><strong class="small">${esc(m.title)}</strong>

@@ -3,8 +3,8 @@
 import { setTitle } from "../app.js";
 import { t } from "../i18n.js";
 import { api, esc, icon, toast } from "../ui.js";
+import { AGENT } from "../agents-meta.js";
 
-const ICON = { audit: "🔍", research: "🔭", strategy: "🧭", ads: "📣", content: "🗓️", video: "🎬", landing_page: "🌐", leads: "🤝", tasks: "✅" };
 const LINK = { ai_output: (/** @type {string} */ id) => "#/studio", page: (/** @type {string} */ id) => `#/pages?id=${id}`, audit: (/** @type {string} */ id) => `#/audits/${id}`,
   action: () => "#/approvals", leads: () => "#/leads", plan: () => "#/", video: () => "#/studio?tab=marketing" };
 
@@ -33,21 +33,23 @@ export async function runView(view) {
     const done = r.plan.steps.filter((/** @type {any} */ s) => ["done", "awaiting_approval"].includes(s.status)).length;
     view.innerHTML = `<div class="stack" style="max-width:820px;margin:0 auto">
       <div class="bubble me" dir="auto" style="align-self:flex-end">${esc(r.request)}</div>
-      <div class="bubble ceo"><div class="bubble-who">P1 CEO</div><p>${r.planner === "pending" ? `<span class="spinner"></span> ${t("ap.planning")}` : esc(r.plan.reply || t("ap.planned"))}</p>
-        <p class="tiny faint">${t("ap.planner")} ${r.planner === "ai" ? t("src.ai") : t("act.source.rules")} · ${done}/${r.plan.steps.length}</p>
-        <div class="meter" style="margin-top:6px"><div style="width:${Math.round(done / Math.max(1, r.plan.steps.length) * 100)}%"></div></div></div>
-      <ol class="plan-steps">${r.plan.steps.map((/** @type {any} */ s, /** @type {number} */ i) => `<li class="plan-step ap-${s.status}"><span class="plan-n">${/** @type {any} */ (ICON)[s.agent] || i + 1}</span>
+      <div class="run-hero aurora"><div class="eyebrow-light">P1 CEO · Autopilot</div><p class="run-reply">${r.planner === "pending" ? `<span class="spinner"></span> ${t("ap.planning")}` : esc(r.plan.reply || t("ap.planned"))}</p>
+        <div class="run-meta"><span>${done}/${r.plan.steps.length} ${t("ap.agentsDone")}</span><span>${t("ap.planner")} ${r.planner === "ai" ? "Gemini" : r.planner === "pending" ? "…" : t("act.source.rules")}</span></div>
+        <div class="run-bar"><div style="width:${Math.round(done / Math.max(1, r.plan.steps.length) * 100)}%"></div></div></div>
+      <ol class="agent-timeline">${r.plan.steps.map((/** @type {any} */ s) => { const a = AGENT[s.agent] || AGENT.tasks; return `<li class="agent-step ap-${s.status}">
+        <span class="agent-av" style="--hue:${a.hue}">${icon(a.icon)}${s.status === "done" ? `<i class="agent-ok">${icon("check")}</i>` : ""}</span>
         <div style="flex:1;min-width:0"><div class="row" style="justify-content:space-between"><strong class="small">${t("ap.agent." + s.agent)}</strong>
           <span class="badge ap-badge-${s.status}">${s.status === "running" ? `<span class="live-dot"></span> ` : ""}${t("ap.s." + s.status)}</span></div>
           <div class="tiny muted">${esc(s.goal)}</div>
-          ${s.summary ? `<div class="small" style="margin-top:6px;white-space:pre-line">${esc(s.summary.slice(0, 600))}</div>` : ""}
+          ${s.summary ? `<div class="small clamp" role="button" tabindex="0" title="${t("ap.more")}" style="margin-top:6px;white-space:pre-line">${esc(s.summary.slice(0, 900))}</div>` : ""}
           ${s.error ? `<div class="notice notice-error" style="margin-top:6px"><span class="ico">!</span><span class="small">${esc(s.error)}</span></div>` : ""}
           ${s.ref && s.ref.type === "video" ? `<video class="ap-video" controls playsinline preload="metadata" src="${esc(s.ref.url)}"></video>` : ""}
-          ${s.ref && /** @type {any} */ (LINK)[s.ref.type] ? `<a class="btn btn-sm" style="margin-top:6px" href="${/** @type {any} */ (LINK)[s.ref.type](s.ref.id)}">${s.ref.needs_approval ? t("ceo.approve") : t("cmd.open")}</a>` : ""}</div></li>`).join("")}</ol>
+          ${s.ref && /** @type {any} */ (LINK)[s.ref.type] ? `<a class="btn btn-sm" style="margin-top:6px" href="${/** @type {any} */ (LINK)[s.ref.type](s.ref.id)}">${s.ref.needs_approval ? t("ceo.approve") : t("cmd.open")}</a>` : ""}</div></li>`; }).join("")}</ol>
       ${r.status !== "running" ? `<div class="row"><a class="btn btn-sm" href="#/">${t("ceo.toCommand")}</a><a class="btn btn-sm btn-ghost" href="#/run">${t("ap.new")}</a></div>` : ""}</div>`;
     clearTimeout(timer);
     if (r.status === "running") timer = window.setTimeout(draw, 3000);
   };
+  view.addEventListener("click", (e) => { const c = /** @type {HTMLElement} */ (e.target).closest(".clamp"); if (c) c.classList.toggle("open"); });
   await draw();
   return () => clearTimeout(timer);
 }

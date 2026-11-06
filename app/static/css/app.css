@@ -756,3 +756,86 @@ textarea.input { height: auto; padding: 9px 12px; resize: vertical; line-height:
 .ap-video { display: block; width: 100%; max-width: 260px; aspect-ratio: 9 / 16; border-radius: 12px; background: #000; margin: 8px 0; }
 .snippet { background: var(--surface-2); border: 1px solid var(--border); border-radius: 10px; padding: 12px; font: 12.5px/1.5 ui-monospace, Menlo, monospace; white-space: pre-wrap; word-break: break-all; margin: 0 0 10px; }
 .conn-form label { display: grid; gap: 4px; }
+
+/* ================================================================ Design 4.0 — "P1 Aurora": זהות פרימיום */
+:root { --aurora-1: #1b1747; --aurora-2: #3b2fd0; --aurora-3: #8b5cf6; --aurora-4: #22d3ee; --radius: 16px; }
+body { background: radial-gradient(1200px 600px at 100% -10%, color-mix(in srgb, var(--brand) 7%, transparent), transparent 60%), var(--bg); }
+.card { border-radius: var(--radius); border-color: color-mix(in srgb, var(--border) 80%, transparent); box-shadow: 0 1px 2px rgba(18,18,40,.04), 0 6px 24px -12px rgba(18,18,40,.12); }
+.btn-primary { background: linear-gradient(135deg, var(--brand), #7c5cff); border-color: transparent; box-shadow: 0 6px 18px -6px color-mix(in srgb, var(--brand) 70%, transparent); }
+.btn-primary:hover { background: linear-gradient(135deg, var(--brand-hover), #6d4df5); }
+.btn { transition: transform .15s var(--ease), box-shadow .15s var(--ease), background .15s; } .btn:active { transform: scale(.97); }
+.page-title { font-size: 17px; font-weight: 700; letter-spacing: -.01em; }
+/* אורורה — רקע כהה עם זוהר צבעוני מונפש */
+.aurora { position: relative; overflow: hidden; color: #fff; isolation: isolate;
+  background: radial-gradient(60% 80% at 85% 10%, color-mix(in srgb, var(--aurora-4) 55%, transparent), transparent 60%),
+              radial-gradient(70% 90% at 10% 100%, color-mix(in srgb, var(--aurora-3) 70%, transparent), transparent 60%),
+              linear-gradient(150deg, var(--aurora-1), var(--aurora-2)); }
+.aurora::after { content: ""; position: absolute; inset: -40%; z-index: -1; opacity: .35;
+  background: conic-gradient(from 0deg, transparent, rgba(255,255,255,.18), transparent 30%); animation: aurora-spin 18s linear infinite; }
+@keyframes aurora-spin { to { transform: rotate(1turn); } }
+@media (prefers-reduced-motion: reduce) { .aurora::after { animation: none; } }
+.eyebrow-light { font-size: 12.5px; font-weight: 600; letter-spacing: .04em; color: rgba(255,255,255,.75); margin-bottom: 10px; }
+/* מסך הפתיחה */
+.start-hero.aurora { border-radius: 28px; padding: 56px 28px 40px; margin-top: 4px; box-shadow: 0 30px 80px -30px rgba(59,47,208,.65); }
+.start-hero.aurora h2 { color: #fff; font-size: clamp(30px, 4.6vw, 46px); }
+.start-hero.aurora .lead { color: rgba(255,255,255,.82); }
+.start-hero.aurora .start-mark { background: rgba(255,255,255,.14); backdrop-filter: blur(8px); border: 1px solid rgba(255,255,255,.28); box-shadow: none; }
+.start-hero.aurora .start-free { background: rgba(255,255,255,.12); border: 1px solid rgba(255,255,255,.22); border-radius: 18px; padding: 8px; backdrop-filter: blur(12px); }
+.start-hero.aurora .start-free textarea { background: rgba(255,255,255,.96); border: 0; color: #121218; }
+.start-hero.aurora .start-btns .btn:not(.btn-primary) { background: rgba(255,255,255,.14); border-color: rgba(255,255,255,.28); color: #fff; }
+.start-hero.aurora .start-btns .btn-primary { background: #fff; color: var(--aurora-2); box-shadow: 0 10px 30px -10px rgba(0,0,0,.45); }
+.start-hero.aurora .chip-btn { background: rgba(255,255,255,.1); border-color: rgba(255,255,255,.22); color: rgba(255,255,255,.92); }
+.start-hero.aurora .chip-btn:hover { background: rgba(255,255,255,.2); color: #fff; }
+.center-title { text-align: center; color: var(--muted); font-weight: 600; font-size: 13px; letter-spacing: .04em; margin: 6px 0 -6px; }
+.tile { --hue: var(--brand); width: 44px; height: 44px; border-radius: 14px; display: grid; place-items: center; flex-shrink: 0;
+  color: var(--hue); background: color-mix(in srgb, var(--hue) 13%, var(--surface)); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--hue) 22%, transparent); }
+.tile svg { width: 22px; height: 22px; }
+.path-card { position: relative; padding: 20px; gap: 8px; border-radius: 18px; }
+.path-card strong { font-size: 16px; margin-top: 4px; }
+.path-go { position: absolute; inset-inline-end: 16px; top: 20px; color: var(--faint); transition: transform .2s var(--ease), color .2s; }
+.path-go svg { width: 18px; height: 18px; transform: rotate(90deg); } [dir="ltr"] .path-go svg { transform: rotate(-90deg); }
+.path-card:hover .path-go { color: var(--brand); transform: translateX(-4px); } [dir="ltr"] .path-card:hover .path-go { transform: translateX(4px); }
+.path-agency { background: linear-gradient(135deg, color-mix(in srgb, var(--brand) 9%, var(--surface)), var(--surface)); }
+/* Autopilot */
+.run-hero { border-radius: 24px; padding: 26px 24px 22px; box-shadow: 0 24px 60px -28px rgba(59,47,208,.7); }
+.run-reply { font-size: 19px; font-weight: 650; line-height: 1.45; margin: 0 0 14px; }
+.run-meta { display: flex; justify-content: space-between; font-size: 12.5px; color: rgba(255,255,255,.78); margin-bottom: 8px; }
+.run-bar { height: 6px; border-radius: 6px; background: rgba(255,255,255,.18); overflow: hidden; }
+.run-bar div { height: 100%; border-radius: 6px; background: linear-gradient(90deg, #fff, var(--aurora-4)); transition: width .6s var(--ease); }
+.agent-timeline { list-style: none; margin: 4px 0 0; padding: 0; position: relative; display: flex; flex-direction: column; gap: 12px; }
+.agent-timeline::before { content: ""; position: absolute; inset-inline-start: 25px; top: 26px; bottom: 26px; width: 2px; background: linear-gradient(var(--border), transparent); }
+.agent-step { position: relative; display: flex; gap: 14px; align-items: flex-start; padding: 14px 16px; border-radius: 18px; background: var(--surface);
+  border: 1px solid var(--border); box-shadow: 0 1px 2px rgba(18,18,40,.04); transition: box-shadow .3s var(--ease), border-color .3s; }
+.agent-av { --hue: var(--brand); position: relative; width: 52px; height: 52px; border-radius: 16px; flex-shrink: 0; display: grid; place-items: center; color: #fff;
+  background: linear-gradient(140deg, var(--hue), color-mix(in srgb, var(--hue) 60%, #000)); box-shadow: 0 8px 20px -8px var(--hue); }
+.agent-av > svg { width: 24px; height: 24px; }
+.agent-ok { position: absolute; bottom: -4px; inset-inline-end: -4px; width: 20px; height: 20px; border-radius: 50%; background: var(--good); display: grid; place-items: center;
+  border: 2px solid var(--surface); font-style: normal; } .agent-ok svg { width: 12px; height: 12px; color: #fff; stroke-width: 3; }
+.agent-step.ap-pending { opacity: .55; } .agent-step.ap-pending .agent-av { filter: grayscale(.8); }
+.agent-step.ap-running { border-color: color-mix(in srgb, var(--brand) 45%, var(--border)); box-shadow: 0 12px 32px -16px rgba(91,84,232,.55); }
+.agent-step.ap-running .agent-av::after { content: ""; position: absolute; inset: -5px; border-radius: 20px; border: 2px solid var(--hue); animation: ring 1.4s var(--ease) infinite; }
+@keyframes ring { 0% { opacity: .9; transform: scale(.92); } 100% { opacity: 0; transform: scale(1.18); } }
+.agent-step.ap-failed { background: color-mix(in srgb, var(--critical-soft) 60%, var(--surface)); }
+.ap-video { border-radius: 16px; }
+/* מרכז הפיקוד */
+.cmd-hero { border-radius: 24px; border: 0; color: #fff; isolation: isolate; position: relative; overflow: hidden;
+  background: radial-gradient(60% 80% at 90% 0%, color-mix(in srgb, var(--aurora-4) 45%, transparent), transparent 60%), linear-gradient(150deg, var(--aurora-1), var(--aurora-2));
+  box-shadow: 0 24px 60px -28px rgba(59,47,208,.7); }
+.cmd-hero h2 { color: #fff; } .cmd-hero .lead { color: rgba(255,255,255,.8); } .cmd-hero .eyebrow { color: rgba(255,255,255,.75); }
+.cmd-hero .btn-primary { background: #fff; color: var(--aurora-2); }
+.cmd-score { background: rgba(255,255,255,.95); border-radius: 22px; padding: 14px 16px 10px; color: var(--muted); }
+.next-card { border-radius: 16px; padding: 16px 18px; } .next-num { background: linear-gradient(140deg, var(--brand), #7c5cff); color: #fff; }
+/* תפריט תחתון באייפון — זכוכית + כפתור P1 מרכזי */
+@media (max-width: 900px) {
+  .bottom-nav { background: color-mix(in srgb, var(--surface) 78%, transparent) !important; backdrop-filter: saturate(1.8) blur(18px); -webkit-backdrop-filter: saturate(1.8) blur(18px);
+    border-top: 1px solid color-mix(in srgb, var(--border) 70%, transparent); }
+  .bottom-nav a[href="#/run"] svg { width: 44px; height: 44px; padding: 11px; margin-top: -18px; border-radius: 16px; color: #fff;
+    background: linear-gradient(140deg, var(--brand), #7c5cff); box-shadow: 0 10px 24px -8px rgba(91,84,232,.8); }
+  .bottom-nav a.active:not([href="#/run"]) svg { color: var(--brand); }
+  .start-hero.aurora { border-radius: 24px; padding: 40px 18px 28px; margin-inline: -4px; }
+  .path-grid { grid-template-columns: 1fr 1fr; gap: 10px; } .path-card { padding: 14px; } .path-card strong { font-size: 14.5px; }
+  .path-card .small { font-size: 12px; } .path-go { display: none; } .tile { width: 40px; height: 40px; border-radius: 12px; }
+  .agent-av { width: 44px; height: 44px; border-radius: 14px; } .agent-timeline::before { inset-inline-start: 21px; }
+}
+.clamp { display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; overflow: hidden; cursor: pointer; color: var(--text-2); }
+.clamp.open { -webkit-line-clamp: unset; display: block; }
