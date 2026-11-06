@@ -37,11 +37,17 @@ FastAPI (app/main.py): request-id, JSON logs, CSRF origin check, CSP, auth על 
                  customers.py (trust / fast_buyer / price / confused / mobile_ad) · orchestrator.py (דפדפן אחד, 2 במקביל)
   fixstudio/     catalog.py (מחוללי תיקון לכל rule_id: copy/structure/design/code/preview ops; יתרונות אמיתיים מהעמוד; [להשלמה] במקום המצאה)
                  sandbox.py (Chromium: טוען עמוד אמיתי → מסמן בעיה → מחיל ops על DOM מבודד → צילום לפני/אחרי) · service.py
+  business/      Business OS: store.py (פרופיל/פעולות/יומן, מסונן לפי account) · brain.py (שדות פרופיל + אימות) ·
+                 ceo.py (בריאות לפי תחום — ציון כולל רק עם ≥3 תחומים מדודים · תוכנית + top3 · הוכחת ערך · ציר זמן · דוח שבועי · ai_brief) ·
+                 actions.py (Approval Center: run_audit / verify_fix / enable_monitor / fix_package — אף אחד לא משנה אתר חי) · routes.py
+  saas/billing.py  ממשק ספק + Paddle (Stripe לא תומך בישראל). webhook חתום (Paddle-Signature) + billing_events לאידמפוטנטיות
+  saas/recovery.py שחזור סיסמה (אסימון hash חד-פעמי 30 דק', SMTP או קישור ממנהל)
+  static/welcome.html  אתר שיווקי ציבורי (/welcome) · static/sw.js + manifest.webmanifest = PWA
   intelligence/  engines.py (anthropic / ollama / rules — מציג איזה פעיל) · analyst.py · personas_ai.py · client.py (עלויות)
   monitor.py     Smart Monitor: tick כל דקה מה-worker, השוואה, התראות new/fixed/score
   report/        data.py · pdf.py (PDF ע"י Chromium)
   static/demo-store/  חנות דמו "סדנת פשתן" עם בעיות מכוונות (חלון קופץ, מדיניות דלה, כפתור לא בולט, קופה עם הרשמה כפויה, קישור שבור…)
-  db.py          SQLite + מיגרציות (user_version=3): agent_runs, fix_previews, monitors, notifications, findings.fix_status/priority…
+  db.py          SQLite + מיגרציות (user_version=4: business_profiles, actions, activity, password_resets, billing_events): agent_runs, fix_previews, monitors, notifications, findings.fix_status/priority…
 ```
 - **מנועי AI (engines.py):** `P1_AI_ENGINE=auto|anthropic|ollama|rules`. Ollama: `P1_OLLAMA_URL`, `P1_OLLAMA_MODEL` (ברירת מחדל qwen2.5:7b-instruct), `P1_OLLAMA_VISION=1`.
   Claude: `claude-opus-5-5`, adaptive thinking, structured outputs, `fallbacks: "default"`. כל קריאה ב-`ai_runs` (Ollama = עלות 0).
@@ -57,6 +63,11 @@ FastAPI (app/main.py): request-id, JSON logs, CSRF origin check, CSP, auth על 
 | `GET/POST /api/sites` · `PUT /api/sites/{id}/monitor` · `GET /api/sites/{id}/progress` | אתרים מורשים + Smart Monitor |
 | `GET /api/notifications` · `POST /api/notifications/read` | התראות |
 | `GET /api/engines` · `POST /api/demo/start` | מנועים · בדיקת דמו |
+| `GET/PUT /api/business/profile` · `GET /api/business/overview` · `/weekly` · `/timeline` · `POST /api/business/brief` | Business OS |
+| `GET/POST /api/actions` · `POST /api/actions/{id}/approve` · `/reject` · `GET /api/actions/{id}/package.html` | מרכז אישורים |
+| `GET /api/billing` · `POST /api/billing/checkout` · `/portal` · `/webhook` | תשלומים (Paddle) |
+| `POST /api/auth/forgot` · `/api/auth/reset` · `POST /api/admin/reset-link` | שחזור סיסמה |
+| `GET /welcome` · `GET /api/public/plans` · `/manifest.webmanifest` · `/sw.js` | ציבורי |
 (קיימים: auth, audits, report.pdf, compare, methodology, tasks, dashboard, account, admin, conversations.)
 
 ## פקודות
@@ -74,7 +85,9 @@ python -m pytest -q                       # ~3 דק' — כולל מסעות ר�
 - ✅ 1 בסיס · ✅ 2 MVP Auditor · ✅ 3 מקצה לקצה + SaaS + עיצוב v2
 - ✅ **3.0 (נוכחי):** Fix Studio (תצוגה מקדימה אמיתית + Before/After + סטטוס יישום) · 5 סוכני לקוח גולשים (rules) ·
   Live Mission Control (SSE) · Conversion Intelligence + סדר עדיפויות · Design System 3.0 · Smart Monitor + התראות · Demo Experience · מנועי AI מודולריים
-- **הבא:** ModelBrain לסוכנים (Ollama/Claude מחליטים על הצעד הבא) · שכתוב AI ב-Fix Studio כשמנוע זמין · Postgres + worker נפרד + Redis ·
+- ✅ **Business OS (נוכחי):** מרכז פיקוד (3 הפעולות הבאות) · פרופיל עסק · מרכז אישורים · אימות תיקון במדידה · ציר צמיחה · דוח שבועי ·
+  PWA לאייפון · אתר שיווקי + מחשבון חיסכון · Paddle (מוק) · שחזור סיסמה · Dockerfile (לא נבנה). פירוט: `PROGRESS.md`. מה חסר מהמשתמש: `REQUIREMENTS.md`.
+- **הבא:** פריסה (באישור) · בדיקת טפסי לידים/וואטסאפ · התראות וואטסאפ/מייל · ModelBrain לסוכנים (Ollama/Claude מחליטים על הצעד הבא) · שכתוב AI ב-Fix Studio כשמנוע זמין · Postgres + worker נפרד + Redis ·
   אימות בעלות (meta/DNS) · איפוס סיסמה/אימות מייל · צוותים · אחסון S3 · Shopify OAuth (store_data) · ספק תשלומים · פריסה (Docker) · תרגום טקסטי כללים לאנגלית.
 
 ## סטטוס וידוע

@@ -1,0 +1,9 @@
+.venv
+node_modules
+data
+data-backup-v1
+.env
+.git
+tests
+__pycache__
+*.pyc
