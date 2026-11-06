@@ -1,6 +1,9 @@
 import os
 
 os.environ.setdefault("P1_RUN_WORKER", "0")  # בבדיקות מריצים בדיקות ישירות, בלי worker ברקע
+# בבדיקות האוטומטיות לא קוראים למודל אמיתי (גם אם יש מפתח ב-.env) — לא מבזבזים מכסה חינמית ולא תלויים ברשת.
+# בדיקות של מנועים משתמשות במוקים / monkeypatch.
+os.environ["P1_AI_ENGINE"] = "rules"
 
 import pytest
 from fastapi.testclient import TestClient
