@@ -25,6 +25,11 @@ def test_every_translation_key_exists_in_both_languages():
     key_re = re.compile(r'"([a-zA-Z0-9_.]+)":')
     he, en = set(key_re.findall(he_block)), set(key_re.findall(en_block))
     assert he == en, {"missing_in_en": sorted(he - en), "missing_in_he": sorted(en - he)}
+    # מילון Business OS (i18n-biz.js) — אותה בדיקה
+    biz = (JS / "i18n-biz.js").read_text(encoding="utf-8")
+    bhe, ben = set(key_re.findall(biz[biz.index("he: {"):biz.index("en: {")])), set(key_re.findall(biz[biz.index("en: {"):]))
+    assert bhe == ben, {"biz_missing_in_en": sorted(bhe - ben), "biz_missing_in_he": sorted(ben - bhe)}
+    he, en = he | bhe, en | ben
     # כל מפתח סטטי שבשימוש בקוד קיים במילון
     used = set()
     for f in JS.rglob("*.js"):

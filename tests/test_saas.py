@@ -14,7 +14,7 @@ def test_password_hashing():
 
 def test_register_login_logout_and_admin_bootstrap(make_client):
     c = make_client()
-    assert c.get("/api/auth/config").json() == {"signup_allowed": True, "has_users": False}
+    assert c.get("/api/auth/config").json() == {"signup_allowed": True, "has_users": False, "email_configured": False}
     register(c, "Founder@P1.ai", name="מייסד", business_name="P1")
     me = c.get("/api/auth/me").json()
     assert me["user"]["email"] == "founder@p1.ai" and me["user"]["is_platform_admin"] == 1 and me["role"] == "owner"
