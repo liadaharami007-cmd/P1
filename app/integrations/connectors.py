@@ -19,8 +19,14 @@ import httpx
 GRAPH = "https://graph.facebook.com/v21.0"
 
 
-def env(*names: str) -> list[str]:
-    return [n for n in names if not os.environ.get(n)]
+def env(*names: str, cfg: dict | None = None) -> list[str]:
+    """אילו הגדרות חסרות. cfg = חיבור של לקוח מסוים (מהכספת); בלי cfg — משתני הסביבה של השרת."""
+    src = cfg if cfg is not None else os.environ
+    return [n for n in names if not src.get(n)]
+
+
+def _v(name: str, cfg: dict | None) -> str:
+    return (cfg if cfg is not None else os.environ).get(name, "")
 
 
 # ---------------------------------------------------------------- WhatsApp
@@ -31,15 +37,16 @@ def wa_missing() -> list[str]:
     return env(*WA_VARS)
 
 
-def wa_send_text(to: str, body: str, transport: httpx.BaseTransport | None = None) -> dict:
-    if wa_missing():
-        raise RuntimeError("WhatsApp לא מחובר: חסר " + ", ".join(wa_missing()))
+def wa_send_text(to: str, body: str, transport: httpx.BaseTransport | None = None, cfg: dict | None = None) -> dict:
+    miss = env("WHATSAPP_TOKEN", "WHATSAPP_PHONE_NUMBER_ID", cfg=cfg) if cfg is not None else wa_missing()
+    if miss:
+        raise RuntimeError("WhatsApp לא מחובר: חסר " + ", ".join(miss))
     to = "".join(ch for ch in to if ch.isdigit())
     if to.startswith("0"):
         to = "972" + to[1:]
     with httpx.Client(timeout=20, transport=transport) as c:
-        r = c.post(f"{GRAPH}/{os.environ['WHATSAPP_PHONE_NUMBER_ID']}/messages",
-                   headers={"Authorization": f"Bearer {os.environ['WHATSAPP_TOKEN']}"},
+        r = c.post(f"{GRAPH}/{_v('WHATSAPP_PHONE_NUMBER_ID', cfg)}/messages",
+                   headers={"Authorization": f"Bearer {_v('WHATSAPP_TOKEN', cfg)}"},
                    json={"messaging_product": "whatsapp", "to": to, "type": "text", "text": {"body": body[:4000]}})
     if r.status_code >= 300:
         raise RuntimeError(f"WhatsApp החזיר {r.status_code}: {r.text[:200]}")
@@ -69,11 +76,11 @@ def wa_parse_inbound(payload: dict) -> list[dict]:
 SHOPIFY_VARS = ("SHOPIFY_STORE_DOMAIN", "SHOPIFY_ADMIN_TOKEN")
 
 
-def shopify_summary(transport: httpx.BaseTransport | None = None) -> dict:
-    if env(*SHOPIFY_VARS):
-        raise RuntimeError("Shopify לא מחובר: חסר " + ", ".join(env(*SHOPIFY_VARS)))
-    base = f"https://{os.environ['SHOPIFY_STORE_DOMAIN']}/admin/api/2025-01"
-    h = {"X-Shopify-Access-Token": os.environ["SHOPIFY_ADMIN_TOKEN"]}
+def shopify_summary(transport: httpx.BaseTransport | None = None, cfg: dict | None = None) -> dict:
+    if env(*SHOPIFY_VARS, cfg=cfg):
+        raise RuntimeError("Shopify לא מחובר: חסר " + ", ".join(env(*SHOPIFY_VARS, cfg=cfg)))
+    base = f"https://{_v('SHOPIFY_STORE_DOMAIN', cfg)}/admin/api/2025-01"
+    h = {"X-Shopify-Access-Token": _v("SHOPIFY_ADMIN_TOKEN", cfg)}
     with httpx.Client(timeout=20, transport=transport, headers=h) as c:
         shop = c.get(f"{base}/shop.json")
         orders = c.get(f"{base}/orders/count.json", params={"status": "any"})
@@ -89,14 +96,31 @@ def shopify_summary(transport: httpx.BaseTransport | None = None) -> dict:
 WP_VARS = ("WP_URL", "WP_USER", "WP_APP_PASSWORD")
 
 
-def wordpress_pages(transport: httpx.BaseTransport | None = None) -> list[dict]:
-    if env(*WP_VARS):
-        raise RuntimeError("WordPress לא מחובר: חסר " + ", ".join(env(*WP_VARS)))
-    with httpx.Client(timeout=20, transport=transport, auth=(os.environ["WP_USER"], os.environ["WP_APP_PASSWORD"])) as c:
-        r = c.get(os.environ["WP_URL"].rstrip("/") + "/wp-json/wp/v2/pages", params={"per_page": 20, "_fields": "id,title,link,modified"})
+def wordpress_pages(transport: httpx.BaseTransport | None = None, cfg: dict | None = None) -> list[dict]:
+    if env(*WP_VARS, cfg=cfg):
+        raise RuntimeError("WordPress לא מחובר: חסר " + ", ".join(env(*WP_VARS, cfg=cfg)))
+    with httpx.Client(timeout=20, transport=transport, auth=(_v("WP_USER", cfg), _v("WP_APP_PASSWORD", cfg))) as c:
+        r = c.get(_v("WP_URL", cfg).rstrip("/") + "/wp-json/wp/v2/pages", params={"per_page": 20, "_fields": "id,title,link,modified"})
     if r.status_code >= 300:
         raise RuntimeError(f"WordPress החזיר {r.status_code}")
     return [{"id": p["id"], "title": (p.get("title") or {}).get("rendered"), "link": p.get("link"), "modified": p.get("modified")} for p in r.json()]
+
+
+# ---------------------------------------------------------------- WooCommerce (REST API, קריאה בלבד)
+WOO_VARS = ("WOO_URL", "WOO_KEY", "WOO_SECRET")
+
+
+def woocommerce_summary(transport: httpx.BaseTransport | None = None, cfg: dict | None = None) -> dict:
+    if env(*WOO_VARS, cfg=cfg):
+        raise RuntimeError("WooCommerce לא מחובר: חסר " + ", ".join(env(*WOO_VARS, cfg=cfg)))
+    base = _v("WOO_URL", cfg).rstrip("/") + "/wp-json/wc/v3"
+    with httpx.Client(timeout=20, transport=transport, auth=(_v("WOO_KEY", cfg), _v("WOO_SECRET", cfg))) as c:
+        orders = c.get(f"{base}/orders", params={"per_page": 1})
+        products = c.get(f"{base}/products", params={"per_page": 1})
+    for r in (orders, products):
+        if r.status_code >= 300:
+            raise RuntimeError(f"WooCommerce החזיר {r.status_code}")
+    return {"source": "store_data", "orders": int(orders.headers.get("x-wp-total", 0)), "products": int(products.headers.get("x-wp-total", 0))}
 
 
 def status() -> dict:

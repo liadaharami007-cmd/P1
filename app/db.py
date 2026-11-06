@@ -337,6 +337,23 @@ CREATE TABLE IF NOT EXISTS videos (             -- סרטוני מוטיון ש�
     created_by TEXT,
     created_at TEXT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS connections (        -- חיבורים של כל לקוח (פרטים מוצפנים)
+    account_id TEXT NOT NULL,
+    provider TEXT NOT NULL,
+    creds_enc TEXT,
+    status TEXT NOT NULL,              -- saved / connected / error
+    last_error TEXT,
+    last_test_at TEXT,
+    meta_json TEXT,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    PRIMARY KEY (account_id, provider)
+);
+CREATE TABLE IF NOT EXISTS embed_keys (         -- מפתח ציבורי לקוד ההטמעה של טפסים
+    account_id TEXT PRIMARY KEY,
+    embed_key TEXT NOT NULL UNIQUE,
+    created_at TEXT NOT NULL
+);
 CREATE TABLE IF NOT EXISTS runs (               -- Autopilot: בקשה אחת → כמה סוכנים ברצף, עם העברת תוצרים ביניהם
     id TEXT PRIMARY KEY,
     account_id TEXT NOT NULL,

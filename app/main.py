@@ -155,7 +155,9 @@ def create_app(db: Database | None = None, agent: Agent | None = None, runner: A
         rid = uuid.uuid4().hex[:12]
         t = time.perf_counter()
         # הגנת CSRF: בקשות משנות-מצב חייבות להגיע מאותו מקור
-        if request.method in ("POST", "PUT", "PATCH", "DELETE") and request.url.path.startswith("/api/"):
+        # חריגים מכוונים: קליטת טפסים מאתרי לקוחות (מפתח ציבורי + הגבלת קצב, בלי cookie) ו-webhooks חתומים של ספקים
+        cross_ok = request.url.path.startswith(("/api/collect/", "/api/whatsapp/webhook", "/api/billing/webhook"))
+        if request.method in ("POST", "PUT", "PATCH", "DELETE") and request.url.path.startswith("/api/") and not cross_ok:
             origin = request.headers.get("origin")
             if origin and urlparse(origin).netloc != request.headers.get("host"):
                 return JSONResponse({"detail": "בקשה ממקור לא מורשה"}, status_code=403)
@@ -776,6 +778,11 @@ def create_app(db: Database | None = None, agent: Agent | None = None, runner: A
                           for k, v in plans.PLANS.items()]}
 
     # PWA: ה-manifest וה-service worker בשורש האתר כדי שה-scope יכסה את כל האפליקציה
+    @app.get("/embed.js")
+    def embed_js():
+        return FileResponse(STATIC / "embed.js", media_type="text/javascript",
+                            headers={"Cache-Control": "public, max-age=3600", "Access-Control-Allow-Origin": "*"})
+
     @app.get("/manifest.webmanifest")
     def manifest():
         return FileResponse(STATIC / "manifest.webmanifest", media_type="application/manifest+json", headers={"Cache-Control": "no-cache"})

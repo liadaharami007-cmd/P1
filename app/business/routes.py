@@ -57,6 +57,10 @@ class VideoIn(BaseModel):
     title: str = "סרטון"
 
 
+class ConnIn(BaseModel):
+    values: dict[str, str]
+
+
 class SendIn(BaseModel):
     channel: str
     body: str
@@ -307,6 +311,65 @@ def register(app: FastAPI, db: Database, runner, browser_available: Callable[[],
         if not p:
             raise HTTPException(404, "לא נמצא")
         return F(p, media_type="video/mp4")
+
+    # ------------------------------------------------------------ חיבורים של כל לקוח (מוצפנים) + קוד הטמעה לטפסים
+    from ..integrations import accounts as acc_conn
+
+    @app.get("/api/connections")
+    def my_connections(ctx: Ctx = Depends(current)):
+        key = acc_conn.embed_key(db, ctx.account_id)
+        return {"items": acc_conn.overview(db, ctx.account_id), "embed": {"key": key, "snippet": acc_conn.embed_snippet(key)}}
+
+    @app.put("/api/connections/{provider}")
+    def save_connection(provider: str, body: ConnIn, ctx: Ctx = Depends(current)):
+        if ctx.role not in ("owner", "admin"):
+            raise HTTPException(403, "רק בעלים/מנהל יכולים לחבר חשבונות")
+        try:
+            return acc_conn.save(db, ctx.account_id, provider, body.values)
+        except ValueError as e:
+            raise HTTPException(400, str(e))
+
+    @app.post("/api/connections/{provider}/test")
+    def test_connection(provider: str, ctx: Ctx = Depends(current)):
+        if provider not in acc_conn.PROVIDERS:
+            raise HTTPException(404, "ספק לא מוכר")
+        return acc_conn.test(db, ctx.account_id, provider)
+
+    @app.delete("/api/connections/{provider}", status_code=204)
+    def delete_connection(provider: str, ctx: Ctx = Depends(current)):
+        if not acc_conn.remove(db, ctx.account_id, provider):
+            raise HTTPException(404, "אין חיבור")
+
+    @app.post("/api/embed/rotate")
+    def rotate_embed(ctx: Ctx = Depends(current)):
+        key = acc_conn.embed_key(db, ctx.account_id, rotate=True)
+        return {"key": key, "snippet": acc_conn.embed_snippet(key)}
+
+    @app.post("/api/collect/{key}")
+    async def collect_lead(key: str, request: Request):
+        """קליטת טופס מאתר של לקוח (כל פלטפורמה). ציבורי: מפתח + הגבלת קצב + ולידציה. אין cookie ואין גישה לנתונים."""
+        import json as _json
+        from fastapi.responses import Response as R
+        from ..saas import auth as _auth
+        acc = acc_conn.account_for_key(db, key)
+        if not acc:
+            raise HTTPException(404, "מפתח לא מוכר")
+        if not _auth.signup_limiter.hit("collect|" + _auth.client_ip(request)):
+            raise HTTPException(429, "יותר מדי פניות")
+        try:
+            d = _json.loads((await request.body())[:8000] or b"{}")
+        except ValueError:
+            raise HTTPException(400, "נתונים לא תקינים")
+        phone, email = str(d.get("phone") or "")[:40], str(d.get("email") or "")[:120]
+        if not (phone or email):
+            raise HTTPException(400, "חסר טלפון או מייל")
+        name = str(d.get("name") or "").strip()[:120] or phone or email
+        page = str(d.get("page") or "")[:300]
+        lead = studio.add_lead(db, acc, name, " · ".join(x for x in (phone, email) if x), "website_form",
+                               (f"[{page}] " if page else "") + str(d.get("message") or "")[:2000])
+        db.add_notification(acc, "new_lead", f"פנייה מהאתר: {name}", page[:120])
+        store.log(db, acc, "lead_added", f"פנייה מהאתר: {name}", ref_type="lead", ref_id=lead["id"])
+        return R(status_code=204, headers={"Access-Control-Allow-Origin": "*"})
 
     # ------------------------------------------------------------ חיבורים רשמיים: WhatsApp webhook · Shopify · WordPress
     @app.get("/api/whatsapp/webhook")

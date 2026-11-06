@@ -113,7 +113,8 @@ def _execute(db: Database, runner, account: dict, user_id: str | None, action: d
         if k == "send_whatsapp":
             from ..integrations import connectors
             try:
-                res = connectors.wa_send_text(lead["contact"] or "", p["body"])
+                from ..integrations import accounts as _acc
+                res = connectors.wa_send_text(lead["contact"] or "", p["body"], cfg=_acc.load(db, account["id"], "whatsapp"))
             except RuntimeError as e:
                 raise ValueError(str(e))
         else:

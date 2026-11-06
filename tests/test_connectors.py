@@ -60,7 +60,7 @@ def test_webhook_inbound_and_approval_gated_send(make_client, monkeypatch):
     act = c.post(f"/api/leads/{lead['id']}/send", json={"channel": "whatsapp", "body": "היי נועה"}).json()
     assert act["status"] == "proposed" and act["risk"] == "high"  # לא נשלח בלי אישור
     sent = {}
-    monkeypatch.setattr(connectors, "wa_send_text", lambda to, body, transport=None: sent.update(to=to, body=body) or {"to": to})
+    monkeypatch.setattr(connectors, "wa_send_text", lambda to, body, transport=None, cfg=None: sent.update(to=to, body=body) or {"to": to})
     done = c.post(f"/api/actions/{act['id']}/approve").json()
     assert done["status"] == "done" and sent == {"to": "972501111111", "body": "היי נועה"}
     assert c.get("/api/leads").json()["items"][0]["status"] == "contacted"
@@ -69,3 +69,51 @@ def test_webhook_inbound_and_approval_gated_send(make_client, monkeypatch):
     assert failed["status"] == "failed" and "SMTP" in failed["error"]  # אין שרת מייל — נכשל בגלוי
     csv = c.get("/api/leads/export.csv")
     assert csv.status_code == 200 and "נועה" in csv.text and "attachment" in csv.headers["content-disposition"]
+
+
+def test_per_account_connections_encrypted_and_isolated(make_client, monkeypatch, tmp_path):
+    from app import config
+    from app.integrations import accounts
+    monkeypatch.setattr(config, "DATA_DIR", tmp_path)
+    c = make_client()
+    register(c, "conn@p1.co")
+    assert c.put("/api/connections/shopify", json={"values": {"SHOPIFY_STORE_DOMAIN": "a.myshopify.com"}}).status_code == 400  # חסר טוקן
+    monkeypatch.setattr(connectors, "shopify_summary", lambda transport=None, cfg=None: {"source": "store_data", "shop": cfg["SHOPIFY_STORE_DOMAIN"], "orders": 3, "products": 2})
+    r = c.put("/api/connections/shopify", json={"values": {"SHOPIFY_STORE_DOMAIN": "a.myshopify.com", "SHOPIFY_ADMIN_TOKEN": "shpat_SECRET1234"}}).json()
+    assert r["status"] == "connected" and r["data"]["orders"] == 3
+    tok = next(f for f in r["fields"] if f["key"] == "SHOPIFY_ADMIN_TOKEN")
+    assert tok["value"] is None and tok["hint"] == "••••1234"  # הסוד לא חוזר
+    assert "shpat_SECRET1234" not in c.get("/api/connections").text and "SECRET1234" not in c.get("/api/connections").text
+    with c.app.state.db._conn() as cx:
+        raw = cx.execute("SELECT creds_enc FROM connections").fetchone()[0]
+    assert "shpat_SECRET1234" not in raw  # מוצפן בבסיס הנתונים
+    # עדכון בלי לשלוח שוב את הסוד — הסוד הקודם נשמר
+    r2 = c.put("/api/connections/shopify", json={"values": {"SHOPIFY_STORE_DOMAIN": "b.myshopify.com"}}).json()
+    assert r2["data"]["shop"] == "b.myshopify.com"
+    monkeypatch.setattr(connectors, "wordpress_pages", lambda transport=None, cfg=None: (_ for _ in ()).throw(RuntimeError("WordPress החזיר 401")))
+    w = c.put("/api/connections/wordpress", json={"values": {"WP_URL": "https://x", "WP_USER": "u", "WP_APP_PASSWORD": "p"}}).json()
+    assert w["status"] == "error" and "401" in w["error"]
+    o = make_client(db=c.app.state.db)
+    register(o, "conn2@p1.co")
+    assert all(i["status"] == "not_connected" for i in o.get("/api/connections").json()["items"])
+    assert c.delete("/api/connections/wordpress").status_code == 204
+
+
+def test_embed_collect_from_any_site(make_client):
+    c = make_client()
+    register(c, "embed@p1.co")
+    e = c.get("/api/connections").json()["embed"]
+    assert e["key"].startswith("p1_") and 'data-p1-key="' + e["key"] in e["snippet"]
+    js = c.get("/embed.js")
+    assert js.status_code == 200 and "password" in js.text and "cc-" in js.text  # מסנן סיסמאות ואשראי
+    body = json.dumps({"name": "יוסי", "phone": "050-2222222", "message": "מעוניין", "page": "https://client-site.co.il/contact"})
+    r = c.post(f"/api/collect/{e['key']}", content=body, headers={"Origin": "https://client-site.co.il", "Content-Type": "text/plain"})
+    assert r.status_code == 204 and r.headers["access-control-allow-origin"] == "*"
+    lead = c.get("/api/leads").json()["items"][0]
+    assert lead["name"] == "יוסי" and lead["channel"] == "website_form" and "client-site" in lead["message"]
+    assert c.post("/api/collect/p1_wrong", content=body).status_code == 404
+    assert c.post(f"/api/collect/{e['key']}", content=json.dumps({"name": "x"})).status_code == 400
+    new = c.post("/api/embed/rotate").json()["key"]
+    assert new != e["key"] and c.post(f"/api/collect/{e['key']}", content=body).status_code == 404
+    # בקשה ממקור זר לנתיב רגיל עדיין חסומה (CSRF)
+    assert c.post("/api/leads", json={"name": "x"}, headers={"Origin": "https://evil.example"}).status_code == 403
