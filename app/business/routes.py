@@ -340,6 +340,34 @@ def register(app: FastAPI, db: Database, runner, browser_available: Callable[[],
         if not acc_conn.remove(db, ctx.account_id, provider):
             raise HTTPException(404, "אין חיבור")
 
+    @app.get("/api/oauth/google/start")
+    def google_start(ctx: Ctx = Depends(current)):
+        from fastapi.responses import RedirectResponse
+        from ..integrations import google
+        if not google.configured():
+            raise HTTPException(503, "התחברות עם Google לא הוגדרה בשרת (P1_GOOGLE_CLIENT_ID / P1_GOOGLE_CLIENT_SECRET)")
+        return RedirectResponse(google.start_url(ctx.account_id), status_code=302)
+
+    @app.get("/api/oauth/google/callback")
+    def google_callback(code: str = "", state: str = "", error: str = "", ctx: Ctx = Depends(current)):
+        from fastapi.responses import RedirectResponse
+        from ..integrations import google
+        acc = google.pop_state(state)
+        if error or not code or acc != ctx.account_id:
+            return RedirectResponse("/#/connect?google=error", status_code=302)
+        try:
+            tok = google.exchange(code)
+        except RuntimeError:
+            return RedirectResponse("/#/connect?google=error", status_code=302)
+        old = acc_conn.load(db, ctx.account_id, "ga4") or {}
+        import json as _json
+        from ..integrations.accounts import _fernet
+        with db._conn() as c:  # שומרים את הטוקן גם לפני שהוזן Property ID
+            c.execute("""INSERT INTO connections (account_id, provider, creds_enc, status, created_at, updated_at) VALUES (?, 'ga4', ?, 'saved', ?, ?)
+                         ON CONFLICT(account_id, provider) DO UPDATE SET creds_enc=excluded.creds_enc, status='saved', updated_at=excluded.updated_at""",
+                      (ctx.account_id, _fernet().encrypt(_json.dumps({**old, "GA4_REFRESH_TOKEN": tok["refresh_token"]}).encode()).decode(), store.now(), store.now()))
+        return RedirectResponse("/#/connect?google=ok", status_code=302)
+
     @app.post("/api/embed/rotate")
     def rotate_embed(ctx: Ctx = Depends(current)):
         key = acc_conn.embed_key(db, ctx.account_id, rotate=True)

@@ -33,6 +33,9 @@ PROVIDERS: dict[str, dict] = {
                                               ("SHOPIFY_ADMIN_TOKEN", "Admin API token", True)],
                 "how": "Shopify Admin → Settings → Apps → Develop apps → הרשאות read_orders, read_products", "test": "shopify_summary",
                 "unlocks": "נתוני הזמנות ומוצרים אמיתיים"},
+    "ga4": {"name": "Google Analytics 4", "fields": [("GA4_PROPERTY_ID", "Property ID (מספר)", False)],
+            "how": "לוחצים 'התחברות עם Google' ואז מזינים Property ID (ב-GA4: Admin → Property settings)", "test": "ga4",
+            "unlocks": "כניסות, מקורות תנועה ורכישות אמיתיים — לכל אתר", "oauth": "google"},
     "whatsapp": {"name": "WhatsApp Business", "fields": [("WHATSAPP_PHONE_NUMBER_ID", "Phone number ID", False),
                                                          ("WHATSAPP_TOKEN", "Access token (קבוע)", True)],
                  "how": "developers.facebook.com → App → WhatsApp → API Setup (מספר עסקי מאומת)", "test": None,
@@ -55,11 +58,13 @@ def _fernet() -> Fernet:
 def save(db: Database, account_id: str, provider: str, values: dict[str, str]) -> dict:
     if provider not in PROVIDERS:
         raise ValueError("ספק לא מוכר")
-    fields = {f[0] for f in PROVIDERS[provider]["fields"]}
+    fields = {f[0] for f in PROVIDERS[provider]["fields"]} | ({"GA4_REFRESH_TOKEN"} if provider == "ga4" else set())
     old = load(db, account_id, provider) or {}
     creds = {k: str(v).strip() for k, v in values.items() if k in fields and str(v or "").strip()}
     merged = {**old, **creds}  # שדה סודי שלא נשלח שוב — נשמר הערך הקודם
     missing = [f[1] for f in PROVIDERS[provider]["fields"] if not merged.get(f[0])]
+    if PROVIDERS[provider].get("oauth") and not merged.get("GA4_REFRESH_TOKEN"):
+        missing.append("התחברות עם Google")
     if missing:
         raise ValueError("חסר: " + ", ".join(missing))
     token = _fernet().encrypt(json.dumps(merged).encode()).decode()
@@ -90,7 +95,11 @@ def test(db: Database, account_id: str, provider: str) -> dict:
         status, err = "error", "אין פרטי חיבור שמורים"
     elif fn:
         try:
-            data = getattr(cn, fn)(cfg=cfg)
+            if fn == "ga4":
+                from . import google
+                data = google.ga4_summary(cfg=cfg)
+            else:
+                data = getattr(cn, fn)(cfg=cfg)
         except Exception as e:  # noqa: BLE001 — כל כשל נשמר ומוצג
             status, err = "error", str(e)[:300]
     else:
@@ -115,7 +124,12 @@ def get_public(db: Database, account_id: str, provider: str) -> dict:
     cfg = load(db, account_id, provider) or {}
     fields = [{"key": k, "label": lbl, "secret": sec, "value": None if sec else cfg.get(k),
                "hint": ("••••" + cfg[k][-4:]) if sec and cfg.get(k) else None} for k, lbl, sec in p["fields"]]
-    return {"provider": provider, "name": p["name"], "how": p["how"], "unlocks": p["unlocks"], "fields": fields,
+    oauth = None
+    if p.get("oauth") == "google":
+        from . import google
+        oauth = {"ready": google.configured(), "linked": bool(cfg.get("GA4_REFRESH_TOKEN")),
+                 "missing": None if google.configured() else "בעל P1 צריך להגדיר פעם אחת P1_GOOGLE_CLIENT_ID + P1_GOOGLE_CLIENT_SECRET"}
+    return {"provider": provider, "name": p["name"], "how": p["how"], "unlocks": p["unlocks"], "fields": fields, "oauth": oauth,
             "status": r["status"] if r else "not_connected", "error": r["last_error"] if r else None,
             "tested_at": r["last_test_at"] if r else None, "data": json.loads(r["meta_json"]) if r and r["meta_json"] else None}
 

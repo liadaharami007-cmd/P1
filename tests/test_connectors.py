@@ -117,3 +117,37 @@ def test_embed_collect_from_any_site(make_client):
     assert new != e["key"] and c.post(f"/api/collect/{e['key']}", content=body).status_code == 404
     # בקשה ממקור זר לנתיב רגיל עדיין חסומה (CSRF)
     assert c.post("/api/leads", json={"name": "x"}, headers={"Origin": "https://evil.example"}).status_code == 403
+
+
+def test_ga4_oauth_flow_and_report(make_client, monkeypatch, tmp_path):
+    from urllib.parse import parse_qs, urlparse
+    from app import config
+    from app.integrations import google
+    monkeypatch.setattr(config, "DATA_DIR", tmp_path)
+    c = make_client()
+    register(c, "ga@p1.co")
+    monkeypatch.delenv("P1_GOOGLE_CLIENT_ID", raising=False)
+    assert c.get("/api/oauth/google/start", follow_redirects=False).status_code == 503
+    ga = next(i for i in c.get("/api/connections").json()["items"] if i["provider"] == "ga4")
+    assert ga["oauth"]["ready"] is False and "P1_GOOGLE_CLIENT_ID" in ga["oauth"]["missing"]
+    monkeypatch.setenv("P1_GOOGLE_CLIENT_ID", "cid")
+    monkeypatch.setenv("P1_GOOGLE_CLIENT_SECRET", "csec")
+    r = c.get("/api/oauth/google/start", follow_redirects=False)
+    q = parse_qs(urlparse(r.headers["location"]).query)
+    assert r.status_code == 302 and q["scope"] == [google.SCOPE] and q["access_type"] == ["offline"]
+    assert c.get("/api/oauth/google/callback", params={"code": "x", "state": "forged"}, follow_redirects=False).headers["location"].endswith("google=error")
+    monkeypatch.setattr(google, "exchange", lambda code, transport=None: {"refresh_token": "rt_SECRET"})
+    ok = c.get("/api/oauth/google/callback", params={"code": "x", "state": q["state"][0]}, follow_redirects=False)
+    assert ok.headers["location"].endswith("google=ok")
+
+    def h(req):
+        if req.url.host == "oauth2.googleapis.com":
+            return httpx.Response(200, json={"access_token": "at"})
+        assert req.headers["authorization"] == "Bearer at" and "/properties/123:runReport" in req.url.path
+        return httpx.Response(200, json={"rows": [{"dimensionValues": [{"value": "Organic Search"}], "metricValues": [{"value": "40"}, {"value": "55"}, {"value": "3"}, {"value": "5"}]},
+                                                  {"dimensionValues": [{"value": "Direct"}], "metricValues": [{"value": "10"}, {"value": "12"}, {"value": "1"}, {"value": "2"}]}]})
+    real = google.ga4_summary
+    monkeypatch.setattr(google, "ga4_summary", lambda transport=None, cfg=None: real(transport=httpx.MockTransport(h), cfg=cfg))
+    g = c.put("/api/connections/ga4", json={"values": {"GA4_PROPERTY_ID": "properties/123"}}).json()
+    assert g["status"] == "connected" and g["data"]["sessions"] == 67 and g["data"]["purchases"] == 4 and g["oauth"]["linked"]
+    assert "rt_SECRET" not in c.get("/api/connections").text

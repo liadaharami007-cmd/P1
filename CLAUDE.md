@@ -48,6 +48,9 @@ FastAPI (app/main.py): request-id, JSON logs, CSRF origin check, CSP, auth על 
                  pages.py (בונה דפי נחיתה: מפרט JSON → HTML בלי סקריפטים · עריכה בשיחה · גרסאות · פרסום באישור ב-/p/<id>/ · טופס → ליד) ·
                  video.py (תסריט → סצנות HTML → פריימים ב-Chromium → MP4 ע"י ffmpeg; בלי קריינות) ·
                  actions.py (Approval Center: run_audit / verify_fix / enable_monitor / fix_package — אף אחד לא משנה אתר חי) · routes.py
+  integrations/accounts.py  חיבורים לכל לקוח: כספת מוצפנת (Fernet, P1_SECRET_KEY) · WordPress/WooCommerce/Shopify/WhatsApp/GA4 · בדיקה חיה · סוד לא חוזר ל-API ·
+                 embed.js + /api/collect/<key> = קליטת טפסים מכל אתר ל-CRM (בלי סיסמאות/אשראי; CSRF פתוח רק לנתיב הזה ול-webhooks)
+  integrations/google.py      GA4: OAuth רשמי (analytics.readonly) לכל לקוח · דורש פעם אחת P1_GOOGLE_CLIENT_ID/SECRET
   integrations/connectors.py  רשמיים בלבד: WhatsApp Cloud API (webhook חתום → ליד · שליחה רק באישור) · Shopify Admin (קריאה) ·
                  WordPress REST (קריאה). מוגדרים במשתני סביבה; בלי הגדרה → not_configured
   saas/billing.py  ממשק ספק + Paddle (Stripe לא תומך בישראל). webhook חתום (Paddle-Signature) + billing_events לאידמפוטנטיות
@@ -109,6 +112,7 @@ python -m pytest -q                       # ~3 דק' — כולל מסעות ר�
 - ✅ **AI חינמי:** מנוע Gemini (פעיל ונבדק אמיתי) · סטודיו סוכנים · לידים · פריסה ל-HF דרך GitHub Action (`DEPLOY.md`). מחכה: HF_TOKEN מהמשתמש.
 - ✅ **מנהל עסק מבצע:** Autopilot (סוכנים ברצף + handoff) · בונה דפי נחיתה · סרטוני MP4 · CRM (תזכורות, משפך, שליחה באישור) · WhatsApp/Shopify/WordPress (מוכנים, לא מחוברים) · מחקר מתחרים (ביקור באתרים מהפרופיל).
   ידוע: חיפוש Google בתוך Gemini לא כלול במסלול החינמי (quota 0).
+- ✅ **חיבורים לכל לקוח:** מסך "החשבונות שלי" · קוד הטמעה לטפסים (נבדק חוצה-אתרים באייפון) · כספת מוצפנת · GA4 OAuth (מוכן) · WooCommerce.
 - **הבא:** פריסה (באישור) · בדיקת טפסי לידים/וואטסאפ · התראות וואטסאפ/מייל · ModelBrain לסוכנים (Ollama/Claude מחליטים על הצעד הבא) · שכתוב AI ב-Fix Studio כשמנוע זמין · Postgres + worker נפרד + Redis ·
   אימות בעלות (meta/DNS) · איפוס סיסמה/אימות מייל · צוותים · אחסון S3 · Shopify OAuth (store_data) · ספק תשלומים · פריסה (Docker) · תרגום טקסטי כללים לאנגלית.
 

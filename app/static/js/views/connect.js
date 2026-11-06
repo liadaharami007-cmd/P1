@@ -23,6 +23,8 @@ export async function connectView(view) {
         <div class="card-head"><div><h2>${esc(p.name)}</h2><div class="card-sub">${esc(p.unlocks)}</div></div><span class="badge ${st[0]}">${t(st[1])}</span></div>
         ${p.error ? `<div class="notice notice-error" style="margin-bottom:10px"><span class="ico">!</span><span class="small">${esc(p.error)}</span></div>` : ""}
         ${p.data ? `<p class="small" style="margin-bottom:10px">${esc(Object.entries(p.data).filter(([k]) => k !== "source").map(([k, v]) => `${k}: ${v}`).join(" · "))}</p>` : ""}
+        ${p.oauth ? (p.oauth.ready ? `<a class="btn btn-sm ${p.oauth.linked ? "" : "btn-primary"}" href="/api/oauth/google/start" style="margin-bottom:10px">G ${p.oauth.linked ? t("cn.googleRelink") : t("cn.google")}</a>`
+          : `<div class="notice notice-warn" style="margin-bottom:10px"><span class="ico">!</span><span class="small">${esc(p.oauth.missing)}</span></div>`) : ""}
         <form class="stack-sm conn-form" data-p="${p.provider}" novalidate>${p.fields.map((/** @type {any} */ f) => `<label class="small">${esc(f.label)}
           <input class="input ${f.secret ? "" : "ltr"}" name="${f.key}" ${f.secret ? `type="password" autocomplete="off" placeholder="${esc(f.hint || "")}"` : `value="${esc(f.value || "")}"`} dir="ltr"></label>`).join("")}
           <div class="row"><button class="btn btn-sm btn-primary">${t("cn.save")}</button>${p.status !== "not_connected" ? `<button type="button" class="btn btn-sm" data-test="${p.provider}">${t("cn.test")}</button>
