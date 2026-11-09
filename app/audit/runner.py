@@ -87,6 +87,11 @@ class AuditRunner:
                 except Exception:  # noqa: BLE001
                     log.exception("monitor tick failed")
                 try:
+                    from ..pulse.scheduler import tick as pulse_tick
+                    pulse_tick(self.db)
+                except Exception:  # noqa: BLE001
+                    log.exception("pulse tick failed")
+                try:
                     from ..business.studio import remind_followups
                     remind_followups(self.db)
                 except Exception:  # noqa: BLE001

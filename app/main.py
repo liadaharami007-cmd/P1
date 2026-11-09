@@ -602,6 +602,10 @@ def create_app(db: Database | None = None, agent: Agent | None = None, runner: A
     from .business.routes import register as register_business
     register_business(app, database, the_runner, browser_available)
 
+    # ---------------------------------------------------------------- ClientPulse OS: בקרת לקוחות לסוכנויות פרסום
+    from .pulse.routes import register as register_pulse
+    register_pulse(app, database)
+
     # ---------------------------------------------------------------- אתרים + Smart Monitor + התראות
     @app.get("/api/sites")
     def sites(ctx: Ctx = Depends(current)):

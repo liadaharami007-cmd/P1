@@ -1,0 +1,1520 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#0B0C0E">
+<title>ClientPulse AI</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Heebo:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>:root{
+  --bg:#0B0C0E;--panel:#0F1013;--card:#15171B;--card2:#1B1E23;--hover:#1F2228;--line:#22252B;--line2:#2D3139;
+  --tx:#ECEEF1;--tx2:#A6ABB5;--mute:#6F7581;--acc:#8E9BFF;--accbg:rgba(142,155,255,.12);
+  --g:#41B883;--gbg:rgba(65,184,131,.12);--y:#E3AA45;--ybg:rgba(227,170,69,.13);--r:#EE6B5F;--rbg:rgba(238,107,95,.13);--b:#8E9BFF;--bbg:rgba(142,155,255,.13);
+  --rad:14px;--rad2:10px;--sh:0 1px 0 rgba(255,255,255,.03) inset,0 8px 24px rgba(0,0,0,.25);--ease:cubic-bezier(.2,.8,.2,1);
+  --sbw:236px;color-scheme:dark}
+[data-theme=light]{--bg:#F5F5F3;--panel:#FBFBFA;--card:#FFFFFF;--card2:#F7F7F5;--hover:#F1F1EE;--line:#E6E5E1;--line2:#D9D8D3;
+  --tx:#15171B;--tx2:#4B505A;--mute:#8A8F99;--acc:#4E5FE0;--accbg:rgba(78,95,224,.09);
+  --g:#1E9C6A;--gbg:#E5F4ED;--y:#B87C0A;--ybg:#FBF1DC;--r:#D2453B;--rbg:#FBE8E6;--b:#4E5FE0;--bbg:#ECEEFC;--sh:0 1px 2px rgba(20,22,27,.04),0 6px 18px rgba(20,22,27,.05);color-scheme:light}
+*{box-sizing:border-box}html,body{margin:0;height:100%}
+body{font-family:Heebo,system-ui,-apple-system,"Segoe UI",Arial,sans-serif;background:var(--bg);color:var(--tx);font-size:14.5px;line-height:1.55;-webkit-font-smoothing:antialiased;overflow-x:hidden}
+button,input,select,textarea{font:inherit;color:inherit}button{cursor:pointer;border:0;background:none;padding:0}
+a{color:var(--acc);text-decoration:none}
+bdi,.num{font-variant-numeric:tabular-nums}
+::selection{background:var(--accbg)}
+.app{display:flex;min-height:100vh}
+/* sidebar */
+.sb{position:fixed;inset:0 0 0 auto;width:var(--sbw);background:var(--panel);border-inline-end:1px solid var(--line);display:flex;flex-direction:column;padding:16px 12px;z-index:30}
+.brand{display:flex;align-items:center;gap:10px;padding:4px 8px 18px;font-weight:700;font-size:16px;letter-spacing:-.2px}
+.logo{width:26px;height:26px;border-radius:8px;background:linear-gradient(135deg,#8E9BFF,#41B883);display:grid;place-items:center;box-shadow:0 4px 14px rgba(142,155,255,.35)}
+.logo i{width:8px;height:8px;border-radius:50%;background:#0B0C0E;display:block}
+.brand small{display:block;font-size:11px;color:var(--mute);font-weight:500;margin-top:-3px}
+.nav{display:flex;flex-direction:column;gap:2px}
+.nav a{display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:9px;color:var(--tx2);font-weight:500;transition:background .15s,color .15s}
+.nav a:hover{background:var(--hover);color:var(--tx)}
+.nav a.on{background:var(--card2);color:var(--tx);box-shadow:inset 0 0 0 1px var(--line)}
+.nav a .ct{margin-inline-start:auto;font-size:11px;background:var(--rbg);color:var(--r);border-radius:99px;padding:0 7px;font-weight:600}
+.nav .sep{height:1px;background:var(--line);margin:10px 8px}
+.ic{width:17px;height:17px;flex:none;stroke:currentColor;fill:none;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+.sbfoot{margin-top:auto;display:flex;flex-direction:column;gap:8px}
+.clock{border:1px solid var(--line);border-radius:12px;padding:10px 12px;background:var(--card)}
+.clock .l{font-size:11px;color:var(--mute)}.clock .v{font-weight:600}
+.row2{display:flex;gap:6px;align-items:center}
+.sel{background:var(--card);border:1px solid var(--line);border-radius:9px;padding:7px 9px;width:100%}
+/* main */
+.main{flex:1;margin-inline-start:var(--sbw);min-width:0}
+.tb{position:sticky;top:0;z-index:20;display:flex;align-items:center;gap:10px;padding:12px 28px;background:color-mix(in srgb,var(--bg) 82%,transparent);backdrop-filter:saturate(1.3) blur(14px);-webkit-backdrop-filter:saturate(1.3) blur(14px);border-bottom:1px solid var(--line)}
+.tb h1{font-size:16px;margin:0;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sp{flex:1}
+.kbd{display:flex;align-items:center;gap:8px;border:1px solid var(--line);background:var(--card);color:var(--mute);border-radius:10px;padding:7px 10px;min-width:220px;transition:border-color .15s}
+.kbd:hover{border-color:var(--line2);color:var(--tx2)}
+.kbd kbd{margin-inline-start:auto;font-family:inherit;font-size:11px;border:1px solid var(--line2);border-radius:5px;padding:0 5px}
+.iconbtn{position:relative;width:36px;height:36px;border-radius:10px;display:grid;place-items:center;color:var(--tx2);border:1px solid var(--line);background:var(--card)}
+.iconbtn:hover{color:var(--tx);border-color:var(--line2)}
+.iconbtn .dotc{position:absolute;top:-4px;inset-inline-end:-4px;min-width:17px;height:17px;border-radius:99px;background:var(--r);color:#fff;font-size:10.5px;font-weight:700;display:grid;place-items:center;padding:0 4px}
+.view{padding:24px 28px 80px;max-width:1320px;margin:0 auto;animation:fade .25s var(--ease)}
+@keyframes fade{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
+/* atoms */
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:7px;border-radius:10px;padding:8px 14px;font-weight:600;font-size:13.5px;transition:background .15s,border-color .15s,transform .06s,opacity .15s;white-space:nowrap}
+.btn:active{transform:scale(.98)}.btn:disabled{opacity:.45;cursor:not-allowed}
+.pri{background:var(--tx);color:var(--bg)}.pri:hover{opacity:.9}
+.sec{background:var(--card);border:1px solid var(--line);color:var(--tx)}.sec:hover{border-color:var(--line2);background:var(--hover)}
+.acc{background:var(--acc);color:#0B0C0E}[data-theme=light] .acc{color:#fff}
+.dng{background:var(--rbg);color:var(--r)}
+.sm{padding:6px 10px;font-size:12.5px;border-radius:8px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:var(--rad);box-shadow:var(--sh)}
+.pad{padding:18px 20px}
+.h2{font-size:14.5px;font-weight:650;margin:0 0 12px;display:flex;align-items:center;gap:8px}
+.h2 .sp{flex:1}
+.eyebrow{font-size:11.5px;font-weight:600;color:var(--mute);letter-spacing:.2px}
+.muted{color:var(--mute)}.tx2{color:var(--tx2)}.small{font-size:12.5px}
+.dot{width:8px;height:8px;border-radius:50%;display:inline-block;flex:none}
+.d-green{background:var(--g);box-shadow:0 0 0 3px var(--gbg)}.d-yellow{background:var(--y);box-shadow:0 0 0 3px var(--ybg)}.d-red{background:var(--r);box-shadow:0 0 0 3px var(--rbg)}.d-imp{background:var(--b);box-shadow:0 0 0 3px var(--bbg)}.d-none{background:var(--line2)}
+.pill{display:inline-flex;align-items:center;gap:5px;font-size:11.5px;font-weight:600;padding:2px 8px;border-radius:99px;white-space:nowrap;line-height:1.6}
+.p-red{background:var(--rbg);color:var(--r)}.p-yellow{background:var(--ybg);color:var(--y)}.p-green{background:var(--gbg);color:var(--g)}.p-imp{background:var(--bbg);color:var(--b)}.p-gray{background:var(--card2);color:var(--tx2);box-shadow:inset 0 0 0 1px var(--line)}.p-new{background:var(--tx);color:var(--bg)}
+.up{color:var(--r)}.down{color:var(--g)}
+.grid{display:grid;gap:14px}
+.g2{grid-template-columns:1.35fr 1fr}.g3{grid-template-columns:repeat(3,1fr)}
+/* hero */
+.hello{display:flex;align-items:flex-end;gap:16px;margin-bottom:18px;flex-wrap:wrap}
+.hello h2{font-size:26px;letter-spacing:-.4px;margin:0;font-weight:700}
+.hello .meta{color:var(--tx2);font-size:13px;display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-top:4px}
+.conn{display:inline-flex;align-items:center;gap:6px}
+/* kpis */
+.kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:14px}
+.kpi{text-align:start;padding:14px 16px;border-radius:var(--rad);background:var(--card);border:1px solid var(--line);transition:border-color .15s,transform .15s;position:relative;min-width:0}
+button.kpi:hover{border-color:var(--line2);transform:translateY(-1px)}
+.kpi .l{font-size:12.5px;color:var(--tx2);display:flex;align-items:center;gap:7px}
+.kpi .n{font-size:26px;font-weight:700;letter-spacing:-.6px;margin-top:4px;line-height:1.15}
+.kpi .s{font-size:11.5px;color:var(--mute);margin-top:2px}
+/* summary */
+.sum p{font-size:16px;line-height:1.75;margin:0}
+.sum .lk{color:var(--tx);border-bottom:1px dashed var(--line2);cursor:pointer;font-weight:600}
+.sum .lk:hover{border-bottom-color:var(--acc);color:var(--acc)}
+.acts{display:flex;flex-direction:column;gap:6px;margin-top:14px}
+.act{display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:10px;background:var(--card2);border:1px solid var(--line);text-align:start;transition:border-color .15s}
+.act:hover{border-color:var(--line2)}
+.act .n{width:22px;height:22px;border-radius:7px;background:var(--bg);display:grid;place-items:center;font-size:12px;font-weight:700;color:var(--tx2);flex:none}
+.engine{display:inline-flex;align-items:center;gap:6px;font-size:11.5px;color:var(--mute);border:1px solid var(--line);border-radius:99px;padding:2px 9px}
+/* list rows */
+.list .rw{display:grid;grid-template-columns:minmax(190px,1.7fr) 90px 1fr .7fr .9fr minmax(200px,2fr);gap:12px;align-items:center;padding:11px 18px;border-top:1px solid var(--line);text-align:start;width:100%;transition:background .12s}
+.list .rw:hover{background:var(--hover)}
+.list .hd{font-size:11.5px;color:var(--mute);font-weight:600;background:var(--card2)}
+.list .hd:hover{background:var(--card2)}
+.nm{display:flex;align-items:center;gap:10px;min-width:0}.nm .t{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.nm .s{font-size:11.5px;color:var(--mute)}
+.av{width:24px;height:24px;border-radius:50%;display:inline-grid;place-items:center;font-size:11px;font-weight:700;background:var(--card2);border:1px solid var(--line2);color:var(--tx2);flex:none}
+.iss{display:flex;gap:6px;align-items:center;flex-wrap:wrap;font-size:13px;color:var(--tx2);min-width:0}
+.chg{font-size:11.5px;margin-inline-start:6px}
+.toolbar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;padding:14px 18px}
+.inp{background:var(--card2);border:1px solid var(--line);border-radius:10px;padding:8px 12px;outline:none;min-width:0}
+.inp:focus{border-color:var(--acc)}
+.chips{display:flex;gap:6px;flex-wrap:wrap}
+.chip{font-size:12.5px;padding:5px 11px;border-radius:99px;border:1px solid var(--line);color:var(--tx2);background:var(--card);transition:all .15s}
+.chip:hover{color:var(--tx);border-color:var(--line2)}.chip.on{background:var(--tx);color:var(--bg);border-color:var(--tx)}
+.seg{display:inline-flex;background:var(--card2);border:1px solid var(--line);border-radius:10px;padding:2px}
+.seg button{padding:5px 11px;border-radius:8px;font-size:12.5px;color:var(--tx2)}.seg button.on{background:var(--card);color:var(--tx);box-shadow:0 1px 3px rgba(0,0,0,.2)}
+/* feed */
+.feed{display:flex;flex-direction:column}
+.fi{display:flex;gap:10px;padding:9px 0;border-top:1px solid var(--line);font-size:13px}.fi:first-child{border-top:0}
+.fi .tm{color:var(--mute);font-size:11.5px;white-space:nowrap;min-width:54px}
+/* client 360 */
+.ch{display:flex;align-items:flex-start;gap:14px;flex-wrap:wrap;margin-bottom:16px}
+.ch h2{font-size:24px;margin:0;letter-spacing:-.3px}
+.back{color:var(--tx2);display:inline-flex;align-items:center;gap:6px;font-size:13px;margin-bottom:10px}
+.mets{display:grid;grid-template-columns:repeat(6,1fr);gap:8px}
+.met{background:var(--card2);border:1px solid var(--line);border-radius:12px;padding:10px 12px;min-width:0}
+.met .l{font-size:11.5px;color:var(--mute)}.met .v{font-size:18px;font-weight:700;letter-spacing:-.3px}.met .c{font-size:11.5px}
+.chart{position:relative}
+.chart svg{display:block;width:100%;height:auto;direction:ltr}
+.tip{position:absolute;pointer-events:none;background:var(--card2);border:1px solid var(--line2);border-radius:10px;padding:8px 10px;font-size:12px;box-shadow:0 10px 30px rgba(0,0,0,.35);opacity:0;transition:opacity .12s;white-space:nowrap;z-index:2}
+.tip.on{opacity:1}
+.legend{display:flex;gap:14px;font-size:12px;color:var(--tx2);flex-wrap:wrap}
+.legend i{display:inline-block;width:14px;height:2px;border-radius:2px;vertical-align:middle;margin-inline-end:5px}
+/* alert / investigation */
+.al{border-inline-start:3px solid var(--y);padding:16px 18px}.al.red{border-inline-start-color:var(--r)}.al.imp{border-inline-start-color:var(--b)}
+.alh{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.alh .t{font-weight:700;font-size:15px}
+.meta2{display:flex;gap:12px;flex-wrap:wrap;font-size:12px;color:var(--mute);margin:6px 0 10px}
+.inv{display:grid;gap:14px;margin-top:6px}
+.blk .k{font-size:11.5px;font-weight:700;color:var(--mute);letter-spacing:.3px;margin-bottom:6px;display:flex;align-items:center;gap:8px}
+.tag3{font-size:10.5px;font-weight:700;padding:1px 7px;border-radius:5px}
+.t-fact{background:var(--gbg);color:var(--g)}.t-hyp{background:var(--ybg);color:var(--y)}.t-rec{background:var(--bbg);color:var(--b)}
+.ft{width:100%;border-collapse:collapse;font-size:13px}
+.ft td{padding:6px 4px;border-bottom:1px solid var(--line)}.ft td:not(:first-child){text-align:end;white-space:nowrap}
+.ft th{font-size:11px;color:var(--mute);font-weight:600;text-align:start;padding-bottom:4px}.ft th:not(:first-child){text-align:end}
+.hyp{padding:10px 12px;border:1px solid var(--line);border-radius:10px;background:var(--card2);margin-bottom:6px}
+.hyp .bar{height:4px;border-radius:4px;background:var(--line);margin-top:8px;overflow:hidden}.hyp .bar i{display:block;height:100%;background:var(--y);border-radius:4px}
+.plan{margin:0;padding:0;list-style:none;counter-reset:p}
+.plan li{counter-increment:p;display:flex;gap:10px;align-items:flex-start;padding:7px 0;border-bottom:1px dashed var(--line);font-size:13.5px}
+.plan li::before{content:counter(p);width:20px;height:20px;border-radius:6px;background:var(--bbg);color:var(--b);font-size:11.5px;font-weight:700;display:grid;place-items:center;flex:none}
+.ul{margin:0;padding-inline-start:18px;font-size:13.5px}.ul li{margin:3px 0}
+.okbox{background:var(--gbg);border-radius:10px;padding:10px 12px;font-size:13.5px}
+.unk{font-size:12.5px;color:var(--mute)}
+/* tasks */
+.tk{padding:14px 16px;display:flex;flex-direction:column;gap:8px;transition:box-shadow .3s}
+.tk.hl{box-shadow:0 0 0 2px var(--acc)}
+.tkh{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.tkh .t{font-weight:650}
+.flow{display:flex;gap:4px;flex-wrap:wrap;font-size:11px}
+.flow span{padding:2px 7px;border-radius:6px;background:var(--card2);color:var(--mute)}
+.flow span.on{background:var(--accbg);color:var(--acc);font-weight:700}.flow span.past{color:var(--tx2)}
+.hist{font-size:12px;color:var(--mute);border-top:1px solid var(--line);padding-top:8px;display:flex;flex-direction:column;gap:3px}
+details summary{cursor:pointer;color:var(--tx2);font-size:12.5px;list-style:none}details summary::-webkit-details-marker{display:none}
+/* timeline */
+.tl{position:relative;padding-inline-start:18px}
+.tl::before{content:"";position:absolute;inset-inline-start:4px;top:6px;bottom:6px;width:1px;background:var(--line2)}
+.tli{position:relative;padding:6px 0 10px;font-size:13px}
+.tli::before{content:"";position:absolute;inset-inline-start:-18px;top:12px;width:9px;height:9px;border-radius:50%;background:var(--card);border:2px solid var(--line2)}
+.tli.alert::before{border-color:var(--r)}.tli.task::before{border-color:var(--acc)}.tli.verified::before{border-color:var(--g);background:var(--g)}.tli.automation::before{border-color:var(--y)}
+.tli .w{font-size:11.5px;color:var(--mute)}
+/* chat */
+.chat{display:flex;flex-direction:column;height:calc(100vh - 150px);min-height:420px}
+.msgs{flex:1;overflow-y:auto;padding:18px;display:flex;flex-direction:column;gap:12px}
+.mu{align-self:flex-start;background:var(--tx);color:var(--bg);padding:9px 13px;border-radius:14px 14px 14px 4px;max-width:80%}
+.ma{align-self:flex-end;background:var(--card2);border:1px solid var(--line);padding:12px 14px;border-radius:14px 14px 4px 14px;max-width:88%}
+.ma .ev{margin:8px 0 0;padding:0;list-style:none;font-size:12.5px;color:var(--tx2)}.ma .ev li{padding:3px 0;border-top:1px dashed var(--line)}
+.composer{display:flex;gap:8px;padding:12px;border-top:1px solid var(--line)}
+.composer .inp{flex:1}
+/* switch */
+.sw{width:38px;height:22px;border-radius:99px;background:var(--line2);position:relative;transition:background .2s;flex:none}
+.sw::after{content:"";position:absolute;top:3px;inset-inline-start:3px;width:16px;height:16px;border-radius:50%;background:#fff;transition:inset-inline-start .2s var(--ease)}
+.sw.on{background:var(--g)}.sw.on::after{inset-inline-start:19px}
+.rule{display:flex;align-items:center;gap:14px;padding:14px 18px;border-top:1px solid var(--line)}.rule:first-of-type{border-top:0}
+/* overlays */
+.ov{position:fixed;inset:0;background:rgba(5,6,8,.55);backdrop-filter:blur(3px);-webkit-backdrop-filter:blur(3px);z-index:60;display:flex;align-items:flex-start;justify-content:center;padding:10vh 16px 16px;opacity:0;pointer-events:none;transition:opacity .18s}
+.ov.on{opacity:1;pointer-events:auto}
+.pal{width:min(620px,100%);background:var(--card);border:1px solid var(--line2);border-radius:16px;box-shadow:0 30px 80px rgba(0,0,0,.5);overflow:hidden;transform:translateY(-6px) scale(.99);transition:transform .2s var(--ease)}
+.ov.on .pal{transform:none}
+.pal input{width:100%;border:0;border-bottom:1px solid var(--line);background:transparent;padding:16px 18px;font-size:15px;outline:none}
+.pal .res{max-height:52vh;overflow-y:auto;padding:6px}
+.pal .it{display:flex;align-items:center;gap:10px;padding:9px 12px;border-radius:9px;width:100%;text-align:start}
+.pal .it.on,.pal .it:hover{background:var(--hover)}
+.pal .grp{font-size:11px;color:var(--mute);padding:8px 12px 4px;font-weight:600}
+.modal{width:min(860px,100%);max-height:84vh;overflow-y:auto;background:var(--card);border:1px solid var(--line2);border-radius:16px;box-shadow:0 30px 80px rgba(0,0,0,.5)}
+.mh{position:sticky;top:0;background:var(--card);display:flex;align-items:center;gap:10px;padding:14px 18px;border-bottom:1px solid var(--line);z-index:1}
+.panel{position:fixed;top:60px;inset-inline-end:auto;left:20px;width:min(400px,calc(100% - 32px));max-height:70vh;overflow-y:auto;z-index:55;opacity:0;pointer-events:none;transform:translateY(-6px);transition:all .18s var(--ease)}
+.panel.on{opacity:1;pointer-events:auto;transform:none}
+.ni{padding:11px 14px;border-top:1px solid var(--line);font-size:13px;text-align:start;width:100%;display:flex;gap:9px}.ni:hover{background:var(--hover)}.ni.unread{background:var(--accbg)}
+.toasts{position:fixed;bottom:22px;left:22px;z-index:80;display:flex;flex-direction:column;gap:8px;pointer-events:none}
+.toast{background:var(--card2);border:1px solid var(--line2);border-radius:12px;padding:10px 14px;box-shadow:0 12px 30px rgba(0,0,0,.35);font-size:13.5px;max-width:380px;animation:tin .25s var(--ease);display:flex;gap:9px;align-items:flex-start;pointer-events:auto}
+@keyframes tin{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+/* tour */
+.tour{position:fixed;bottom:20px;left:20px;width:min(420px,calc(100% - 32px));z-index:50;padding:16px 18px;border-color:var(--line2);box-shadow:0 24px 60px rgba(0,0,0,.45)}
+.steps{display:flex;gap:4px;margin:8px 0 12px}.steps i{flex:1;height:3px;border-radius:3px;background:var(--line2)}.steps i.on{background:var(--acc)}
+/* skeleton */
+.sk{background:linear-gradient(90deg,var(--card2) 0%,var(--hover) 50%,var(--card2) 100%);background-size:200% 100%;animation:sk 1.2s infinite;border-radius:8px}
+@keyframes sk{from{background-position:200% 0}to{background-position:-200% 0}}
+.empty{padding:28px;text-align:center;color:var(--mute);font-size:13.5px}
+.note{font-size:12px;color:var(--mute)}
+.mock{white-space:nowrap;font-size:11px;font-weight:600;color:var(--y);background:var(--ybg);padding:2px 8px;border-radius:99px}
+/* report (also print) */
+.rep{padding:24px 28px;color:var(--tx)}
+.rep h3{margin:0 0 4px;font-size:20px}.rep h4{margin:18px 0 8px;font-size:14px}
+.rep table{width:100%;border-collapse:collapse;font-size:13px}.rep td,.rep th{padding:7px 4px;border-bottom:1px solid var(--line);text-align:start}
+.rep .rk{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+/* mobile nav */
+.bn{display:none}
+.more-sheet .it{display:flex;gap:10px;align-items:center;padding:12px 14px;border-radius:10px}
+@media (max-width:1100px){.mets{grid-template-columns:repeat(3,1fr)}.g3{grid-template-columns:1fr 1fr}}
+@media (max-width:900px){
+  .sb{display:none}.main{margin:0}.g2,.g3{grid-template-columns:1fr}
+  .kpis{grid-template-columns:repeat(2,1fr)}
+  .tb{padding:10px 14px}.kbd{min-width:0;padding:8px}.kbd span,.kbd kbd{display:none}
+  .view{padding:16px 14px 110px}
+  .bn{display:flex;position:fixed;bottom:0;left:0;right:0;z-index:40;background:color-mix(in srgb,var(--panel) 92%,transparent);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);border-top:1px solid var(--line);padding:6px 6px calc(6px + env(safe-area-inset-bottom))}
+  .bn a,.bn button{flex:1;display:flex;flex-direction:column;align-items:center;gap:2px;font-size:10.5px;color:var(--mute);padding:4px 0;position:relative}
+  .bn .on{color:var(--tx)}
+  .list .hd{display:none}
+  .list .rw{grid-template-columns:1fr auto;gap:6px 10px;padding:12px 14px}
+  .list .c-owner,.list .c-leads,.list .c-spend{display:none}
+  .list .c-cpl{grid-column:2;grid-row:1;text-align:end}
+  .list .iss{grid-column:1/-1}
+  .tour{bottom:76px;left:12px;right:12px;width:auto}
+  .toasts{bottom:84px;left:12px;right:12px}.toast{max-width:none}
+  .panel{left:12px;right:12px;width:auto}
+  .hello h2{font-size:22px}
+  .tb h1{font-size:15px}.tb .mock{display:none}
+  .rep{padding:16px}.rep .rk{grid-template-columns:repeat(2,1fr)}
+  .chat{height:calc(100vh - 200px)}
+  .mets{grid-template-columns:repeat(2,1fr)}
+}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+@media print{
+  body *{visibility:hidden}.printable,.printable *{visibility:visible}
+  .printable{position:absolute;inset:0;background:#fff;color:#111}
+  .printable .no-print{display:none}
+}
+</style>
+</head>
+<body>
+<div id="app"></div>
+<script>/* ClientPulse 2.0 — core: data providers, intelligence engine, investigation, alert lifecycle.
+ * Pure logic, no DOM. Runs in the browser (window.CPCore) and in Node (module.exports) for tests.
+ *
+ * Provider contract (every data source implements it; the engine only sees normalized data):
+ *   provider.id, provider.label, provider.kind ('ads'|'leads'|'crm'), provider.connected, provider.isMock
+ *   provider.listClients()                     -> [{ id, name, industry, owner, goals:{targetCpl, monthlyBudget} }]
+ *   provider.getDays(clientId, fromIdx, toIdx, ctx) -> [{ date:'YYYY-MM-DD', spend, impressions, clicks, leads }]
+ * Day indexes are UTC epoch days (dayIdx('2026-11-08') === 20400).
+ */
+(function (root) {
+  'use strict';
+
+  // ---------------- utils ----------------
+  function mulberry32(a) { return function () { a |= 0; a = a + 0x6D2B79F5 | 0; var t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
+  function poisson(rng, l) {
+    if (l <= 0) return 0;
+    if (l > 30) { var u1 = rng() || 1e-9, u2 = rng(); return Math.max(0, Math.round(l + Math.sqrt(-2 * Math.log(u1)) * Math.cos(2 * Math.PI * u2) * Math.sqrt(l))); }
+    var L = Math.exp(-l), k = 0, p = 1; do { k++; p *= rng(); } while (p > L); return k - 1;
+  }
+  function dayIdx(iso) { var p = iso.split('-'); return Math.round(Date.UTC(+p[0], +p[1] - 1, +p[2]) / 864e5); }
+  function isoOf(idx) { return new Date(idx * 864e5).toISOString().slice(0, 10); }
+  function fmtDay(idx) { var s = isoOf(idx).split('-'); return +s[2] + '.' + +s[1]; }
+  function money(x) { return '₪' + Math.round(x).toLocaleString('en-US'); }
+  function money2(x) { return '₪' + x.toFixed(2); }
+  function pct(x) { return Math.round(x * 100); }
+  function sgn(x) { return (x > 0 ? '+' : '') + pct(x) + '%'; }
+  function r0(x) { return Math.round(x); }
+
+  // ---------------- team ----------------
+  var TEAM = [
+    { id: 'niv', name: 'ניב', role: 'בעלים', approver: true },
+    { id: 'yuval', name: 'יובל', role: 'מנהל תפעול', approver: true },
+    { id: 'dana', name: 'דנה', role: 'מנהלת קמפיינים', approver: false },
+    { id: 'omer', name: 'עומר', role: 'מנהל קמפיינים', approver: false }
+  ];
+
+  // ---------------- Mock provider ----------------
+  var TYPES = ['מרפאת שיניים', 'סטודיו פילאטיס', 'משרד עורכי דין', 'שיווק נדל"ן', 'מכון כושר', 'קבלן שיפוצים', 'משרד רו"ח', 'מטבחים', 'קוסמטיקה', 'גני אירועים', 'סוכנות ביטוח', 'אנרגיה סולארית', 'אופטיקה', 'פיזיותרפיה', 'קורסים אונליין', 'השכרת רכב', 'בית ספר לנהיגה', 'רהיטים', 'מיזוג אוויר', 'מרפאה אסתטית'];
+  var NAMES = ['כהן', 'לוי', 'מזרחי', 'פרץ', 'ביטון', 'אברהם', 'פרידמן', 'אזולאי', 'דהן', 'אוחנה', 'שפירא', 'גבאי', 'חדד', 'רוזן', 'קפלן', 'עמר', 'בן דוד', 'סויסה', 'טל', 'נחום', 'אשכנזי', 'ברק', 'שלום', 'גולן', 'יוסף'];
+  var SCEN = [['healthy', 26], ['cpl_spike', 5], ['no_leads', 4], ['gradual', 5], ['improved', 4], ['low_data', 3], ['multi', 2], ['data_gap', 1]];
+  var CAUSES = ['cvr', 'cpm', 'ctr', 'cvr', 'cpm'];
+
+  function createMockProvider(T0, seed) {
+    var rng = mulberry32(seed), list = [];
+    SCEN.forEach(function (s) { for (var k = 0; k < s[1]; k++) list.push(s[0]); });
+    for (var i = list.length - 1; i > 0; i--) { var j = Math.floor(rng() * (i + 1)); var tmp = list[i]; list[i] = list[j]; list[j] = tmp; }
+    var spikeN = 0, owners = ['dana', 'omer', 'dana', 'omer', 'yuval'];
+    var clients = list.map(function (sc, i) {
+      var cpl, lpd, cpm = 25 + rng() * 35, ctr = 0.008 + rng() * 0.02, s = { start: null };
+      if (sc === 'low_data') { cpl = 120 + rng() * 80; lpd = 0.25 + rng() * 0.15; }
+      else if (sc === 'gradual') { cpl = 40 + rng() * 40; lpd = 40 + rng() * 15; }
+      else if (sc === 'cpl_spike' || sc === 'improved' || sc === 'multi') { cpl = 30 + rng() * 120; lpd = 12 + rng() * 10; }
+      else { cpl = 30 + rng() * 120; lpd = 4 + rng() * 16; }
+      if (sc === 'no_leads' && lpd < 6) lpd = 6;
+      var cvr = cpm / (1000 * ctr * cpl);
+      if (sc === 'cpl_spike') { s.days = 3 + (i % 2); s.start = T0 - s.days + 1; s.mult = 2.3 + rng() * 0.5; s.cause = CAUSES[spikeN++ % CAUSES.length]; }
+      if (sc === 'no_leads') s.start = T0 - (i % 2);
+      if (sc === 'improved') { s.start = T0 - 6; s.mult = 0.58 + rng() * 0.06; }
+      if (sc === 'gradual') s.start = T0 - 20;
+      if (sc === 'multi') s.start = T0 - 6;
+      if (sc === 'data_gap') s.start = T0 - 1;
+      var daily = cpl * lpd;
+      return {
+        id: 'c' + (i + 1), name: TYPES[(i * 7) % TYPES.length] + ' ' + NAMES[(i * 11 + 3) % NAMES.length],
+        industry: TYPES[(i * 7) % TYPES.length], owner: owners[i % owners.length], scenario: sc, scn: s,
+        goals: { targetCpl: Math.round(cpl * (1.1 + rng() * 0.2)), monthlyBudget: Math.round(daily * 30.4 * (1.05 + rng() * 0.15) / 100) * 100 },
+        p: { cpm: cpm, ctr: ctr, cvr: cvr, daily: daily }, seed: (seed * 31 + i * 7919) >>> 0
+      };
+    });
+    var byId = {}; clients.forEach(function (c) { byId[c.id] = c; });
+
+    // op is active on day t if it started and no later 'fix' cut it off
+    function activeFrom(start, t, fixes) {
+      if (start == null || t < start) return false;
+      for (var k = 0; k < fixes.length; k++) if (fixes[k] >= start && fixes[k] <= t) return false;
+      return true;
+    }
+    function genDay(c, t, ops) {
+      var r = mulberry32((c.seed ^ Math.imul(t, 2654435761)) >>> 0);
+      var fixes = ops.filter(function (o) { return o.op === 'fix'; }).map(function (o) { return o.from; });
+      var spM = 1, cpmM = 1, ctrM = 1, cvrM = 1, zero = false, gap = false, s = c.scn;
+      if (activeFrom(s.start, t, fixes)) {
+        var sc = c.scenario;
+        if (sc === 'cpl_spike') { if (s.cause === 'cvr') cvrM /= s.mult; else if (s.cause === 'cpm') cpmM *= s.mult; else ctrM /= s.mult; }
+        if (sc === 'gradual') ctrM /= Math.pow(1.015, Math.min(t - s.start + 1, 35));
+        if (sc === 'improved') cvrM /= s.mult;
+        if (sc === 'multi') { spM *= 1.7; ctrM *= 0.6; if (t >= s.start + 3) cvrM /= 2.1; }
+        if (sc === 'no_leads') zero = true;
+        if (sc === 'data_gap') gap = true;
+      }
+      ops.forEach(function (o) {
+        if (o.op === 'fix' || !activeFrom(o.from, t, fixes)) return;
+        if (o.op === 'cpl') cvrM /= 1 + o.pct / 100;
+        if (o.op === 'cpm') cpmM *= 1 + o.pct / 100;
+        if (o.op === 'ctr') ctrM *= 1 - o.pct / 100;
+        if (o.op === 'improve') cvrM /= 1 - o.pct / 100;
+        if (o.op === 'spend') { spM *= 1 + o.pct / 100; cvrM /= 1 + o.pct / 100; }
+        if (o.op === 'zero_leads') zero = true;
+        if (o.op === 'disconnect') gap = true;
+      });
+      var spend = c.p.daily * spM * (1 + (r() - 0.5) * 0.24);
+      var impr = Math.round(spend / (c.p.cpm * cpmM) * 1000);
+      var clicks = poisson(r, impr * c.p.ctr * ctrM);
+      var leads = poisson(r, clicks * c.p.cvr * cvrM);
+      if (gap) return null;
+      return { date: isoOf(t), spend: Math.round(spend), impressions: impr, clicks: clicks, leads: zero ? 0 : leads };
+    }
+    return {
+      id: 'mock', label: 'נתוני דמו (מדומים)', kind: 'ads', connected: true, isMock: true,
+      listClients: function () { return clients.map(function (c) { return { id: c.id, name: c.name, industry: c.industry, surname: NAMES[(+c.id.slice(1) - 1) * 11 % NAMES.length], owner: c.owner, goals: c.goals, scenario: c.scenario, cause: c.scn.cause || null }; }); },
+      getDays: function (id, from, to, ctx) {
+        var c = byId[id], ops = (ctx && ctx.ops) || [], out = [];
+        for (var t = from; t <= to; t++) { var d = genDay(c, t, ops); if (d) out.push(d); }
+        return out;
+      }
+    };
+  }
+
+  // Connectors that exist as interfaces only. Never reported as connected without verification.
+  var PROVIDERS = [
+    { id: 'mock', name: 'נתוני דמו', kind: 'ads', status: 'connected', note: '50 לקוחות מדומים, 90 ימי היסטוריה' },
+    { id: 'meta_insights', name: 'Meta Ads Insights', kind: 'ads', status: 'not_connected', needs: 'אפליקציית Meta + הרשאת ads_read ואסימון שנשמר בשרת' },
+    { id: 'meta_leads', name: 'Meta Lead Ads', kind: 'leads', status: 'not_connected', needs: 'הרשאת leads_retrieval + Webhook בשרת' },
+    { id: 'google_ads', name: 'Google Ads', kind: 'ads', status: 'not_connected', needs: 'Developer token + OAuth, נשמר בשרת' },
+    { id: 'crm', name: 'CRM (איכות לידים ומכירות)', kind: 'crm', status: 'not_connected', needs: 'API של ה-CRM. בלעדיו אין ניתוח איכות לידים או פער לידים-מכירות' },
+    { id: 'activity', name: 'יומן שינויים בחשבון (Meta Activity Log)', kind: 'ads', status: 'not_connected', needs: 'נדרש כדי לאמת השערות על שינויי קריאייטיב או תקציב' },
+    { id: 'webhooks', name: 'Webhooks', kind: 'out', status: 'not_connected', needs: 'Backend עם נקודת קצה מאומתת' },
+    { id: 'whatsapp', name: 'WhatsApp Business API', kind: 'out', status: 'not_connected', needs: 'חשבון WABA מאומת + תבניות מאושרות' },
+    { id: 'email', name: 'Email', kind: 'out', status: 'not_connected', needs: 'ספק שליחה (SMTP/API) בשרת' },
+    { id: 'ai', name: 'מודל AI (Claude / Gemini)', kind: 'ai', status: 'not_connected', needs: 'מפתח API שנשמר בשרת בלבד. עד אז פועל מנוע כללים' }
+  ];
+
+  // ---------------- Engine ----------------
+  var T = {
+    minMaterialDaily: 60, cplYellow: 0.25, cplRed: 0.5, zYellow: -2.5, zRed: -3,
+    zeroPYellow: 0.05, zeroPRed: 0.01, spendYellow: 0.3, spendRed: 0.6,
+    ctrYellow: 0.25, ctrRed: 0.45, ctrZ: -3, ctrMinClicks: 200,
+    trendSlope: 0.06, trendZ: 2.2, trendMinLeads: 25, trendMinLevel: 0.08,
+    improveCpl: -0.25, improveZ: 3, improveMinLeads: 10, lowDataLeads: 20, goalOver: 0.3
+  };
+  function stats(ds) {
+    var s = { n: ds.length, spend: 0, leads: 0, clicks: 0, impr: 0 };
+    ds.forEach(function (d) { s.spend += d.spend; s.leads += d.leads; s.clicks += d.clicks; s.impr += d.impressions; });
+    s.cpl = s.leads ? s.spend / s.leads : null; s.ctr = s.impr ? s.clicks / s.impr : null;
+    s.cpc = s.clicks ? s.spend / s.clicks : null; s.cpm = s.impr ? s.spend / s.impr * 1000 : null; s.cvr = s.clicks ? s.leads / s.clicks : null;
+    s.dailySpend = s.n ? s.spend / s.n : 0; s.dailyLeads = s.n ? s.leads / s.n : 0; return s;
+  }
+  function win(days, ref, from, to) { return days.filter(function (d) { var a = ref - dayIdx(d.date); return a >= from && a <= to; }); }
+  function conf(absZ) { return absZ >= 4 ? 'גבוהה' : absZ >= 3 ? 'בינונית' : 'נמוכה'; }
+
+  function analyzeClient(c, days, ref) {
+    days = days.slice().sort(function (a, b) { return a.date < b.date ? -1 : 1; });
+    var alerts = [], info = [];
+    var base = stats(win(days, ref, 7, 27)), rec = stats(win(days, ref, 0, 6));
+    var material = rec.dailySpend >= T.minMaterialDaily, lowData = base.leads < T.lowDataLeads;
+    function cap(sev) { return (!material && sev === 'red') ? 'yellow' : sev; }
+    var last = days.length ? dayIdx(days[days.length - 1].date) : null, lag = last == null ? 99 : ref - last;
+    var CMP = '7 הימים האחרונים מול 21 הימים שלפניהם';
+
+    if (lag >= 1) alerts.push({ type: 'data', severity: lag >= 2 ? 'red' : 'yellow', durationDays: lag, confidence: 'גבוהה',
+      period: 'עד ' + fmtDay(ref), title: 'לא התקבלו נתונים ' + (lag === 1 ? 'מאתמול' : lag + ' ימים'),
+      what: 'הנתון האחרון שהתקבל ממקור הנתונים הוא מ-' + (last != null ? fmtDay(last) : '—') + '.',
+      numbers: [['ימים ללא נתונים', '0', String(lag)]],
+      why: 'בלי נתונים אי אפשר לבקר את הלקוח, וכל בעיה אחרת אצלו נשארת בלתי נראית.', immediate: lag >= 2 });
+
+    var baseCpl = base.cpl;
+    if (baseCpl && !lowData) {
+      var best = null;
+      [3, 7].forEach(function (w) {
+        var s = stats(win(days, ref, 0, w - 1)); if (!s.spend) return;
+        var exp = s.spend / baseCpl, z = (s.leads - exp) / Math.sqrt(Math.max(exp + exp * exp / base.leads, 1));
+        var chg = s.leads ? (s.spend / s.leads) / baseCpl - 1 : Infinity;
+        var sev = (chg >= T.cplRed && z <= T.zRed) ? 'red' : (chg >= T.cplYellow && z <= T.zYellow) ? 'yellow' : null;
+        if (sev && (!best || sev === 'red' && best.sev !== 'red')) best = { sev: sev, w: w, s: s, exp: exp, chg: chg, z: z };
+      });
+      if (best) {
+        var sev = cap(best.sev), cur = best.s.leads ? best.s.spend / best.s.leads : null;
+        alerts.push({ type: 'cpl', severity: sev, durationDays: best.w, window: best.w, confidence: conf(-best.z),
+          period: best.w + ' הימים האחרונים מול 21 הימים שלפניהם',
+          title: sev === 'red' ? 'עלות לליד זינקה' : 'עלות לליד עולה',
+          what: 'העלות לליד ב-' + best.w + ' הימים האחרונים היא ' + (cur ? money(cur) : '—') + ', לעומת ' + money(baseCpl) + ' בממוצע לפני כן.',
+          numbers: [['עלות לליד', money(baseCpl), cur ? money(cur) : '—', isFinite(best.chg) ? sgn(best.chg) : ''], ['לידים בתקופה', '~' + r0(best.exp) + ' צפויים', String(best.s.leads)]],
+          why: 'התקבלו ' + best.s.leads + ' לידים לעומת כ-' + r0(best.exp) + ' שהיו צפויים לפי ההוצאה. הסטייה מובהקת סטטיסטית ולא רעש יומי.', immediate: sev === 'red' });
+      }
+    }
+    if (baseCpl && days.length) {
+      var streak = 0, sSpend = 0, sClicks = 0;
+      for (var i = days.length - 1; i >= 0 && days[i].leads === 0 && days[i].spend > 0; i--) { streak++; sSpend += days[i].spend; sClicks += days[i].clicks; }
+      if (streak) {
+        var expL = sSpend / baseCpl, pz = Math.exp(-expL), zs = pz <= T.zeroPRed ? 'red' : pz <= T.zeroPYellow ? 'yellow' : null;
+        if (zs) { zs = cap(zs); alerts.push({ type: 'no_leads', severity: zs, durationDays: streak, confidence: pz < 0.001 ? 'גבוהה' : pz < 0.01 ? 'בינונית' : 'נמוכה',
+          period: streak + ' ימים אחרונים', streakClicks: sClicks, streakSpend: sSpend,
+          title: 'אין לידים ' + (streak === 1 ? 'מאתמול' : 'כבר ' + streak + ' ימים'),
+          what: 'הוצאו ' + money(sSpend) + ' ונרשמו ' + sClicks + ' הקלקות מאז הליד האחרון, אבל לא נכנס אף ליד.',
+          numbers: [['לידים צפויים', '~' + expL.toFixed(1), '0'], ['הוצאה ללא לידים', '', money(sSpend)]],
+          why: 'לפי הביצועים הרגילים, הסיכוי לאפס לידים במקרה הוא ' + (pz < 0.001 ? 'פחות מ-0.1%' : (pz * 100).toFixed(1) + '%') + '.', immediate: zs === 'red' }); }
+      }
+    }
+    if (base.dailySpend && rec.n >= 4 && material) {
+      var sUp = rec.dailySpend / base.dailySpend - 1, lUp = base.dailyLeads ? rec.dailyLeads / base.dailyLeads - 1 : 0;
+      var ss = (sUp >= T.spendRed && lUp <= 0.05) ? 'red' : (sUp >= T.spendYellow && lUp < sUp * 0.5) ? 'yellow' : null;
+      if (ss) alerts.push({ type: 'spend_up', severity: ss, durationDays: 7, confidence: rec.n >= 6 ? 'בינונית' : 'נמוכה', period: CMP,
+        title: 'ההוצאה עלתה בלי תוספת לידים מתאימה',
+        what: 'ההוצאה היומית עלתה ב-' + pct(sUp) + '%, ואילו הלידים ליום השתנו ב-' + sgn(lUp) + '.',
+        numbers: [['הוצאה יומית', money(base.dailySpend), money(rec.dailySpend), sgn(sUp)], ['לידים ליום', base.dailyLeads.toFixed(1), rec.dailyLeads.toFixed(1)]],
+        why: 'התקציב הנוסף לא מייצר תוצאה בהתאם, וזה כסף של הלקוח.', immediate: ss === 'red' });
+    }
+    if (base.ctr && rec.impr && base.clicks >= T.ctrMinClicks) {
+      var expC = rec.impr * base.ctr, zc = (rec.clicks - expC) / Math.sqrt(expC), cd = 1 - rec.ctr / base.ctr;
+      var cs = (cd >= T.ctrRed && zc <= T.ctrZ) ? 'red' : (cd >= T.ctrYellow && zc <= T.ctrZ) ? 'yellow' : null;
+      if (cs) alerts.push({ type: 'ctr', severity: cap(cs), durationDays: 7, confidence: conf(-zc), period: CMP,
+        title: 'ירידה בשיעור ההקלקה', what: 'ה-CTR ירד ב-' + pct(cd) + '% בשבוע האחרון.',
+        numbers: [['CTR', (base.ctr * 100).toFixed(2) + '%', (rec.ctr * 100).toFixed(2) + '%', '-' + pct(cd) + '%']],
+        why: 'ירידה בהקלקות היא סימן מוקדם. היא נוטה להקדים עלייה בעלות לליד.', immediate: false });
+    }
+    var weeks = [[21, 27], [14, 20], [7, 13], [0, 6]].map(function (r) { return stats(win(days, ref, r[0], r[1])); });
+    if (weeks.every(function (w) { return w.leads >= T.trendMinLeads; })) {
+      var ws = weeks.map(function (w) { return w.leads; }), ys = weeks.map(function (w) { return Math.log(w.cpl); });
+      var W = ws.reduce(function (a, b) { return a + b; }), xm = 0, ym = 0;
+      ws.forEach(function (w, k) { xm += w * k / W; ym += w * ys[k] / W; });
+      var sxx = 0, sxy = 0; ws.forEach(function (w, k) { sxx += w * (k - xm) * (k - xm); sxy += w * (k - xm) * (ys[k] - ym); });
+      var slope = sxy / sxx, zt = slope / Math.sqrt(1 / sxx), level = weeks[3].cpl / weeks[0].cpl - 1;
+      if (slope >= T.trendSlope && zt >= T.trendZ && level >= T.trendMinLevel && !alerts.some(function (a) { return a.type === 'cpl'; })) {
+        var wk = Math.exp(slope) - 1;
+        alerts.push({ type: 'trend', severity: 'yellow', durationDays: 21, confidence: zt >= 3.5 ? 'גבוהה' : 'בינונית', period: '4 שבועות אחרונים', early: true,
+          title: 'מגמת הידרדרות הדרגתית',
+          what: 'העלות לליד עולה ברציפות: ' + weeks.map(function (w) { return money(w.cpl); }).join(' ← ') + ' (כ-' + sgn(wk) + ' בשבוע).',
+          numbers: [['עלות לליד לפני 4 שבועות', '', money(weeks[0].cpl)], ['עלות לליד השבוע', '', money(weeks[3].cpl), sgn(level)]],
+          why: 'עוד לא משבר. אבל אם הקצב יימשך, העלות תעלה בעוד כ-' + pct(Math.pow(1 + wk, 2) - 1) + '% תוך שבועיים.', immediate: false });
+      }
+    }
+    if (c.goals && c.goals.targetCpl && rec.cpl && rec.leads >= 10 && rec.cpl > c.goals.targetCpl * (1 + T.goalOver) && !alerts.some(function (a) { return a.type === 'cpl' || a.type === 'trend'; })) {
+      alerts.push({ type: 'goal', severity: 'yellow', durationDays: 7, confidence: 'בינונית', period: '7 ימים אחרונים מול יעד הלקוח',
+        title: 'עלות לליד מעל היעד', what: 'העלות לליד (' + money(rec.cpl) + ') גבוהה ב-' + pct(rec.cpl / c.goals.targetCpl - 1) + '% מהיעד שסוכם (' + money(c.goals.targetCpl) + ').',
+        numbers: [['עלות לליד מול יעד', money(c.goals.targetCpl), money(rec.cpl), sgn(rec.cpl / c.goals.targetCpl - 1)]],
+        why: 'גם בלי שינוי חד, הלקוח לא מקבל את מה שהובטח לו, וזה סיכון לנטישה.', immediate: false });
+    }
+    var improved = null;
+    if (baseCpl && !lowData && rec.leads >= T.improveMinLeads && rec.spend) {
+      var expI = rec.spend / baseCpl, zi = (rec.leads - expI) / Math.sqrt(expI + expI * expI / base.leads), ci = rec.cpl / baseCpl - 1;
+      if (ci <= T.improveCpl && zi >= T.improveZ) improved = { change: ci, confidence: conf(zi), period: CMP,
+        what: 'העלות לליד ירדה ב-' + Math.abs(pct(ci)) + '% (' + money(baseCpl) + ' ← ' + money(rec.cpl) + '). השבוע נכנסו ' + rec.leads + ' לידים, לעומת כ-' + r0(base.dailyLeads * 7) + ' בשבוע רגיל.' };
+    }
+    if (lowData) info.push('מעט נתונים: ' + base.leads + ' לידים ב-3 השבועות שלפני. הספים הורחבו כדי לא להתריע על רעש.');
+
+    var rank = { red: 2, yellow: 1 };
+    var status = alerts.reduce(function (s, a) { return rank[a.severity] > (rank[s] || 0) ? a.severity : s; }, 'green');
+    alerts.forEach(function (a) {
+      a.key = c.id + ':' + a.type;
+      a.priority = (a.severity === 'red' ? 1000 : 100) + Math.log10(1 + rec.spend) * 20 + Math.min(a.durationDays, 14) * 5 + (a.immediate ? 50 : 0);
+    });
+    alerts.sort(function (a, b) { return b.priority - a.priority; });
+    var costly = alerts.some(function (a) { return /cpl|spend_up|no_leads|goal/.test(a.type); });
+    var excess = (costly && baseCpl && !lowData) ? Math.max(0, rec.spend - rec.leads * baseCpl) : 0;
+    return { id: c.id, name: c.name, industry: c.industry, owner: c.owner, goals: c.goals, status: status, improved: improved, lowData: lowData, info: info,
+      alerts: alerts, priority: alerts.length ? alerts[0].priority + 10 * (alerts.length - 1) : (improved ? 50 : 0),
+      base: base, rec: rec, weeks: weeks, excess: excess, lastIdx: last, days: days };
+  }
+
+  function analyzePortfolio(list, ref) {
+    var now = typeof performance !== 'undefined' ? function () { return performance.now(); } : Date.now;
+    var t0 = now();
+    var results = list.map(function (x) { return analyzeClient(x.client, x.days, ref); });
+    results.sort(function (a, b) { return b.priority - a.priority; });
+    var counts = { green: 0, yellow: 0, red: 0, improved: 0 }, excess = 0, spend30 = 0;
+    results.forEach(function (r) {
+      counts[r.status]++; if (r.improved) counts.improved++; excess += r.excess;
+      r.days.forEach(function (d) { if (ref - dayIdx(d.date) < 30) spend30 += d.spend; });
+    });
+    return { results: results, counts: counts, excess: excess, spend30: spend30, ms: now() - t0, ref: ref };
+  }
+
+  // ---------------- Investigation (facts / hypotheses / checks / plan / success) ----------------
+  function investigate(r, a) {
+    var w = a.window || 7, ref = r.lastIdx != null ? r.lastIdx : 0;
+    var cur = stats(r.days.filter(function (d) { var x = (r.lastIdx - dayIdx(d.date)); return x >= 0 && x < w; })), b = r.base;
+    var facts = [], hyp = [], checks = [], plan = [], unknown = [];
+    function f(label, x, y, fmt) { if (x != null && y != null) facts.push({ label: label, before: fmt(x), after: fmt(y), change: x ? y / x - 1 : null }); }
+    var M = money, P2 = function (v) { return (v * 100).toFixed(2) + '%'; }, P1 = function (v) { return (v * 100).toFixed(1) + '%'; };
+    f('הוצאה יומית', b.dailySpend, cur.dailySpend, M); f('לידים ליום', b.dailyLeads, cur.dailyLeads, function (v) { return v.toFixed(1); });
+    f('עלות לליד (CPL)', b.cpl, cur.cpl, M); f('עלות לאלף חשיפות (CPM)', b.cpm, cur.cpm, M); f('שיעור הקלקה (CTR)', b.ctr, cur.ctr, P2);
+    f('עלות להקלקה (CPC)', b.cpc, cur.cpc, money2); f('המרה מקליק לליד', b.cvr, cur.cvr, P1);
+    // CPL = CPM / (1000 * CTR * CVR): split the CPL change into its three drivers (log contributions)
+    var drivers = [];
+    if (b.cpm && cur.cpm && b.ctr && cur.ctr && b.cvr && cur.cvr) {
+      var lc = { cpm: Math.log(cur.cpm / b.cpm), ctr: -Math.log(cur.ctr / b.ctr), cvr: -Math.log(cur.cvr / b.cvr) };
+      var tot = Math.abs(lc.cpm) + Math.abs(lc.ctr) + Math.abs(lc.cvr) || 1;
+      drivers = [['cvr', lc.cvr], ['ctr', lc.ctr], ['cpm', lc.cpm]].map(function (d) { return { k: d[0], v: d[1], share: Math.abs(d[1]) / tot }; }).sort(function (x, y) { return y.v - x.v; });
+    }
+    var expLeadsFromClicks = b.cvr ? cur.clicks * b.cvr : null, zCvr = expLeadsFromClicks ? (cur.leads - expLeadsFromClicks) / Math.sqrt(Math.max(expLeadsFromClicks, 1)) : 0;
+    var expClicks = b.ctr ? cur.impr * b.ctr : null, zCtr = expClicks ? (cur.clicks - expClicks) / Math.sqrt(Math.max(expClicks, 1)) : 0;
+    var cpmUp = b.cpm && cur.cpm ? cur.cpm / b.cpm - 1 : 0;
+    function H(text, evidence, support, share) { hyp.push({ text: text, evidence: evidence, support: support, share: share || 0 }); }
+    var dShare = {}; drivers.forEach(function (d) { dShare[d.k] = d.v > 0 ? d.share : 0; });
+
+    if (a.type === 'data') {
+      H('החיבור למקור הנתונים נותק, פג תוקף ההרשאה או שהחשבון הושהה', 'לא התקבלו נתונים ' + a.durationDays + ' ימים ברציפות.', 'לא ניתן לאמת בלי גישה ל-API של המקור', 1);
+      checks.push('בדוק את סטטוס החיבור והרשאות הגישה של חשבון המודעות', 'בדוק אם הקמפיינים הושהו או אם יש בעיית תשלום');
+      plan.push({ text: 'לחדש את החיבור או את ההרשאה למקור הנתונים', actionType: 'check' });
+    } else if (a.type === 'no_leads') {
+      var clicksOk = b.dailyLeads && a.streakClicks > 0;
+      if (clicksOk) H('הקליקים ממשיכים להגיע, אבל לידים לא נרשמים. זה חשד חזק לתקלה בטופס, בדף הנחיתה או בקליטת הלידים', a.streakClicks + ' הקלקות ו-' + M(a.streakSpend) + ' הוצאה, עם 0 לידים.', 'נתמך בנתונים', 0.9);
+      else H('המודעות כנראה לא מוצגות (אין הקלקות)', 'אפס הקלקות בתקופה.', 'נתמך בנתונים', 0.9);
+      checks.push('שלח ליד בדיקה בטופס ובדוק שהוא מגיע ליעד (CRM, מייל או וובהוק)', 'בדוק שדף הנחיתה נטען בנייד ובמחשב');
+      plan.push({ text: 'לתקן את קליטת הלידים או את דף הנחיתה', actionType: 'check' }, { text: 'אם התקלה לא נמצאת תוך שעות: להשהות את הקמפיין כדי לעצור הוצאה', actionType: 'campaign_change' });
+    } else {
+      if (dShare.cvr > 0.25 && zCvr <= -2) H('פחות הקלקות הופכות ללידים. בעיה אפשרית בדף הנחיתה, בטופס, בהצעה או באיכות התנועה', 'המרה מקליק לליד: ' + P1(b.cvr) + ' ← ' + P1(cur.cvr) + ' (' + Math.round(dShare.cvr * 100) + '% מהשינוי ב-CPL).', 'נתמך בנתונים', dShare.cvr);
+      if (dShare.ctr > 0.25 && zCtr <= -2) H('המודעות מושכות פחות הקלקות. ייתכן שחיקת קריאייטיב או שינוי בקהל', 'CTR: ' + P2(b.ctr) + ' ← ' + P2(cur.ctr) + ' (' + Math.round(dShare.ctr * 100) + '% מהשינוי ב-CPL). אין נתוני שינויי קריאייטיב, כך שהסיבה המדויקת לא אומתה.', 'נתמך חלקית', dShare.ctr);
+      if (dShare.cpm > 0.25 && cpmUp >= 0.2) H('עלות החשיפה עלתה. ייתכן תחרות במכרז, קהל מצומצם או עונתיות', 'CPM: ' + M(b.cpm) + ' ← ' + M(cur.cpm) + ' (' + sgn(cpmUp) + ').', 'נתמך בנתונים', dShare.cpm);
+      if (a.type === 'spend_up') H('התקציב הנוסף הגיע לקהל שממיר פחות (תשואה פוחתת)', 'הוצאה ' + sgn(cur.dailySpend / b.dailySpend - 1) + ', לידים ' + sgn(cur.dailyLeads / b.dailyLeads - 1) + '.', 'נתמך בנתונים', 0.5);
+      if (!hyp.length) H('השינוי מפוזר בין כמה מדדים ואין לו גורם יחיד ברור', 'אף מדד במשפך לא מסביר לבדו את רוב השינוי.', 'לא חד-משמעי', 0.2);
+      hyp.sort(function (x, y) { return y.share - x.share; });
+      var top = hyp[0].text;
+      if (/נחיתה|טופס/.test(top)) { checks.push('שלח ליד בדיקה ובדוק את זמן הטעינה של דף הנחיתה', 'השווה את איכות התנועה לפי מיקום מודעה'); plan.push({ text: 'לתקן או לבצע A/B לדף הנחיתה ולטופס', actionType: 'check' }); }
+      if (/קריאייטיב|הקלקות/.test(top) || hyp.some(function (h) { return /קריאייטיב/.test(h.text); })) { checks.push('בדוק מתי הוחלף הקריאייטיב לאחרונה ומה התדירות (Frequency)'); plan.push({ text: 'להעלות 2–3 קריאייטיבים חדשים ולבחון אותם מול הקיימים', actionType: 'campaign_change' }); }
+      if (/חשיפה/.test(top)) { checks.push('בדוק את גודל הקהל ושינויים בטירגוט'); plan.push({ text: 'להרחיב קהל או לשנות אסטרטגיית הצעת מחיר', actionType: 'campaign_change' }); }
+      if (a.type === 'spend_up') { checks.push('מי העלה את התקציב ומתי'); plan.push({ text: 'להחזיר את התקציב לרמה הקודמת עד שהביצועים יתייצבו', actionType: 'budget_change' }); }
+      if (a.type === 'trend' || a.type === 'goal') plan.push({ text: 'לעדכן את הלקוח על המגמה ועל תוכנית הפעולה', actionType: 'client_message' });
+      if (!plan.length) plan.push({ text: 'לבדוק ידנית את הקמפיינים הפעילים', actionType: 'check' });
+      if (a.type === 'cpl' && a.severity === 'red') plan.push({ text: 'להוריד זמנית את התקציב ב-30% עד שהתקלה תאותר', actionType: 'budget_change' });
+    }
+    unknown.push('שינויים שבוצעו בחשבון (קריאייטיב, טירגוט, תקציב): יומן השינויים לא מחובר');
+    unknown.push('איכות הלידים ושיעור הסגירה: CRM לא מחובר');
+    var target = b.cpl ? b.cpl * 1.15 : null;
+    var success = a.type === 'data' ? { text: 'נתונים מתקבלים שוב באופן יומי', days: 1 } :
+      a.type === 'no_leads' ? { text: 'לידים נכנסים שוב (לפחות ' + Math.max(1, Math.floor(b.dailyLeads * 0.6)) + ' ביום)', days: 2 } :
+      { text: 'עלות לליד חוזרת עד ' + (target ? money(target) : '—') + ' (עד 15% מעל הממוצע) לאורך 3 ימים', days: 3, targetCpl: target };
+    return { facts: facts, drivers: drivers, hypotheses: hyp, checks: checks, plan: plan, unknown: unknown, success: success, engine: 'rules' };
+  }
+
+  // ---------------- Alert lifecycle (dedupe across runs) ----------------
+  function reconcile(run, state, now) {
+    state.alerts = state.alerts || {};
+    var rank = { red: 2, yellow: 1 }, seen = {}, fresh = [];
+    run.results.forEach(function (r) {
+      r.alerts.forEach(function (a) {
+        seen[a.key] = 1; var s = state.alerts[a.key];
+        if (!s || s.status === 'cleared') {
+          state.alerts[a.key] = s = { status: 'open', severity: a.severity, firstDay: run.ref, lastDay: run.ref, firstT: now, maxSeverity: a.severity, type: a.type, clientId: r.id,
+            title: a.title, snapshot: { cpl: r.rec.cpl, leads: r.rec.leads, spend: r.rec.spend }, history: (s ? s.history : []).concat([{ day: run.ref, t: now, a: 'זוהתה: ' + a.title }]), wasYellowFirst: a.severity === 'yellow' };
+          a.lifecycle = 'new'; fresh.push(a.key);
+        } else {
+          if (rank[a.severity] > rank[s.severity]) { s.history.push({ day: run.ref, t: now, a: 'החמירה לאדום' }); a.lifecycle = 'escalated'; if (s.status === 'resolved') s.status = 'open'; fresh.push(a.key); }
+          else a.lifecycle = 'ongoing';
+          s.severity = a.severity; s.lastDay = run.ref; s.title = a.title; if (rank[a.severity] > rank[s.maxSeverity]) s.maxSeverity = a.severity;
+        }
+        a.handling = state.alerts[a.key].status; a.firstDay = state.alerts[a.key].firstDay;
+      });
+    });
+    var cleared = [];
+    Object.keys(state.alerts).forEach(function (k) {
+      var s = state.alerts[k];
+      if (!seen[k] && s.status !== 'cleared') { s.status = 'cleared'; s.clearedDay = run.ref; s.history.push({ day: run.ref, t: now, a: 'נעלמה, המדדים חזרו לטווח התקין' }); cleared.push(k); }
+    });
+    run.newAlerts = fresh; run.cleared = cleared;
+    return state;
+  }
+
+  var API = { mulberry32: mulberry32, dayIdx: dayIdx, isoOf: isoOf, fmtDay: fmtDay, money: money, money2: money2, pct: pct, sgn: sgn, stats: stats,
+    TEAM: TEAM, PROVIDERS: PROVIDERS, THRESHOLDS: T, createMockProvider: createMockProvider,
+    analyzeClient: analyzeClient, analyzePortfolio: analyzePortfolio, investigate: investigate, reconcile: reconcile };
+  if (typeof module !== 'undefined' && module.exports) module.exports = API; else root.CPCore = API;
+})(this);
+</script>
+<script>/* ClientPulse 2.0 — operations layer: state, checks, tasks & approvals, automations, verification,
+ * Ask ClientPulse (data-grounded Q&A), Impact Center, client reports, Demo Lab.
+ * Pure logic over a serializable state object S (persisted by the UI). No DOM.
+ */
+(function (root) {
+  'use strict';
+  var C = (typeof module !== 'undefined' && module.exports) ? require('./core.js') : root.CPCore;
+  var money = C.money, pct = C.pct, sgn = C.sgn, fmtDay = C.fmtDay;
+  var TEAM = C.TEAM, byUser = {}; TEAM.forEach(function (u) { byUser[u.id] = u; });
+
+  var STATUS = { new: 'חדש', in_progress: 'בטיפול', awaiting_approval: 'ממתין לאישור', done: 'בוצע', awaiting_verification: 'ממתין לבדיקת תוצאות', closed: 'נסגר' };
+  var ACTION = { check: 'בדיקה ותיקון', campaign_change: 'שינוי בקמפיין', budget_change: 'שינוי תקציב', client_message: 'הודעה ללקוח' };
+  var RULES = [
+    { id: 'red_task', name: 'לקוח הופך לאדום', then: 'צור משימה לאחראי הלקוח', on: true },
+    { id: 'persist_escalate', name: 'בעיה נמשכת יומיים ויותר', then: 'הסלם למנהלים (התראה פנימית)', on: true },
+    { id: 'improve_draft', name: 'שיפור משמעותי', then: 'הכן טיוטת עדכון ללקוח (לאישור)', on: true },
+    { id: 'daily_summary', name: 'בכל בוקר (בבדיקה הראשונה של היום)', then: 'צור סיכום פעילות', on: true },
+    { id: 'overdue', name: 'משימה לא טופלה בזמן', then: 'שלח התראה פנימית לאחראי ולמנהלים', on: true },
+    { id: 'recheck', name: 'בוצעה פעולה מתקנת', then: 'קבע בדיקה חוזרת אוטומטית לפי מדד ההצלחה', on: true }
+  ];
+
+  function newState(T0) {
+    return { v: 2, T0: T0, offset: 0, ops: {}, alerts: {}, tasks: [], notes: {}, events: [], notifications: [], drafts: [],
+      rules: RULES.reduce(function (o, r) { o[r.id] = r.on; return o; }, {}), user: 'niv', seq: 1, lastRun: null, summaryDay: null,
+      improvedSeen: {}, verifications: [], assumptions: { minPerClient: 4, minPerAlert: 8, workdays: 22 } };
+  }
+  function today(S) { return S.T0 + S.offset; }
+  function uid(S, p) { return p + (S.seq++); }
+  function ev(S, type, text, o) {
+    o = o || {}; S.events.unshift({ id: uid(S, 'e'), day: today(S), t: Date.now(), type: type, text: text, clientId: o.clientId || null, user: o.user || null, ref: o.ref || null });
+    if (S.events.length > 800) S.events.length = 800;
+  }
+  function notify(S, text, o) {
+    o = o || {}; S.notifications.unshift({ id: uid(S, 'n'), day: today(S), t: Date.now(), text: text, kind: o.kind || 'info', route: o.route || null, to: o.to || 'all', read: false });
+    if (S.notifications.length > 200) S.notifications.length = 200;
+  }
+
+  // ---------------- world & checks ----------------
+  function createWorld(T0, seed) {
+    var provider = C.createMockProvider(T0, seed);
+    return { T0: T0, provider: provider, clients: provider.listClients() };
+  }
+  function inputs(world, S, ref) {
+    return world.clients.map(function (c) { return { client: c, days: world.provider.getDays(c.id, ref - 89, ref, { ops: S.ops[c.id] || [] }) }; });
+  }
+  function runCheck(world, S, opts) {
+    opts = opts || {};
+    var ref = today(S), now = Date.now();
+    var run = C.analyzePortfolio(inputs(world, S, ref), ref);
+    run.byId = {}; run.results.forEach(function (r) { run.byId[r.id] = r; });
+    C.reconcile(run, S, now);
+    run.newAlerts.forEach(function (k) { var a = findAlert(run, k), s = S.alerts[k]; ev(S, 'alert', (a.lifecycle === 'escalated' ? 'החמרה: ' : 'זוהתה חריגה: ') + a.title, { clientId: s.clientId, ref: k }); });
+    run.cleared.forEach(function (k) { ev(S, 'cleared', 'החריגה נעלמה: ' + S.alerts[k].title, { clientId: S.alerts[k].clientId, ref: k }); });
+    reopenTasks(run, S);
+    automations(world, run, S);
+    verifyTasks(run, S);
+    run.decisions = [];
+    run.results.forEach(function (r) { r.alerts.forEach(function (a) { if (a.severity === 'red' && a.handling === 'open' && !openTaskFor(S, a.key, true)) run.decisions.push({ client: r, alert: a }); }); });
+    run.decisions.sort(function (x, y) { return y.alert.priority - x.alert.priority; });
+    S.lastRun = { t: now, day: ref, ms: run.ms, n: run.results.length, newA: run.newAlerts.length, alerts: run.results.reduce(function (s, r) { return s + r.alerts.length; }, 0), manual: !!opts.manual };
+    return run;
+  }
+  function findAlert(run, key) { var r = run.byId[key.split(':')[0]]; return r && r.alerts.find(function (a) { return a.key === key; }); }
+
+  // ---------------- tasks ----------------
+  function openTaskFor(S, key, assignedOnly) { return S.tasks.find(function (t) { return t.alertKey === key && t.status !== 'closed'; }); }
+  function createTask(S, run, key, o) {
+    o = o || {};
+    var ex = openTaskFor(S, key); if (ex) return ex;
+    var r = run.byId[key.split(':')[0]], a = findAlert(run, key); if (!r || !a) return null;
+    var inv = C.investigate(r, a);
+    var needs = inv.plan.some(function (p) { return p.actionType !== 'check'; });
+    var t = { id: uid(S, 't'), title: a.title + ' · ' + r.name, clientId: r.id, alertKey: key, severity: a.severity,
+      desc: (inv.hypotheses[0] ? 'השערה מובילה: ' + inv.hypotheses[0].text + '.' : ''), plan: inv.plan, success: inv.success,
+      requiresApproval: needs, approvedBy: null, assignee: o.assignee || r.owner, due: today(S) + (a.severity === 'red' ? 1 : 3),
+      status: 'new', createdBy: o.by || 'auto', createdDay: today(S), history: [], before: { cpl: r.rec.cpl, leads: r.rec.leads, spend: r.rec.spend, dailyLeads: r.rec.dailyLeads } };
+    th(t, S, o.by === 'auto' ? 'אוטומציה' : (byUser[o.by] || {}).name, 'נוצרה משימה' + (o.by === 'auto' ? ' (כלל: לקוח הופך לאדום)' : ''));
+    S.tasks.unshift(t);
+    if (S.alerts[key]) S.alerts[key].history.push({ day: today(S), t: Date.now(), a: 'נפתחה משימה ל' + byUser[t.assignee].name });
+    ev(S, 'task', 'נוצרה משימה: ' + t.title + ' (אחראי: ' + byUser[t.assignee].name + ')', { clientId: r.id, ref: t.id, user: o.by });
+    return t;
+  }
+  function th(t, S, who, a) { t.history.push({ day: today(S), t: Date.now(), who: who || 'מערכת', a: a }); }
+  // returns {ok, msg}
+  function taskAction(S, t, action, userId, extra) {
+    var u = byUser[userId], name = u.name, st = t.status;
+    function go(ns, msg) { t.status = ns; th(t, S, name, msg); ev(S, 'task', msg + ': ' + t.title, { clientId: t.clientId, ref: t.id, user: userId }); return { ok: true, msg: msg }; }
+    if (action === 'start' && st === 'new') return go('in_progress', 'התחיל/ה טיפול');
+    if (action === 'submit' && st === 'in_progress') {
+      if (t.requiresApproval && !t.approvedBy) return go('awaiting_approval', 'הוגש לאישור (הפעולה כוללת ' + t.plan.filter(function (p) { return p.actionType !== 'check'; }).map(function (p) { return ACTION[p.actionType]; }).join(', ') + ')');
+      return markDone(S, t, name, userId);
+    }
+    if (action === 'approve' && st === 'awaiting_approval') {
+      if (!u.approver) return { ok: false, msg: 'רק משתמש מורשה (' + TEAM.filter(function (x) { return x.approver; }).map(function (x) { return x.name; }).join(' / ') + ') יכול לאשר פעולה שמשנה קמפיין, תקציב או שולחת הודעה' };
+      t.approvedBy = userId; th(t, S, name, 'אישר/ה את הפעולה. הביצוע בחשבון המודעות ידני, כי Meta לא מחובר');
+      return markDone(S, t, name, userId);
+    }
+    if (action === 'reject' && st === 'awaiting_approval') {
+      if (!u.approver) return { ok: false, msg: 'אין הרשאה' };
+      return go('in_progress', 'הוחזר לטיפול ללא אישור' + (extra ? ': ' + extra : ''));
+    }
+    if (action === 'reassign' && st !== 'closed') { t.assignee = extra; return go(st, 'הועבר ל' + byUser[extra].name); }
+    if (action === 'request_verify' && st === 'done') { t.recheckDay = today(S) + t.success.days; return go('awaiting_verification', 'נקבעה בדיקה חוזרת ל-' + fmtDay(t.recheckDay)); }
+    if (action === 'reopen' && st === 'closed') return go('in_progress', 'נפתחה מחדש');
+    return { ok: false, msg: 'הפעולה לא זמינה בסטטוס "' + STATUS[st] + '"' };
+  }
+  function markDone(S, t, name, userId) {
+    t.doneDay = today(S); t.status = 'done'; th(t, S, name, 'סומן כבוצע. הבעיה לא נסגרת עד שהמדדים יאשרו');
+    ev(S, 'task', 'בוצע: ' + t.title, { clientId: t.clientId, ref: t.id, user: userId });
+    if (S.rules.recheck) { t.status = 'awaiting_verification'; t.recheckDay = today(S) + t.success.days; th(t, S, 'אוטומציה', 'נקבעה בדיקה חוזרת ל-' + fmtDay(t.recheckDay) + ' (מדד: ' + t.success.text + ')'); }
+    if (S.alerts[t.alertKey]) S.alerts[t.alertKey].status = 'in_progress';
+    return { ok: true, msg: S.rules.recheck ? 'סומן כבוצע. בדיקה חוזרת ב-' + fmtDay(t.recheckDay) : 'סומן כבוצע' };
+  }
+  function evalSuccess(r, t, ref) {
+    var after = r.days.filter(function (d) { var i = C.dayIdx(d.date); return i > t.doneDay && i <= ref; }), s = C.stats(after);
+    var res = { cpl: s.cpl, leads: s.leads, dailyLeads: s.dailyLeads, spend: s.spend, days: after.length };
+    if (t.alertKey.split(':')[1] === 'data') res.ok = r.lastIdx === ref;
+    else if (t.alertKey.split(':')[1] === 'no_leads') res.ok = after.length > 0 && s.leads >= Math.max(1, Math.floor(r.base.dailyLeads * after.length * 0.5));
+    else res.ok = !!(s.cpl && t.success.targetCpl && s.cpl <= t.success.targetCpl && s.leads >= 5);
+    return res;
+  }
+  function verifyTasks(run, S) {
+    S.tasks.forEach(function (t) {
+      if (t.status !== 'awaiting_verification' || today(S) < t.recheckDay) return;
+      var r = run.byId[t.clientId], res = evalSuccess(r, t, today(S));
+      t.verification = { day: today(S), ok: res.ok, before: t.before, after: res };
+      if (res.ok) {
+        t.status = 'closed'; t.closedDay = today(S);
+        th(t, S, 'בדיקה חוזרת', 'אומת בנתונים: ' + t.success.text + (res.cpl ? ' (עלות לליד ' + money(t.before.cpl || 0) + ' ← ' + money(res.cpl) + ')' : '') + '. המשימה נסגרה');
+        if (S.alerts[t.alertKey]) { S.alerts[t.alertKey].status = S.alerts[t.alertKey].status === 'cleared' ? 'cleared' : 'resolved'; S.alerts[t.alertKey].history.push({ day: today(S), t: Date.now(), a: 'נפתרה ואומתה בנתונים' }); }
+        ev(S, 'verified', 'אומת: הבעיה נפתרה · ' + t.title, { clientId: t.clientId, ref: t.id });
+        S.verifications.unshift({ taskId: t.id, title: t.title, clientId: t.clientId, day: today(S), before: t.before, after: res, detectedDay: S.alerts[t.alertKey] ? S.alerts[t.alertKey].firstDay : null });
+      } else {
+        t.status = 'in_progress';
+        th(t, S, 'בדיקה חוזרת', 'הפעולה בוצעה, אבל המדד עדיין לא חזר ליעד (' + (res.cpl ? 'עלות לליד ' + money(res.cpl) : res.leads + ' לידים') + '). נדרשת פעולה נוספת');
+        ev(S, 'verify_failed', 'בדיקה חוזרת נכשלה: ' + t.title, { clientId: t.clientId, ref: t.id });
+        notify(S, 'בדיקה חוזרת: הבעיה עדיין קיימת · ' + t.title, { kind: 'warn', route: 'tasks' });
+      }
+    });
+  }
+  function reopenTasks(run, S) {
+    run.newAlerts.forEach(function (k) {
+      var t = S.tasks.find(function (x) { return x.alertKey === k && x.status === 'closed' && today(S) - (x.closedDay || 0) <= 21; });
+      if (t && !openTaskFor(S, k)) { t.status = 'new'; t.approvedBy = null; th(t, S, 'מערכת', 'נפתחה מחדש: הבעיה חזרה'); ev(S, 'task', 'משימה נפתחה מחדש, הבעיה חזרה: ' + t.title, { clientId: t.clientId, ref: t.id }); }
+    });
+  }
+
+  // ---------------- automations (local, real, on demo data) ----------------
+  function automations(world, run, S) {
+    var d = today(S), log = function (rule, text, o) { ev(S, 'automation', '[' + rule + '] ' + text, o); };
+    if (S.rules.red_task) run.results.forEach(function (r) {
+      r.alerts.forEach(function (a) {
+        if (a.severity === 'red' && (a.lifecycle === 'new' || a.lifecycle === 'escalated') && !openTaskFor(S, a.key)) {
+          var t = createTask(S, run, a.key, { by: 'auto' }); if (t) log('לקוח אדום', 'נוצרה משימה ל' + byUser[t.assignee].name + ': ' + t.title, { clientId: r.id, ref: t.id });
+        }
+      });
+    });
+    if (S.rules.persist_escalate) Object.keys(S.alerts).forEach(function (k) {
+      var s = S.alerts[k];
+      if (s.status !== 'cleared' && s.status !== 'resolved' && d - s.firstDay >= 2 && !s.escalated) {
+        s.escalated = d; var cl = run.byId[s.clientId];
+        notify(S, 'הסלמה: "' + s.title + '" אצל ' + cl.name + ' נמשכת ' + (d - s.firstDay) + ' ימים', { kind: 'escalation', route: 'client-' + s.clientId, to: 'approvers' });
+        log('הסלמה', s.title + ' · ' + cl.name + ' (' + (d - s.firstDay) + ' ימים)', { clientId: s.clientId, ref: k });
+      }
+    });
+    if (S.rules.improve_draft) run.results.forEach(function (r) {
+      if (r.improved && !(S.improvedSeen[r.id] && d - S.improvedSeen[r.id] < 14)) {
+        S.improvedSeen[r.id] = d;
+        var txt = 'היי, עדכון קצר על הקמפיינים: ב-7 הימים האחרונים העלות לליד ירדה ב-' + Math.abs(pct(r.improved.change)) + '% (' + money(r.base.cpl) + ' ← ' + money(r.rec.cpl) + ') ונכנסו ' + r.rec.leads + ' לידים. נמשיך לעקוב ונעדכן.';
+        S.drafts.unshift({ id: uid(S, 'd'), clientId: r.id, day: d, text: txt, status: 'draft', channel: 'WhatsApp' });
+        notify(S, 'טיוטת עדכון ללקוח מוכנה: ' + r.name + ' (שיפור)', { kind: 'success', route: 'client-' + r.id });
+        log('שיפור', 'הוכנה טיוטת עדכון ל' + r.name, { clientId: r.id });
+      }
+    });
+    if (S.rules.daily_summary && S.summaryDay !== d) {
+      S.summaryDay = d; notify(S, summaryText(run, S).plain, { kind: 'summary', route: 'home' }); log('סיכום בוקר', 'נוצר סיכום פעילות ל-' + fmtDay(d));
+    }
+    if (S.rules.overdue) S.tasks.forEach(function (t) {
+      if ((t.status === 'new' || t.status === 'in_progress' || t.status === 'awaiting_approval') && t.due < d && t.overdueNotified !== d) {
+        t.overdueNotified = d; t.overdue = true;
+        notify(S, 'משימה באיחור (' + (d - t.due) + ' ימים): ' + t.title + ' · ' + byUser[t.assignee].name, { kind: 'warn', route: 'tasks', to: 'all' });
+        log('איחור', t.title + ' · ' + byUser[t.assignee].name, { clientId: t.clientId, ref: t.id });
+      }
+    });
+  }
+
+  // ---------------- summary ----------------
+  function summaryText(run, S) {
+    var c = run.counts, red = run.results.filter(function (r) { return r.status === 'red'; });
+    var trend = run.results.filter(function (r) { return r.alerts.some(function (a) { return a.type === 'trend'; }); });
+    var imp = run.results.filter(function (r) { return r.improved; }).sort(function (a, b) { return a.improved.change - b.improved.change; });
+    var top = topActions(run, S, 3);
+    var parts = [{ t: 'נמצאו ' }, { t: red.length + ' לקוחות שדורשים טיפול', route: 'clients-red' }, { t: ', ' },
+      { t: trend.length + ' לקוחות במגמת הידרדרות מתמשכת', route: 'clients-yellow' }, { t: ' ו-' }, { t: imp.length + ' לקוחות שהשתפרו משמעותית', route: 'clients-improved' }, { t: '.' }];
+    if (run.excess > 0) parts.push({ t: ' ההוצאה העודפת המשוערת מחריגות בשבוע האחרון: ' + money(run.excess) + '.' });
+    var plain = parts.map(function (p) { return p.t; }).join('') + (top.length ? ' שלוש הפעולות החשובות להיום: ' + top.map(function (x, i) { return (i + 1) + '. ' + x.text; }).join(' ') : '');
+    return { parts: parts, top: top, plain: plain };
+  }
+  function topActions(run, S, n) {
+    var out = [];
+    run.results.forEach(function (r) { r.alerts.forEach(function (a) {
+      if (a.handling === 'resolved') return;
+      var t = openTaskFor(S, a.key), base = a.priority + (t && t.overdue ? 300 : 0);
+      var text = t ? (t.status === 'awaiting_approval' ? 'לאשר: ' : t.overdue ? 'משימה באיחור: ' : t.status === 'new' ? 'טרם התחיל טיפול: ' : t.status === 'awaiting_verification' ? 'ממתין לבדיקה חוזרת: ' : 'בטיפול: ') + a.title + ' · ' + r.name : 'לפתוח משימה: ' + a.title + ' · ' + r.name;
+      if (t && t.status === 'awaiting_approval') base += 400; if (t && t.status === 'awaiting_verification') base -= 600; if (t && t.status === 'in_progress') base -= 200;
+      out.push({ text: text, route: t ? 'task-' + t.id : 'client-' + r.id, score: base, severity: a.severity, clientId: r.id });
+    }); });
+    return out.sort(function (a, b) { return b.score - a.score; }).slice(0, n);
+  }
+
+  // ---------------- Ask ClientPulse (rules + data; no external AI) ----------------
+  function matchClient(q, run) {
+    var best = null, bs = 0;
+    run.results.forEach(function (r) {
+      var sur = r.name.slice(r.industry.length + 1); if (q.indexOf(sur) < 0) return;
+      var sc = sur.length * 2; r.industry.split(' ').forEach(function (w) { if (w.length > 2 && q.indexOf(w) >= 0) sc += w.length; });
+      if (sc > bs) { bs = sc; best = r; } });
+    return best;
+  }
+  function ask(q, run, S) {
+    q = (q || '').trim(); var out = { text: '', evidence: [], links: [], intent: 'unknown' };
+    var cl = matchClient(q, run);
+    function link(l, r) { out.links.push({ label: l, route: r }); }
+    if (/למה|מדוע|סיבה/.test(q) && cl) {
+      out.intent = 'why'; var a = cl.alerts[0];
+      if (!a) { out.text = 'אצל ' + cl.name + ' לא זוהתה כרגע חריגה. העלות לליד ב-7 הימים האחרונים היא ' + (cl.rec.cpl ? money(cl.rec.cpl) : '—') + ' לעומת ' + (cl.base.cpl ? money(cl.base.cpl) : '—') + ' קודם.'; }
+      else { var inv = C.investigate(cl, a);
+        out.text = cl.name + ': ' + a.what + ' ההסבר שהנתונים תומכים בו ביותר: ' + inv.hypotheses[0].text + ' (' + inv.hypotheses[0].support + ').';
+        out.evidence = inv.facts.filter(function (f) { return f.change != null && Math.abs(f.change) >= 0.1; }).map(function (f) { return f.label + ': ' + f.before + ' ← ' + f.after + ' (' + sgn(f.change) + ')'; });
+        out.evidence.push('לא נבדק: ' + inv.unknown[0]); }
+      link('פתח את תיק הלקוח', 'client-' + cl.id); return out;
+    }
+    if (/דחו|הכי חשוב|בעיות|עדיפות/.test(q)) {
+      out.intent = 'urgent'; var top = topActions(run, S, 3);
+      out.text = top.length ? 'שלוש הבעיות הדחופות כרגע, לפי חומרה, תקציב, משך ומצב טיפול:' : 'אין כרגע בעיות פתוחות.';
+      top.forEach(function (x, i) { var r = run.byId[x.clientId]; out.evidence.push((i + 1) + '. ' + x.text + ' (עלות לליד 7 ימים: ' + (r.rec.cpl ? money(r.rec.cpl) : '—') + ', הוצאה: ' + money(r.rec.spend) + ')'); link(r.name, x.route); });
+      return out;
+    }
+    if (/הידרדר|החמיר|הכי גרוע/.test(q)) {
+      out.intent = 'worst';
+      var c = run.results.filter(function (r) { return !r.lowData && r.weeks[2].cpl && r.weeks[3].cpl; })
+        .map(function (r) { return { r: r, ch: r.weeks[3].cpl / r.weeks[2].cpl - 1 }; }).sort(function (a, b) { return b.ch - a.ch; }).slice(0, 3);
+      out.text = 'הלקוח שהידרדר הכי הרבה השבוע: ' + c[0].r.name + '. העלות לליד שלו עלתה ב-' + pct(c[0].ch) + '% לעומת השבוע הקודם.';
+      c.forEach(function (x) { out.evidence.push(x.r.name + ': ' + money(x.r.weeks[2].cpl) + ' ← ' + money(x.r.weeks[3].cpl) + ' (' + sgn(x.ch) + ')'); link(x.r.name, 'client-' + x.r.id); });
+      out.evidence.push('השוואה: 7 ימים אחרונים מול 7 הימים שלפניהם, ללקוחות עם מספיק נתונים'); return out;
+    }
+    if (/עובד|משימ|לא טיפל|מי /.test(q)) {
+      out.intent = 'team';
+      var open = S.tasks.filter(function (t) { return t.status !== 'closed'; });
+      if (!open.length) { out.text = 'אין משימות פתוחות.'; return out; }
+      var g = {}; open.forEach(function (t) { (g[t.assignee] = g[t.assignee] || []).push(t); });
+      var late = open.filter(function (t) { return t.due < today(S) && /new|in_progress|awaiting_approval/.test(t.status); });
+      out.text = late.length ? late.length + ' משימות באיחור. ' + late.map(function (t) { return byUser[t.assignee].name; }).filter(function (v, i, a) { return a.indexOf(v) === i; }).join(', ') + ' עדיין לא סגרו משימות שמועד היעד שלהן עבר.' : 'אין משימות באיחור. מצב המשימות הפתוחות לפי אחראי:';
+      Object.keys(g).forEach(function (u) { var ts = g[u]; out.evidence.push(byUser[u].name + ': ' + ts.length + ' פתוחות (' + ts.filter(function (t) { return t.status === 'new'; }).length + ' לא התחילו, ' + ts.filter(function (t) { return t.due < today(S) && /new|in_progress|awaiting_approval/.test(t.status); }).length + ' באיחור)'); });
+      link('מרכז המשימות', 'tasks'); return out;
+    }
+    if (/השתפר|שיפור|הצלח/.test(q)) {
+      out.intent = 'improved'; var imp = run.results.filter(function (r) { return r.improved; });
+      out.text = imp.length ? imp.length + ' לקוחות השתפרו משמעותית ב-7 הימים האחרונים:' : 'לא זוהו כרגע לקוחות עם שיפור מובהק.';
+      imp.forEach(function (r) { out.evidence.push(r.name + ': עלות לליד ' + money(r.base.cpl) + ' ← ' + money(r.rec.cpl) + ' (' + sgn(r.improved.change) + '), ' + r.rec.leads + ' לידים'); link(r.name, 'client-' + r.id); });
+      return out;
+    }
+    if (/סיכום|למנהל|דוח מנהל/.test(q)) {
+      out.intent = 'summary'; var s = summaryText(run, S);
+      out.text = s.plain; out.evidence = ['תקינים ' + run.counts.green + ', במעקב ' + run.counts.yellow + ', דחוף ' + run.counts.red, 'תקציב מנוהל (30 יום): ' + money(run.spend30), 'משימות פתוחות: ' + S.tasks.filter(function (t) { return t.status !== 'closed'; }).length];
+      link('מרכז הפיקוד', 'home'); return out;
+    }
+    if (/תקציב|הוצא/.test(q)) {
+      out.intent = 'budget'; out.text = 'בשלושים הימים האחרונים הוצאו ' + money(run.spend30) + ' על כל הלקוחות. ההוצאה העודפת המשוערת מחריגות בשבוע האחרון היא ' + money(run.excess) + '.';
+      out.evidence = ['הוצאה עודפת = הוצאת 7 ימים פחות (לידים × עלות לליד היסטורית), רק ללקוחות עם חריגת עלות'];
+      run.results.filter(function (r) { return r.excess > 0; }).sort(function (a, b) { return b.excess - a.excess; }).slice(0, 3).forEach(function (r) { out.evidence.push(r.name + ': ' + money(r.excess)); link(r.name, 'client-' + r.id); });
+      return out;
+    }
+    if (cl) {
+      out.intent = 'client'; out.text = cl.name + ': ' + ({ green: 'תקין', yellow: 'במעקב', red: 'דחוף' })[cl.status] + (cl.alerts.length ? '. ' + cl.alerts.map(function (a) { return a.title; }).join('; ') : '') + '.';
+      out.evidence = ['עלות לליד 7 ימים: ' + (cl.rec.cpl ? money(cl.rec.cpl) : '—') + ' (קודם ' + (cl.base.cpl ? money(cl.base.cpl) : '—') + ')', 'לידים 7 ימים: ' + cl.rec.leads, 'אחראי: ' + byUser[cl.owner].name];
+      link('פתח את תיק הלקוח', 'client-' + cl.id); return out;
+    }
+    out.text = 'לא זיהיתי את השאלה. אני עונה רק מתוך נתוני המערכת, ויודע לענות על: הבעיות הדחופות, מי הידרדר, למה (שם לקוח) התייקר, מצב משימות לפי עובד, מי השתפר, סיכום למנהל, תקציב, או מצב של לקוח לפי שם.';
+    return out;
+  }
+
+  // ---------------- Impact Center ----------------
+  function impact(run, S) {
+    var keys = Object.keys(S.alerts), closed = S.verifications || [];
+    var handled = S.tasks.filter(function (t) { return t.history.some(function (h) { return /התחיל|הוגש|בוצע/.test(h.a); }); });
+    var tth = handled.map(function (t) { var s = S.alerts[t.alertKey], h = t.history.find(function (x) { return /התחיל|הוגש|בוצע/.test(x.a); }); return s ? (h.t - s.firstT) / 60000 : null; }).filter(function (x) { return x != null; });
+    var early = keys.filter(function (k) { var s = S.alerts[k]; return s.wasYellowFirst && s.maxSeverity === 'yellow'; }).length;
+    var events = closed.map(function (v) {
+      var b = v.before, a = v.after, est = (b.cpl && a.cpl && a.cpl < b.cpl) ? (b.cpl - a.cpl) * (a.dailyLeads || 0) * 7 : null;
+      return { v: v, before: b, after: a, estWeekly: est };
+    });
+    var A = S.assumptions, alertsN = keys.length;
+    var manual = A.minPerClient * run.results.length * A.workdays, withSys = A.minPerAlert * alertsN;
+    return { detected: alertsN, tasks: S.tasks.length, handled: handled.length, verified: closed.length,
+      avgMinToHandle: tth.length ? tth.reduce(function (a, b) { return a + b; }, 0) / tth.length : null, early: early, events: events,
+      avoidedWeekly: events.reduce(function (s, e) { return s + (e.estWeekly || 0); }, 0),
+      time: { manualMin: manual, sysMin: withSys, savedHours: Math.max(0, (manual - withSys) / 60) } };
+  }
+
+  // ---------------- Client report ----------------
+  function report(run, S, clientId, days) {
+    var r = run.byId[clientId], ref = run.ref, cur = [], prev = [];
+    r.days.forEach(function (d) { var a = ref - C.dayIdx(d.date); if (a < days) cur.push(d); else if (a < days * 2) prev.push(d); });
+    var sc = C.stats(cur), sp = C.stats(prev), weeks = [];
+    for (var w = Math.ceil(days / 7) - 1; w >= 0; w--) { var ds = cur.filter(function (d) { var a = ref - C.dayIdx(d.date); return a >= w * 7 && a < w * 7 + 7; }); if (ds.length) weeks.push({ from: C.dayIdx(ds[0].date), to: C.dayIdx(ds[ds.length - 1].date), s: C.stats(ds) }); }
+    var acts = S.events.filter(function (e) { return e.clientId === clientId && ref - e.day < days && /task|verified|automation/.test(e.type); }).slice(0, 12);
+    var resolved = S.tasks.filter(function (t) { return t.clientId === clientId && t.status === 'closed' && t.verification && t.verification.ok; });
+    var open = r.alerts.filter(function (a) { return a.handling !== 'resolved'; });
+    var plan = open.length ? open.map(function (a) { return C.investigate(r, a).plan[0].text; }) : ['שימור הביצועים הנוכחיים ובדיקת הזדמנויות להגדלת תקציב'];
+    if (r.improved) plan.push('לבחון הגדלת תקציב הדרגתית כל עוד העלות לליד יציבה');
+    return { client: r, period: { from: ref - days + 1, to: ref, days: days }, cur: sc, prev: sp, weeks: weeks, actions: acts, resolved: resolved, open: open, plan: plan, isMock: true };
+  }
+
+  // ---------------- Demo Lab ----------------
+  var SCENARIOS = [
+    { id: 'cpl', name: 'עלות לליד מזנקת', desc: 'ההמרה מקליק לליד צונחת ב-3 הימים האחרונים', op: { op: 'cpl', pct: 140 }, back: 2 },
+    { id: 'zero_leads', name: 'קמפיין מפסיק להביא לידים', desc: 'יומיים בלי לידים, למרות שיש הקלקות', op: { op: 'zero_leads' }, back: 1 },
+    { id: 'spend', name: 'הוצאות עולות בלי שיפור', desc: 'תקציב +70% בשבוע, אותה כמות לידים', op: { op: 'spend', pct: 70 }, back: 6 },
+    { id: 'disconnect', name: 'חיבור הנתונים מתנתק', desc: 'יומיים בלי נתונים מהמקור', op: { op: 'disconnect' }, back: 1 },
+    { id: 'ignored', name: 'עובד לא מטפל במשימה דחופה', desc: 'משימה אדומה עוברת את מועד היעד. היום מתקדם ביום', special: true },
+    { id: 'improve', name: 'ביצועי לקוח משתפרים', desc: 'ההמרה משתפרת ב-45% בשבוע האחרון', op: { op: 'improve', pct: 45 }, back: 6 }
+  ];
+  function applyScenario(S, clientId, sid) {
+    var s = SCENARIOS.find(function (x) { return x.id === sid; }), d = today(S);
+    var o = Object.assign({}, s.op, { from: d - s.back, sid: sid });
+    S.ops[clientId] = (S.ops[clientId] || []).concat([o]);
+    ev(S, 'lab', 'Demo Lab · הופעל תרחיש "' + s.name + '" (שינוי בנתוני הדמו)', { clientId: clientId });
+  }
+  function simulateFix(S, t) {
+    S.ops[t.clientId] = (S.ops[t.clientId] || []).concat([{ op: 'fix', from: today(S) + 1 }]);
+    th(t, S, 'Demo Lab', 'סימולציה: השפעת התיקון הוחלה על נתוני הדמו מ-' + fmtDay(today(S) + 1));
+    ev(S, 'lab', 'סימולציה: הוחלה השפעת תיקון על נתוני הלקוח', { clientId: t.clientId, ref: t.id });
+  }
+  function advanceDays(S, n) { S.offset += n; ev(S, 'lab', 'שעון הדמו התקדם ב-' + n + (n === 1 ? ' יום' : ' ימים') + ' ל-' + fmtDay(today(S))); }
+  function pickDemoClient(run, S) {
+    var used = {}; Object.keys(S.ops).forEach(function (k) { used[k] = 1; });
+    return run.results.filter(function (r) { return r.status === 'green' && !r.improved && !r.lowData && !used[r.id] && r.rec.dailySpend > 200; })
+      .sort(function (a, b) { return b.base.leads - a.base.leads; })[0] || run.results.find(function (r) { return r.status === 'green'; });
+  }
+
+  var API = { STATUS: STATUS, ACTION: ACTION, RULES: RULES, SCENARIOS: SCENARIOS, TEAM: TEAM, byUser: byUser,
+    newState: newState, today: today, createWorld: createWorld, runCheck: runCheck, findAlert: findAlert, openTaskFor: openTaskFor,
+    createTask: createTask, taskAction: taskAction, summaryText: summaryText, topActions: topActions, ask: ask, impact: impact, report: report,
+    applyScenario: applyScenario, simulateFix: simulateFix, advanceDays: advanceDays, pickDemoClient: pickDemoClient, ev: ev, notify: notify };
+  if (typeof module !== 'undefined' && module.exports) module.exports = API; else root.CPOps = API;
+})(this);
+</script>
+<script>/* ClientPulse 2.0 — UI layer (vanilla JS, no build deps). Reads/writes state only through CPOps. */
+(function () {
+  'use strict';
+  const C = window.CPCore, O = window.CPOps;
+  const KEY = 'clientpulse.v2', SEED = 206;
+  const T0 = (() => { const d = new Date(); d.setDate(d.getDate() - 1); return Math.round(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()) / 864e5); })();
+  const IN_FRAME = (() => { try { return window.self !== window.top; } catch (e) { return true; } })();
+  let S = load(), world = O.createWorld(S.T0, SEED), run = null;
+  const U = { filter: 'all', q: '', period: 30, metric: 'cpl', taskTab: 'open', chat: [], tour: null, hl: null, pal: false, palQ: '', palI: 0, notif: false, report: null, more: false, exp: false };
+  const CH = {};
+  const SL = { green: 'תקין', yellow: 'במעקב', red: 'דחוף' }, ST = O.STATUS, byU = O.byUser;
+  const money = C.money, fmtDay = C.fmtDay, pct = C.pct;
+
+  function load() { try { const s = JSON.parse(localStorage.getItem(KEY)); if (s && s.v === 2) return s; } catch (e) {} const s = O.newState(T0); s.theme = 'dark'; return s; }
+  function save() { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) {} }
+  const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  const N = x => `<bdi>${esc(x)}</bdi>`;
+  const me = () => byU[S.user];
+  const hhmm = t => new Date(t).toLocaleTimeString('he-IL', { hour: '2-digit', minute: '2-digit' });
+  const chg = (a, b, inv) => { if (a == null || b == null || !b) return ''; const x = a / b - 1; const bad = inv ? x < -0.05 : x > 0.05, good = inv ? x > 0.05 : x < -0.05; return `<span class="chg ${bad ? 'up' : good ? 'down' : 'muted'}">${N((x > 0 ? '+' : '') + Math.round(x * 100) + '%')}</span>`; };
+  const av = id => `<span class="av" title="${esc(byU[id].name)}">${esc(byU[id].name[0])}</span>`;
+
+  const I = {
+    home: '<path d="M3 10.5 12 3l9 7.5V20a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/>', users: '<circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c.8-3.5 3.4-5.5 6.5-5.5s5.7 2 6.5 5.5"/><path d="M16 4.5a3.5 3.5 0 0 1 0 7M18.5 14.8c1.6.8 2.6 2.6 3 5.2"/>',
+    check: '<rect x="3.5" y="3.5" width="17" height="17" rx="4"/><path d="m8 12 3 3 5-6"/>', chat: '<path d="M4 5h16v11H9l-5 4z"/>', zap: '<path d="M13 2 4 14h7l-1 8 9-12h-7z"/>',
+    chart: '<path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/>', flask: '<path d="M9 3h6M10 3v6L4.5 19a1.5 1.5 0 0 0 1.3 2h12.4a1.5 1.5 0 0 0 1.3-2L14 9V3"/><path d="M7 15h10"/>',
+    plug: '<path d="M9 2v5M15 2v5M6 7h12v4a6 6 0 0 1-12 0zM12 17v5"/>', search: '<circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/>', bell: '<path d="M6 16V11a6 6 0 0 1 12 0v5l2 2H4z"/><path d="M10 21h4"/>',
+    sun: '<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2M5 5l1.5 1.5M17.5 17.5 19 19M5 19l1.5-1.5M17.5 6.5 19 5"/>', moon: '<path d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z"/>',
+    more: '<circle cx="5" cy="12" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="19" cy="12" r="1.5"/>', play: '<path d="M7 4v16l13-8z"/>', back: '<path d="m9 6 6 6-6 6"/>', x: '<path d="M6 6l12 12M18 6 6 18"/>', report: '<path d="M6 3h9l4 4v14H6z"/><path d="M14 3v5h5M9 13h6M9 17h6"/>'
+  };
+  const ic = (n, s) => `<svg class="ic" viewBox="0 0 24 24" ${s ? `style="width:${s}px;height:${s}px"` : ''}>${I[n]}</svg>`;
+  const NAV = [['home', 'מרכז פיקוד', 'home'], ['clients', 'לקוחות', 'users'], ['tasks', 'משימות ואישורים', 'check'], ['ask', 'Ask ClientPulse', 'chat'], ['automations', 'אוטומציות', 'zap'], ['impact', 'Impact Center', 'chart'], ['lab', 'Demo Lab', 'flask'], ['integrations', 'חיבורים', 'plug']];
+  const TITLE = { home: 'מרכז פיקוד', clients: 'לקוחות', tasks: 'משימות ואישורים', ask: 'Ask ClientPulse', automations: 'מרכז אוטומציות', impact: 'Impact Center · הוכחת ערך', lab: 'Demo Lab', integrations: 'חיבורים וארכיטקטורה', client: 'תיק לקוח' };
+
+  // ---------------- shell ----------------
+  function shell() {
+    document.getElementById('app').innerHTML = `
+    <aside class="sb">
+      <div class="brand"><div class="logo"><i></i></div><div>ClientPulse<small>Agency Command Center</small></div></div>
+      <nav class="nav" id="nav"></nav>
+      <div class="sbfoot">
+        <div class="clock"><div class="row2"><div style="flex:1"><div class="l">יום הדמו</div><div class="v" id="clockV"></div></div><button class="btn sec sm" data-act="advance" data-arg="1" title="קדם את שעון הדמו ביום">+1 יום</button></div></div>
+        <select class="sel" id="userSel" aria-label="משתמש פעיל">${O.TEAM.map(u => `<option value="${u.id}">${esc(u.name)} · ${esc(u.role)}</option>`).join('')}</select>
+        <div class="row2"><button class="btn sec sm" style="flex:1" data-act="theme" id="themeBtn"></button><button class="btn sec sm" style="flex:1" data-act="reset">איפוס דמו</button></div>
+      </div>
+    </aside>
+    <div class="main">
+      <header class="tb"><h1 id="ttl"></h1><span class="mock">נתוני דמו</span><div class="sp"></div>
+        <button class="kbd" data-act="palette">${ic('search', 15)}<span>חיפוש לקוח או פעולה</span><kbd>⌘K</kbd></button>
+        <button class="btn pri sm" data-act="check" id="runBtn">הרץ בדיקה</button>
+        <button class="iconbtn" data-act="notif" aria-label="התראות">${ic('bell')}<span id="bellC"></span></button>
+      </header>
+      <main class="view" id="view"></main>
+    </div>
+    <nav class="bn" id="bn"></nav>
+    <div class="ov" id="palOv"><div class="pal" role="dialog"><input id="palIn" placeholder="חפש לקוח, מסך או פעולה…" autocomplete="off"><div class="res" id="palRes"></div></div></div>
+    <div class="ov" id="modalOv"><div class="modal" id="modal" role="dialog"></div></div>
+    <div class="card panel" id="notifP"></div>
+    <div id="tourBox"></div>
+    <div class="toasts" id="toasts"></div>`;
+    document.getElementById('userSel').addEventListener('change', e => { S.user = e.target.value; save(); toast('משתמש פעיל: ' + me().name + ' (' + me().role + ')'); render(); });
+    document.getElementById('palIn').addEventListener('input', e => { U.palQ = e.target.value; U.palI = 0; renderPal(); });
+  }
+  function chrome() {
+    const r = route(), counts = run ? run.counts : null, openT = S.tasks.filter(t => t.status !== 'closed').length, appr = S.tasks.filter(t => t.status === 'awaiting_approval').length;
+    document.getElementById('nav').innerHTML = NAV.map((n, i) => `${i === 4 ? '<div class="sep"></div>' : ''}<a href="#${n[0]}" class="${r.v === n[0] || (r.v === 'client' && n[0] === 'clients') ? 'on' : ''}">${ic(n[2])}${n[1]}${n[0] === 'clients' && counts && counts.red ? `<span class="ct">${counts.red}</span>` : ''}${n[0] === 'tasks' && appr ? `<span class="ct">${appr}</span>` : ''}</a>`).join('');
+    document.getElementById('bn').innerHTML = [['home', 'בית', 'home'], ['clients', 'לקוחות', 'users'], ['tasks', 'משימות', 'check'], ['ask', 'שאל', 'chat']].map(n => `<a href="#${n[0]}" class="${r.v === n[0] ? 'on' : ''}">${ic(n[2], 20)}${n[1]}</a>`).join('') + `<button data-act="more">${ic('more', 20)}עוד</button>`;
+    document.getElementById('ttl').textContent = r.v === 'client' && run && run.byId[r.id] ? run.byId[r.id].name : TITLE[r.v] || '';
+    document.getElementById('clockV').innerHTML = N(fmtDay(O.today(S))) + (S.offset ? ` <span class="muted small">(+${S.offset})</span>` : '');
+    document.getElementById('userSel').value = S.user;
+    document.getElementById('themeBtn').innerHTML = S.theme === 'light' ? ic('moon', 15) + 'כהה' : ic('sun', 15) + 'בהיר';
+    document.documentElement.dataset.theme = S.theme === 'light' ? 'light' : 'dark';
+    const unread = visibleNotifs().filter(n => !n.read).length;
+    document.getElementById('bellC').innerHTML = unread ? `<span class="dotc">${unread > 99 ? '99+' : unread}</span>` : '';
+  }
+  function visibleNotifs() { return S.notifications.filter(n => n.to !== 'approvers' || me().approver); }
+
+  // ---------------- routing ----------------
+  function route() {
+    const h = (location.hash || '#home').slice(1);
+    if (h.startsWith('client-')) return { v: 'client', id: h.slice(7) };
+    if (h.startsWith('clients-')) return { v: 'clients', f: h.slice(8) };
+    if (h.startsWith('task-')) return { v: 'tasks', id: h.slice(5) };
+    return { v: TITLE[h] ? h : 'home' };
+  }
+  function go(h) { if (location.hash === '#' + h) render(); else location.hash = h; }
+  window.addEventListener('hashchange', () => { const r = route(); if (r.v === 'clients' && r.f) U.filter = r.f; if (r.v === 'tasks' && r.id) { U.hl = r.id; const t = S.tasks.find(x => x.id === r.id); if (t) U.taskTab = t.status === 'closed' ? 'closed' : 'all'; } render(true); });
+
+  function render(scrollTop) {
+    chrome();
+    const v = document.getElementById('view');
+    if (!run) { v.innerHTML = skeleton(); return; }
+    const r = route();
+    v.innerHTML = ({ home: vHome, clients: vClients, client: () => vClient(r.id), tasks: vTasks, ask: vAsk, automations: vAuto, impact: vImpact, lab: vLab, integrations: vInteg })[r.v]();
+    if (scrollTop) window.scrollTo(0, 0);
+    if (r.v === 'tasks' && U.hl) { const el = document.getElementById('tk-' + U.hl); if (el) el.scrollIntoView({ block: 'center' }); }
+    if (r.v === 'ask') { const m = document.getElementById('msgs'); if (m) m.scrollTop = m.scrollHeight; }
+    renderTour(); renderNotif(); renderModal();
+  }
+  function skeleton() { return `<div class="sk" style="height:34px;width:280px;margin-bottom:18px"></div><div class="kpis">${'<div class="sk" style="height:86px"></div>'.repeat(8)}</div><div class="sk" style="height:160px;margin-bottom:14px"></div>${'<div class="sk" style="height:44px;margin-bottom:8px"></div>'.repeat(6)}`; }
+
+  function check(manual) {
+    const b = document.getElementById('runBtn'); if (b) { b.disabled = true; b.textContent = 'בודק…'; }
+    setTimeout(() => {
+      try {
+        run = O.runCheck(world, S, { manual: manual }); save();
+        if (manual) toast(`בדיקה הושלמה: ${run.results.length} לקוחות ב-${run.ms.toFixed(0)} מ״ש · ${run.newAlerts.length} חריגות חדשות${run.cleared.length ? ' · ' + run.cleared.length + ' נפתרו' : ''}`, 'ok');
+      } catch (e) { toast('הבדיקה נכשלה: ' + e.message, 'err'); console.error(e); }
+      if (b) { b.disabled = false; b.textContent = 'הרץ בדיקה'; }
+      render();
+    }, manual ? 30 : 60);
+  }
+  function checkSync() { run = O.runCheck(world, S, {}); save(); }
+
+  // ---------------- views ----------------
+  function greet() { const h = new Date().getHours(); return h < 12 ? 'בוקר טוב' : h < 17 ? 'צהריים טובים' : h < 21 ? 'ערב טוב' : 'לילה טוב'; }
+  function vHome() {
+    const c = run.counts, openT = S.tasks.filter(t => t.status !== 'closed'), newToday = Object.values(S.alerts).filter(a => a.firstDay === run.ref && a.status !== 'cleared').length;
+    const sum = O.summaryText(run, S), lr = S.lastRun;
+    const k = (l, n, go, dot, s) => `<button class="kpi" ${go ? `data-go="${go}"` : 'disabled'}><div class="l">${dot ? `<span class="dot ${dot}"></span>` : ''}${l}</div><div class="n">${n}</div>${s ? `<div class="s">${s}</div>` : ''}</button>`;
+    const decis = run.decisions.slice(0, 5).map(d => ({ t: d.alert.title, c: d.client, sub: 'אין משימה פתוחה', route: 'client-' + d.client.id, pill: 'p-red' }))
+      .concat(S.tasks.filter(t => t.status === 'awaiting_approval').map(t => ({ t: 'ממתין לאישורך: ' + t.title.split(' · ')[0], c: run.byId[t.clientId], sub: 'הוגש ע״י ' + byU[t.assignee].name, route: 'task-' + t.id, pill: 'p-imp' })))
+      .concat(S.tasks.filter(t => t.status === 'new' && t.severity === 'red' && !t.overdue).map(t => ({ t: 'טרם התחיל טיפול: ' + t.title.split(' · ')[0], c: run.byId[t.clientId], sub: 'אחראי: ' + byU[t.assignee].name + ' · יעד ' + fmtDay(t.due), route: 'task-' + t.id, pill: 'p-red' })))
+      .concat(S.tasks.filter(t => t.overdue && /new|in_progress/.test(t.status)).map(t => ({ t: 'משימה באיחור: ' + t.title.split(' · ')[0], c: run.byId[t.clientId], sub: 'אחראי: ' + byU[t.assignee].name, route: 'task-' + t.id, pill: 'p-yellow' })));
+    return `
+    <div class="hello"><div><h2>${greet()}, ${esc(me().name)}</h2>
+      <div class="meta"><span>בדיקה אחרונה: ${lr ? N(hhmm(lr.t)) + ' · ' + N(lr.ms.toFixed(0) + ' מ״ש') : '—'}</span><span>·</span><span>נתונים עד ${N(fmtDay(run.ref))}</span><span>·</span>
+      <a class="conn" href="#integrations"><span class="dot d-green"></span>נתוני דמו מחוברים</a><a class="conn" href="#integrations"><span class="dot d-none"></span>Meta / Google / CRM לא מחוברים</a></div></div>
+      <div class="sp"></div><button class="btn acc" data-act="tour">${ic('play', 14)}יום בחיי מנהל סוכנות</button></div>
+    <div class="kpis">
+      ${k('לקוחות פעילים', run.results.length, 'clients', 'd-none')}${k('תקינים', c.green, 'clients-green', 'd-green')}${k('במעקב', c.yellow, 'clients-yellow', 'd-yellow')}${k('דורשים טיפול דחוף', c.red, 'clients-red', 'd-red')}
+      ${k('התראות חדשות היום', newToday, 'clients-red', '', 'מאז ' + N(fmtDay(run.ref)))}${k('משימות פתוחות', openT.length, 'tasks', '', S.tasks.filter(t => t.status === 'awaiting_approval').length + ' ממתינות לאישור')}
+      ${k('תקציב מנוהל · 30 יום', N(money(run.spend30)), '', '', 'כל הלקוחות')}
+      <div class="kpi"><div class="l">הוצאה עודפת משוערת · 7 ימים</div><div class="n" style="color:var(--r)">${N(money(run.excess))}</div>
+      <div class="s">${U.exp ? 'לכל לקוח עם חריגת עלות: הוצאת 7 הימים פחות (לידים × עלות לליד היסטורית). זו הערכה ולא הפסד מאומת. ' : ''}<button class="pill p-gray" data-act="exp">${U.exp ? 'הסתר' : 'איך מחושב?'}</button></div></div>
+    </div>
+    <div class="grid g2">
+      <section class="card pad sum"><div class="h2"><span class="eyebrow">סיכום מנהלים</span><div class="sp"></div><span class="engine">מנוע כללים · AI חיצוני לא מחובר</span></div>
+        <p>${greet()}, ${esc(me().name)}. ${sum.parts.map(p => p.route ? `<span class="lk" data-go="${p.route}">${esc(p.t)}</span>` : esc(p.t)).join('')}</p>
+        ${sum.top.length ? `<div class="eyebrow" style="margin-top:16px">שלוש הפעולות החשובות להיום</div><div class="acts">${sum.top.map((a, i) => `<button class="act" data-go="${a.route}"><span class="n">${i + 1}</span><span class="dot d-${a.severity}"></span><span style="flex:1">${esc(a.text)}</span>${ic('back', 14)}</button>`).join('')}</div>` : ''}
+      </section>
+      <section class="card pad"><div class="h2">מחייב החלטה<div class="sp"></div><span class="muted small">${decis.length}</span></div>
+        ${decis.length ? `<div class="feed">${decis.slice(0, 7).map(d => `<button class="fi" style="text-align:start" data-go="${d.route}"><span class="dot ${d.pill === 'p-red' ? 'd-red' : d.pill === 'p-imp' ? 'd-imp' : 'd-yellow'}" style="margin-top:7px"></span><div style="flex:1;min-width:0"><div style="font-weight:600">${esc(d.c.name)}</div><div class="tx2 small">${esc(d.t)} · ${esc(d.sub)}</div></div></button>`).join('')}</div>` : '<div class="empty">אין החלטות פתוחות. כל המקרים הדחופים כבר בטיפול.</div>'}
+      </section>
+    </div>
+    <div class="grid" style="margin-top:14px">
+      <section class="card list" style="overflow:hidden"><div class="toolbar"><div class="h2" style="margin:0">לקוחות לפי עדיפות</div><div class="sp"></div><a href="#clients" class="small">כל ${run.results.length} הלקוחות ←</a></div>${rows(run.results.slice(0, 9))}</section>
+      <section class="card pad"><div class="h2">פעילות אחרונה</div><div class="feed">${S.events.slice(0, 10).map(feedItem).join('') || '<div class="empty">אין פעילות עדיין</div>'}</div></section>
+    </div>`;
+  }
+  function feedItem(e) { return `<div class="fi"><span class="tm">${N(fmtDay(e.day))} ${N(hhmm(e.t))}</span><span style="flex:1">${e.clientId && run.byId[e.clientId] ? `<a href="#client-${e.clientId}">${esc(run.byId[e.clientId].name)}</a> · ` : ''}${esc(e.text)}</span></div>`; }
+  function issue(r) {
+    let h = '';
+    if (r.alerts.length) {
+      const a = r.alerts[0], t = O.openTaskFor(S, a.key);
+      h += `<span class="pill p-${a.severity}">${SL[a.severity]}</span>${esc(a.title)}`;
+      if (r.alerts.length > 1) h += ` <span class="pill p-gray">+${r.alerts.length - 1}</span>`;
+      if (r.alerts.some(x => x.lifecycle === 'new' || x.lifecycle === 'escalated')) h += ' <span class="pill p-new">חדש</span>';
+      if (t) h += ` <span class="pill p-gray">${esc(ST[t.status])}</span>`; else if (a.handling === 'resolved') h += ' <span class="pill p-gray">טופל ואומת</span>';
+    } else h += `<span class="pill p-green">תקין</span>${r.lowData ? '<span class="muted small">מעט נתונים</span>' : ''}`;
+    if (r.improved) h += ` <span class="pill p-imp">↑ שיפור ${N(Math.abs(pct(r.improved.change)) + '%')}</span>`;
+    if ((S.ops[r.id] || []).length) h += ' <span class="pill p-gray">Demo Lab</span>';
+    return h;
+  }
+  function rows(rs) {
+    if (!rs.length) return '<div class="empty">אין לקוחות שמתאימים לסינון.</div>';
+    return `<div class="rw hd"><div>לקוח</div><div class="c-owner">אחראי</div><div class="c-cpl">עלות לליד · 7 ימים</div><div class="c-leads">לידים</div><div class="c-spend">הוצאה</div><div>מצב</div></div>` +
+      rs.map(r => `<button class="rw" data-go="client-${r.id}"><div class="nm"><span class="dot d-${r.status}"></span><div style="min-width:0"><div class="t">${esc(r.name)}</div><div class="s">${esc(r.industry)}</div></div></div>
+      <div class="c-owner">${av(r.owner)}</div><div class="c-cpl">${r.rec.cpl ? N(money(r.rec.cpl)) + (r.lowData ? '' : chg(r.rec.cpl, r.base.cpl)) : '<span class="muted">—</span>'}</div>
+      <div class="c-leads">${N(r.rec.leads)}</div><div class="c-spend">${N(money(r.rec.spend))}</div><div class="iss">${issue(r)}</div></button>`).join('');
+  }
+  function filtered() {
+    return run.results.filter(r => {
+      if (U.q && (r.name + ' ' + r.industry + ' ' + byU[r.owner].name).indexOf(U.q) < 0) return false;
+      if (U.filter === 'all') return true; if (U.filter === 'improved') return !!r.improved;
+      if (U.filter === 'tasks') return r.alerts.some(a => O.openTaskFor(S, a.key));
+      return r.status === U.filter;
+    });
+  }
+  function vClients() {
+    const f = [['all', 'הכל'], ['red', 'דחוף · ' + run.counts.red], ['yellow', 'במעקב · ' + run.counts.yellow], ['green', 'תקין · ' + run.counts.green], ['improved', 'שיפור · ' + run.counts.improved], ['tasks', 'עם משימה פתוחה']];
+    return `<section class="card list" style="overflow:hidden"><div class="toolbar"><input class="inp" id="cq" placeholder="חיפוש לפי לקוח, תחום או אחראי…" value="${esc(U.q)}" style="flex:1;min-width:200px">
+      <div class="chips">${f.map(x => `<button class="chip ${U.filter === x[0] ? 'on' : ''}" data-act="filter" data-arg="${x[0]}">${x[1]}</button>`).join('')}</div></div><div id="clist">${rows(filtered())}</div></section>`;
+  }
+
+  // ----- Client 360 -----
+  function periodStats(r, P) {
+    const cur = [], prev = [];
+    r.days.forEach(d => { const a = run.ref - C.dayIdx(d.date); if (a < P) cur.push(d); else if (a < 2 * P) prev.push(d); });
+    return { cur: C.stats(cur), prev: prev.length >= P * 0.6 ? C.stats(prev) : null };
+  }
+  function series(r, metric, P) {
+    const map = {}; r.days.forEach(d => { map[C.dayIdx(d.date)] = d; });
+    const first = C.dayIdx(r.days[0] ? r.days[0].date : C.isoOf(run.ref));
+    const val = i => {
+      if (i < first) return null;
+      if (metric === 'leads' || metric === 'spend') { const d = map[i]; return d ? d[metric] : null; }
+      let s = 0, l = 0, c = 0, im = 0, n = 0; for (let k = i - 6; k <= i; k++) { const d = map[k]; if (d) { s += d.spend; l += d.leads; c += d.clicks; im += d.impressions; n++; } }
+      if (!n || !map[i] && metric !== 'cpl') return n ? (metric === 'ctr' ? (im ? c / im * 100 : null) : null) : null;
+      return metric === 'cpl' ? (l ? s / l : null) : (im ? c / im * 100 : null);
+    };
+    const cur = [], prev = []; for (let j = P - 1; j >= 0; j--) { cur.push({ i: run.ref - j, v: val(run.ref - j) }); prev.push({ i: run.ref - j - P, v: val(run.ref - j - P) }); }
+    return { cur, prev };
+  }
+  const FMT = { cpl: v => money(v), leads: v => String(Math.round(v)), spend: v => money(v), ctr: v => v.toFixed(2) + '%' };
+  function chart(id, cur, prev, fmt, refLine) {
+    const W = 760, H = 240, pl = 10, pr = 58, pt = 14, pb = 28, vals = cur.concat(prev).map(p => p.v).filter(v => v != null);
+    const mx = (Math.max.apply(null, vals.concat(refLine ? [refLine] : [])) || 1) * 1.12, n = cur.length;
+    const x = i => pl + i * (W - pl - pr) / Math.max(n - 1, 1), y = v => pt + (1 - v / mx) * (H - pt - pb);
+    const path = arr => { let d = '', pen = false; arr.forEach((p, i) => { if (p.v == null) { pen = false; return; } d += (pen ? 'L' : 'M') + x(i).toFixed(1) + ' ' + y(p.v).toFixed(1); pen = true; }); return d; };
+    const cp = path(cur), lastI = cur.map(p => p.v != null).lastIndexOf(true), firstI = cur.findIndex(p => p.v != null);
+    const area = lastI > firstI ? cp.replace(/M/g, 'L').replace(/^L/, 'M') + `L${x(lastI)} ${H - pb}L${x(firstI)} ${H - pb}Z` : '';
+    const grid = [0, .25, .5, .75, 1].map(f => { const v = mx * (1 - f) / 1.0; const yy = pt + f * (H - pt - pb); return `<line x1="${pl}" x2="${W - pr}" y1="${yy}" y2="${yy}" style="stroke:var(--line)" stroke-dasharray="${f === 1 ? '' : '2 4'}"/><text x="${W - pr + 8}" y="${yy + 4}" font-size="11" style="fill:var(--mute)">${esc(fmt(v))}</text>`; }).join('');
+    const lbl = [0, Math.floor((n - 1) / 2), n - 1].map(i => `<text x="${x(i)}" y="${H - 8}" font-size="11" text-anchor="${i === 0 ? 'start' : i === n - 1 ? 'end' : 'middle'}" style="fill:var(--mute)">${fmtDay(cur[i].i)}</text>`).join('');
+    const gaps = cur.map((p, i) => p.v == null && i > firstI ? `<rect x="${x(i) - 3}" y="${pt}" width="6" height="${H - pt - pb}" style="fill:var(--rbg)"/>` : '').join('');
+    CH[id] = { cur, prev, fmt, x, n, W, pl, pr };
+    return `<div class="chart" id="ch-${id}"><svg viewBox="0 0 ${W} ${H}" data-chart="${id}" role="img" aria-label="גרף ביצועים">
+      <defs><linearGradient id="gr-${id}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" style="stop-color:var(--acc);stop-opacity:.28"/><stop offset="1" style="stop-color:var(--acc);stop-opacity:0"/></linearGradient></defs>
+      ${grid}${gaps}${refLine ? `<line x1="${pl}" x2="${W - pr}" y1="${y(refLine)}" y2="${y(refLine)}" style="stroke:var(--g)" stroke-dasharray="5 4" stroke-width="1.2"/>` : ''}
+      <path d="${area}" fill="url(#gr-${id})"/><path d="${path(prev)}" fill="none" style="stroke:var(--mute)" stroke-dasharray="4 4" stroke-width="1.5"/>
+      <path d="${cp}" fill="none" style="stroke:var(--acc)" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round"/>
+      <line class="guide" x1="0" x2="0" y1="${pt}" y2="${H - pb}" style="stroke:var(--line2);opacity:0"/><circle class="gdot" r="4" style="fill:var(--acc);opacity:0"/>
+      ${lbl}<rect x="${pl}" y="0" width="${W - pl - pr}" height="${H}" fill="transparent"/></svg><div class="tip"></div></div>`;
+  }
+  document.addEventListener('pointermove', e => {
+    const svg = e.target.closest && e.target.closest('svg[data-chart]'); document.querySelectorAll('.tip.on').forEach(t => { if (!svg || !t.parentNode.contains(svg)) t.classList.remove('on'); });
+    if (!svg) return; const c = CH[svg.dataset.chart]; if (!c) return;
+    const b = svg.getBoundingClientRect(), sx = (e.clientX - b.left) / b.width * c.W, i = Math.max(0, Math.min(c.n - 1, Math.round((sx - c.pl) / ((c.W - c.pl - c.pr) / Math.max(c.n - 1, 1)))));
+    const p = c.cur[i], q = c.prev[i], g = svg.querySelector('.guide'), dot = svg.querySelector('.gdot'), tip = svg.parentNode.querySelector('.tip');
+    g.setAttribute('x1', c.x(i)); g.setAttribute('x2', c.x(i)); g.style.opacity = 1;
+    const yv = p.v == null ? null : (svg.viewBox.baseVal.height - 28 - (p.v / (Math.max.apply(null, c.cur.concat(c.prev).map(z => z.v).filter(v => v != null)) * 1.12 || 1)) * (svg.viewBox.baseVal.height - 42));
+    if (yv != null) { dot.setAttribute('cx', c.x(i)); dot.setAttribute('cy', yv); dot.style.opacity = 1; } else dot.style.opacity = 0;
+    tip.innerHTML = `<div class="muted">${fmtDay(p.i)}</div><div><b>${p.v == null ? 'אין נתונים' : N(c.fmt(p.v))}</b></div>${q && q.v != null ? `<div class="muted">תקופה קודמת (${fmtDay(q.i)}): ${N(c.fmt(q.v))}</div>` : ''}`;
+    tip.classList.add('on'); const px = c.x(i) / c.W * b.width; tip.style.left = Math.min(Math.max(px - 80, 0), b.width - 170) + 'px'; tip.style.top = '6px';
+  });
+  function vClient(id) {
+    const r = run.byId[id]; if (!r) return '<div class="empty">הלקוח לא נמצא. <a href="#clients">חזרה ללקוחות</a></div>';
+    const P = U.period, ps = periodStats(r, P), cs = ps.cur, pv = ps.prev, sr = series(r, U.metric, P);
+    const m = (l, v, c) => `<div class="met"><div class="l">${l}</div><div class="v">${v}</div><div class="c">${c || '<span class="muted">אין השוואה</span>'}</div></div>`;
+    const proj = r.rec.dailySpend * 30.4, tasks = S.tasks.filter(t => t.clientId === id), notes = S.notes[id] || [], drafts = S.drafts.filter(d => d.clientId === id);
+    const opp = []; if (r.improved) opp.push('שיפור מובהק: ' + r.improved.what + ' כדאי לשקול הגדלת תקציב הדרגתית.');
+    if (r.rec.cpl && r.goals.targetCpl && r.rec.cpl < r.goals.targetCpl * 0.8 && !r.alerts.length && !r.lowData) opp.push('העלות לליד נמוכה ב-' + pct(1 - r.rec.cpl / r.goals.targetCpl) + '% מהיעד, אז יש מרווח להגדלת היקף.');
+    if (r.lowData) opp.push('נפח הנתונים נמוך מכדי לזהות מגמות באמינות. כדאי לשקול איחוד קמפיינים או הגדלת תקציב בדיקה.');
+    const tl = timeline(id);
+    return `<a class="back" href="#clients">${ic('back', 14)} כל הלקוחות</a>
+    <div class="ch"><div style="flex:1;min-width:240px"><div class="row2" style="gap:10px;flex-wrap:wrap"><h2>${esc(r.name)}</h2><span class="pill p-${r.status}">${SL[r.status]}</span>${r.improved ? '<span class="pill p-imp">↑ שיפור</span>' : ''}</div>
+      <div class="meta2" style="margin:6px 0 0"><span>${esc(r.industry)}</span><span>אחראי: ${esc(byU[r.owner].name)}</span><span>יעד עלות לליד: ${N(money(r.goals.targetCpl))}</span><span>תקציב חודשי: ${N(money(r.goals.monthlyBudget))}</span><span class="mock">מקור: נתוני דמו</span></div></div>
+      <div class="row2" style="flex-wrap:wrap"><button class="btn sec" data-act="report" data-arg="${id}">${ic('report', 15)}הפק דוח</button><button class="btn sec" data-act="askc" data-arg="${id}">${ic('chat', 15)}שאל על הלקוח</button></div></div>
+    <div class="grid g2" style="align-items:start">
+      <div class="grid">
+        <section class="card pad">
+          <div class="h2">ביצועים<div class="sp"></div><div class="seg">${[7, 14, 30, 90].map(p => `<button class="${U.period === p ? 'on' : ''}" data-act="period" data-arg="${p}">${p} ימים</button>`).join('')}</div></div>
+          <div class="mets">${m('הוצאה', N(money(cs.spend)), pv && chg(cs.spend, pv.spend))}${m('לידים', N(cs.leads), pv && chg(cs.leads, pv.leads, true))}${m('עלות לליד', cs.cpl ? N(money(cs.cpl)) : '—', pv && chg(cs.cpl, pv.cpl))}
+            ${m('CTR', cs.ctr ? N((cs.ctr * 100).toFixed(2) + '%') : '—', pv && chg(cs.ctr, pv.ctr, true))}${m('CPC', cs.cpc ? N(C.money2(cs.cpc)) : '—', pv && chg(cs.cpc, pv.cpc))}${m('CPM', cs.cpm ? N(money(cs.cpm)) : '—', pv && chg(cs.cpm, pv.cpm))}</div>
+          <div class="row2" style="margin:16px 0 8px;flex-wrap:wrap"><div class="seg">${[['cpl', 'עלות לליד'], ['leads', 'לידים'], ['spend', 'הוצאה'], ['ctr', 'CTR']].map(x => `<button class="${U.metric === x[0] ? 'on' : ''}" data-act="metric" data-arg="${x[0]}">${x[1]}</button>`).join('')}</div><div class="sp"></div>
+            <div class="legend"><span><i style="background:var(--acc)"></i>${P} ימים אחרונים</span><span><i style="background:var(--mute)"></i>תקופה קודמת</span>${U.metric === 'cpl' ? '<span><i style="background:var(--g)"></i>יעד</span>' : ''}</div></div>
+          ${chart('c360', sr.cur, sr.prev, FMT[U.metric], U.metric === 'cpl' ? r.goals.targetCpl : null)}
+          <div class="note">${U.metric === 'cpl' || U.metric === 'ctr' ? 'ממוצע נע של 7 ימים. ' : ''}${pv ? 'השינויים מחושבים מול ' + P + ' הימים שלפני.' : 'לתקופה הקודמת אין מספיק נתונים להשוואה.'} ימים מסומנים באדום הם ימים ללא נתונים.</div>
+        </section>
+        ${r.info.map(t => `<div class="card pad small tx2">${esc(t)}</div>`).join('')}
+        ${r.improved ? `<section class="card al imp"><div class="alh"><span class="pill p-imp">שיפור</span><span class="t">שיפור משמעותי</span><span class="pill p-gray">ביטחון ${esc(r.improved.confidence)}</span></div><p style="margin:8px 0 0">${esc(r.improved.what)}</p><div class="note" style="margin-top:6px">${esc(r.improved.period)}</div></section>` : ''}
+        ${r.alerts.map(a => alertCard(r, a)).join('') || (r.improved ? '' : '<div class="card empty">אין התראות פעילות. כל המדדים בטווח הרגיל של הלקוח.</div>')}
+      </div>
+      <div class="grid">
+        <section class="card pad"><div class="h2">מדדים פיננסיים</div>
+          <table class="ft"><tr><td>הוצאה · 30 יום</td><td>${N(money(periodStats(r, 30).cur.spend))}</td></tr><tr><td>קצב חודשי צפוי מול תקציב</td><td>${N(money(proj))} / ${N(money(r.goals.monthlyBudget))} ${chg(proj, r.goals.monthlyBudget)}</td></tr>
+          <tr><td>עלות לליד · 7 ימים מול יעד</td><td>${r.rec.cpl ? N(money(r.rec.cpl)) : '—'} / ${N(money(r.goals.targetCpl))} ${chg(r.rec.cpl, r.goals.targetCpl)}</td></tr><tr><td>הוצאה עודפת משוערת · 7 ימים</td><td>${N(money(r.excess))}</td></tr></table></section>
+        ${opp.length || drafts.length ? `<section class="card pad"><div class="h2">הזדמנויות והמלצות</div><ul class="ul">${opp.map(o => `<li>${esc(o)}</li>`).join('')}</ul>${drafts.map(d => `<div class="hyp" style="margin-top:10px"><div class="eyebrow">טיוטת עדכון ללקוח (${esc(d.channel)} · לא נשלח)</div><div style="margin:6px 0">${esc(d.text)}</div><div class="row2"><button class="btn sec sm" data-act="copy" data-arg="${esc(d.text)}">העתק</button><button class="btn sec sm" disabled title="WhatsApp לא מחובר">שליחה: דורש חיבור WhatsApp ואישור</button></div></div>`).join('')}</section>` : ''}
+        <section class="card pad"><div class="h2">משימות<div class="sp"></div><span class="muted small">${tasks.length}</span></div>${tasks.length ? tasks.map(t => `<button class="fi" style="text-align:start;width:100%" data-go="task-${t.id}"><span class="pill ${t.status === 'closed' ? 'p-green' : 'p-gray'}">${esc(ST[t.status])}</span><span style="flex:1">${esc(t.title.split(' · ')[0])}</span>${av(t.assignee)}</button>`).join('') : '<div class="empty" style="padding:10px">אין משימות</div>'}</section>
+        <section class="card pad"><div class="h2">Timeline</div>${tl.length ? `<div class="tl">${tl.slice(0, 14).map(x => `<div class="tli ${x.k}"><div>${esc(x.a)}</div><div class="w">${N(fmtDay(x.day))} · ${N(hhmm(x.t))}${x.who ? ' · ' + esc(x.who) : ''}</div></div>`).join('')}</div>` : '<div class="empty" style="padding:10px">אין אירועים עדיין</div>'}</section>
+        <section class="card pad"><div class="h2">הערות צוות</div><div class="row2"><input class="inp" id="noteIn" placeholder="הוסף הערה…" style="flex:1"><button class="btn sec sm" data-act="note" data-arg="${id}">הוסף</button></div>
+          ${notes.map(n => `<div class="fi"><span>${av(n.user)}</span><div style="flex:1"><div>${esc(n.text)}</div><div class="muted small">${N(fmtDay(n.day))} · ${N(hhmm(n.t))}</div></div></div>`).join('')}</section>
+        <section class="card pad"><div class="h2">Demo Lab ללקוח<div class="sp"></div><span class="mock">משנה נתוני דמו</span></div><div class="chips">${O.SCENARIOS.filter(s => !s.special).map(s => `<button class="chip" data-act="scen1" data-arg="${s.id}|${id}">${esc(s.name)}</button>`).join('')}</div>
+          ${(S.ops[id] || []).length ? `<button class="btn sec sm" style="margin-top:10px" data-act="resetc" data-arg="${id}">החזר את הלקוח לנתוני המקור</button>` : ''}</section>
+      </div>
+    </div>`;
+  }
+  function timeline(id) {
+    const out = [];
+    S.events.filter(e => e.clientId === id).forEach(e => out.push({ day: e.day, t: e.t, a: e.text, who: e.user ? byU[e.user] && byU[e.user].name : null, k: e.type === 'alert' ? 'alert' : e.type === 'verified' ? 'verified' : e.type === 'automation' ? 'automation' : 'task' }));
+    S.tasks.filter(t => t.clientId === id).forEach(t => t.history.forEach(h => { if (!/נוצרה משימה/.test(h.a)) out.push({ day: h.day, t: h.t, a: h.a + ' · ' + t.title.split(' · ')[0], who: h.who, k: /אומת/.test(h.a) ? 'verified' : 'task' }); }));
+    (S.notes[id] || []).forEach(n => out.push({ day: n.day, t: n.t, a: 'הערה: ' + n.text, who: byU[n.user].name, k: '' }));
+    return out.sort((a, b) => b.t - a.t);
+  }
+  function alertCard(r, a) {
+    const inv = C.investigate(r, a), t = O.openTaskFor(S, a.key), sup = { 'נתמך בנתונים': 'p-green', 'נתמך חלקית': 'p-yellow' };
+    return `<section class="card al ${a.severity}" id="al-${a.key.replace(':', '-')}">
+      <div class="alh"><span class="pill p-${a.severity}">${SL[a.severity]}</span><span class="t">${esc(a.title)}</span>${a.lifecycle === 'new' ? '<span class="pill p-new">חדש</span>' : a.lifecycle === 'escalated' ? '<span class="pill p-new">החמיר</span>' : ''}${a.early ? '<span class="pill p-imp">זיהוי מוקדם</span>' : ''}${t ? `<span class="pill p-gray">משימה: ${esc(ST[t.status])}</span>` : a.handling === 'resolved' ? '<span class="pill p-green">טופל ואומת</span>' : ''}</div>
+      <div class="meta2"><span>תקופת השוואה: ${esc(a.period)}</span><span>רמת ביטחון: ${esc(a.confidence)}</span><span>זוהה: ${N(fmtDay(a.firstDay))}</span><span>${a.immediate ? 'נדרשת פעולה היום' : 'מעקב בימים הקרובים'}</span></div>
+      <div class="inv">
+        <div class="blk"><div class="k"><span class="tag3 t-fact">עובדה</span>מה קרה</div><div>${esc(a.what)}</div>
+          <table class="ft" style="margin-top:8px"><tr><th>מדד</th><th>לפני</th><th>עכשיו</th><th>שינוי</th></tr>${inv.facts.map(f => `<tr><td>${esc(f.label)}</td><td>${N(f.before)}</td><td><b>${N(f.after)}</b></td><td>${f.change != null ? `<span class="${Math.abs(f.change) >= 0.15 ? (/המרה|הקלקה|לידים/.test(f.label) ? (f.change < 0 ? 'up' : 'down') : (f.change > 0 ? 'up' : 'down')) : 'muted'}">${N(C.sgn(f.change))}</span>` : ''}</td></tr>`).join('')}</table></div>
+        <div class="blk"><div class="k">למה זה חשוב</div><div>${esc(a.why)}</div></div>
+        <div class="blk"><div class="k"><span class="tag3 t-hyp">השערה</span>מה עשוי לגרום לכך (לפי הראיות)</div>${inv.hypotheses.map(h => `<div class="hyp"><div class="row2" style="align-items:flex-start;gap:8px"><span style="flex:1;font-weight:600">${esc(h.text)}</span><span class="pill ${sup[h.support] || 'p-gray'}">${esc(h.support)}</span></div><div class="small tx2" style="margin-top:4px">ראיה: ${esc(h.evidence)}</div>${h.share ? `<div class="bar"><i style="width:${Math.round(h.share * 100)}%"></i></div>` : ''}</div>`).join('')}
+          <div class="unk">לא נבדק (חסר מקור נתונים): ${inv.unknown.map(esc).join(' · ')}</div></div>
+        <div class="blk"><div class="k">מה צריך לבדוק</div><ul class="ul">${inv.checks.map(c => `<li>${esc(c)}</li>`).join('')}</ul></div>
+        <div class="blk"><div class="k"><span class="tag3 t-rec">המלצה</span>מה מומלץ לעשות, לפי סדר עדיפות</div><ol class="plan">${inv.plan.map(p => `<li><span style="flex:1">${esc(p.text)}</span><span class="pill p-gray">${esc(O.ACTION[p.actionType])}</span>${p.actionType !== 'check' ? '<span class="pill p-imp">דורש אישור</span>' : ''}</li>`).join('')}</ol></div>
+        <div class="blk"><div class="k">איך נדע שזה עבד</div><div class="okbox">${esc(inv.success.text)} · בדיקה חוזרת אוטומטית ${N(inv.success.days)} ימים אחרי הביצוע</div></div>
+      </div>
+      <div class="row2" style="margin-top:14px;flex-wrap:wrap"><span class="engine">חקירה: מנוע כללים מבוסס נתונים · AI חיצוני לא מחובר</span><div class="sp"></div>
+        ${t ? `<button class="btn sec" data-go="task-${t.id}">פתח משימה (${esc(ST[t.status])})</button>` : `<button class="btn pri" data-act="mktask" data-arg="${a.key}">צור משימה</button>`}</div>
+    </section>`;
+  }
+
+  // ----- Tasks -----
+  function vTasks() {
+    const tabs = [['open', 'פתוחות', t => !/closed/.test(t.status)], ['approval', 'ממתינות לאישור', t => t.status === 'awaiting_approval'], ['verify', 'לבדיקת תוצאות', t => t.status === 'awaiting_verification'], ['closed', 'נסגרו', t => t.status === 'closed'], ['all', 'הכל', () => true]];
+    const cur = tabs.find(x => x[0] === U.taskTab) || tabs[0], list = S.tasks.filter(cur[2]);
+    return `<div class="row2" style="margin-bottom:14px;flex-wrap:wrap;gap:10px"><div class="chips">${tabs.map(x => `<button class="chip ${U.taskTab === x[0] ? 'on' : ''}" data-act="ttab" data-arg="${x[0]}">${x[1]} · ${S.tasks.filter(x[2]).length}</button>`).join('')}</div><div class="sp"></div>
+      <span class="small tx2">פועל כ: <b>${esc(me().name)}</b> (${esc(me().role)}${me().approver ? ', מורשה אישור' : ''})</span></div>
+      <div class="note" style="margin-bottom:12px">זרימה: חדש ← בטיפול ← ממתין לאישור (רק לפעולות שמשנות קמפיין או תקציב או שולחות הודעה) ← בוצע ← ממתין לבדיקת תוצאות ← נסגר. משימה נסגרת רק אחרי שהמדדים מאשרים שהבעיה נפתרה.</div>
+      <div class="grid" style="grid-template-columns:repeat(auto-fill,minmax(min(100%,460px),1fr))">${list.map(taskCard).join('') || '<div class="card empty">אין משימות בתצוגה הזו. משימות נוצרות מהתראות (ידנית או באוטומציה).</div>'}</div>`;
+  }
+  function taskCard(t) {
+    const r = run.byId[t.clientId], flow = ['new', 'in_progress'].concat(t.requiresApproval ? ['awaiting_approval'] : []).concat(['done', 'awaiting_verification', 'closed']), ci = flow.indexOf(t.status);
+    const late = t.due < O.today(S) && /new|in_progress|awaiting_approval/.test(t.status), btn = (a, l, cls, dis) => `<button class="btn ${cls || 'sec'} sm" data-act="task" data-arg="${t.id}|${a}" ${dis ? 'disabled title="' + esc(dis) + '"' : ''}>${l}</button>`;
+    let acts = '';
+    if (t.status === 'new') acts = btn('start', 'התחל טיפול', 'pri');
+    if (t.status === 'in_progress') acts = t.requiresApproval && !t.approvedBy ? btn('submit', 'הגש לאישור', 'pri') : btn('submit', 'סמן כבוצע', 'pri');
+    if (t.status === 'awaiting_approval') acts = me().approver ? btn('approve', 'אשר ובצע', 'pri') + btn('reject', 'החזר לטיפול') : btn('approve', 'ממתין לאישור מנהל', 'sec', 'רק ניב או יובל יכולים לאשר');
+    if (t.status === 'done') acts = btn('request_verify', 'קבע בדיקה חוזרת', 'pri');
+    if (t.status === 'awaiting_verification') acts = `<span class="small tx2">בדיקה חוזרת אוטומטית ב-${N(fmtDay(t.recheckDay))}</span>` + (t.fixSim ? '' : btn('fix', 'סימולציה: החל השפעת תיקון')) + `<button class="btn sec sm" data-act="advance" data-arg="${Math.max(1, t.recheckDay - O.today(S))}">קדם שעון לבדיקה</button>`;
+    if (t.status === 'closed') acts = btn('reopen', 'פתח מחדש');
+    const v = t.verification;
+    return `<section class="card tk ${U.hl === t.id ? 'hl' : ''}" id="tk-${t.id}">
+      <div class="tkh"><span class="pill p-${t.severity}">${SL[t.severity]}</span><span class="t" style="flex:1;min-width:0">${esc(t.title.split(' · ')[0])}</span>${late ? '<span class="pill p-red">באיחור</span>' : ''}${t.requiresApproval ? `<span class="pill ${t.approvedBy ? 'p-green' : 'p-imp'}">${t.approvedBy ? 'אושר ע״י ' + esc(byU[t.approvedBy].name) : 'דורש אישור'}</span>` : ''}</div>
+      <div class="small"><a href="#client-${t.clientId}">${esc(r ? r.name : t.clientId)}</a> · נוצרה ${t.createdBy === 'auto' ? 'אוטומטית' : 'ע״י ' + esc(byU[t.createdBy] ? byU[t.createdBy].name : '')} ב-${N(fmtDay(t.createdDay))} · יעד ${N(fmtDay(t.due))}</div>
+      <div class="flow">${flow.map((s, i) => `<span class="${i === ci ? 'on' : i < ci ? 'past' : ''}">${esc(ST[s])}</span>`).join('')}</div>
+      ${t.desc ? `<div class="small tx2">${esc(t.desc)}</div>` : ''}
+      <ol class="plan">${t.plan.map(p => `<li><span style="flex:1">${esc(p.text)}</span>${p.actionType !== 'check' ? `<span class="pill p-imp">${esc(O.ACTION[p.actionType])}</span>` : ''}</li>`).join('')}</ol>
+      <div class="okbox small">מדד הצלחה: ${esc(t.success.text)}</div>
+      ${v ? `<div class="small ${v.ok ? 'down' : 'up'}">${v.ok ? '✓ אומת בנתונים' : '✗ הבדיקה החוזרת לא אישרה שיפור'}${v.before.cpl && v.after.cpl ? ': עלות לליד ' + N(money(v.before.cpl)) + ' ← ' + N(money(v.after.cpl)) : ''} (${N(fmtDay(v.day))})</div>` : ''}
+      <div class="row2" style="flex-wrap:wrap;gap:8px"><label class="small tx2 row2">אחראי <select class="sel" style="width:auto;padding:4px 8px" data-chg="assign" data-arg="${t.id}" ${t.status === 'closed' ? 'disabled' : ''}>${O.TEAM.map(u => `<option value="${u.id}" ${u.id === t.assignee ? 'selected' : ''}>${esc(u.name)}</option>`).join('')}</select></label><div class="sp"></div>${acts}</div>
+      <details><summary>היסטוריית פעילות (${t.history.length})</summary><div class="hist">${t.history.slice().reverse().map(h => `<div>${N(fmtDay(h.day))} ${N(hhmm(h.t))} · <b>${esc(h.who)}</b>: ${esc(h.a)}</div>`).join('')}</div></details>
+    </section>`;
+  }
+
+  // ----- Ask -----
+  const SUG = ['מה שלוש הבעיות הכי דחופות היום?', 'איזה לקוח הידרדר הכי הרבה השבוע?', 'מי מהעובדים עדיין לא טיפל במשימות?', 'אילו לקוחות השתפרו?', 'תכין לי סיכום למנהל', 'כמה תקציב אנחנו מנהלים?'];
+  function vAsk() {
+    const msgs = U.chat.map(m => m.q ? `<div class="mu">${esc(m.q)}</div>` : `<div class="ma"><div>${esc(m.a.text)}</div>${m.a.evidence.length ? `<ul class="ev">${m.a.evidence.map(e => `<li>${N(e)}</li>`).join('')}</ul>` : ''}${m.a.links.length ? `<div class="chips" style="margin-top:10px">${m.a.links.map(l => `<button class="chip" data-go="${l.route}">${esc(l.label)} ←</button>`).join('')}</div>` : ''}<div class="note" style="margin-top:8px">מקור: נתוני המערכת (דמו) נכון ל-${N(fmtDay(run.ref))} · מנוע שאלות מבוסס כללים</div></div>`).join('');
+    return `<section class="card chat"><div class="toolbar" style="border-bottom:1px solid var(--line)"><div class="h2" style="margin:0">${ic('chat')} Ask ClientPulse</div><div class="sp"></div><span class="engine">AI חיצוני לא מחובר · עונה מנתוני המערכת בלבד</span></div>
+      <div class="msgs" id="msgs">${msgs || `<div class="empty">שאל שאלה על תיק הלקוחות. כל תשובה מבוססת על נתוני המערכת, כוללת ראיות מספריות ומפנה למסך הרלוונטי.<br>כשהמנוע לא מזהה שאלה, הוא אומר את זה ולא ממציא תשובה.</div>`}</div>
+      <div style="padding:0 12px"><div class="chips">${SUG.map(s => `<button class="chip" data-act="ask" data-arg="${esc(s)}">${esc(s)}</button>`).join('')}</div></div>
+      <form class="composer" id="askF"><input class="inp" id="askIn" placeholder="למשל: למה העלות לליד של ${esc(run.results[0].name)} עלתה?" autocomplete="off"><button class="btn pri">שלח</button></form></section>`;
+  }
+  function doAsk(q) { if (!q.trim()) return; U.chat.push({ q }); U.chat.push({ a: O.ask(q, run, S) }); render(); }
+
+  // ----- Automations -----
+  const RTAG = { red_task: 'לקוח אדום', persist_escalate: 'הסלמה', improve_draft: 'שיפור', daily_summary: 'סיכום בוקר', overdue: 'איחור' };
+  function vAuto() {
+    const cnt = id => id === 'recheck' ? S.tasks.filter(t => t.recheckDay).length : S.events.filter(e => e.type === 'automation' && e.text.indexOf('[' + RTAG[id] + ']') === 0).length;
+    return `<div class="grid g2" style="align-items:start"><section class="card" style="overflow:hidden"><div class="toolbar"><div class="h2" style="margin:0">כללים פעילים</div><div class="sp"></div><span class="engine">רצים מקומית על נתוני הדמו בכל בדיקה</span></div>
+      ${O.RULES.map(r => `<div class="rule"><button class="sw ${S.rules[r.id] ? 'on' : ''}" data-act="rule" data-arg="${r.id}" aria-label="הפעל/כבה"></button><div style="flex:1"><div><span class="muted">כאשר</span> <b>${esc(r.name)}</b></div><div class="small tx2">← ${esc(r.then)}</div></div><span class="pill p-gray">${N(cnt(r.id))} הפעלות</span></div>`).join('')}
+      <div class="rule"><span class="sw" style="opacity:.4"></span><div style="flex:1"><div><b>שליחה חיצונית (WhatsApp / Email) ופעולות ב-Meta</b></div><div class="small tx2">לא מחובר. דורש אינטגרציה מאומתת, הרשאות, אישור משתמש מורשה ותיעוד תוצאה.</div></div><a class="pill p-gray" href="#integrations">חיבורים</a></div></section>
+      <section class="card pad"><div class="h2">יומן אוטומציות</div><div class="feed">${S.events.filter(e => e.type === 'automation').slice(0, 25).map(feedItem).join('') || '<div class="empty">עדיין לא הופעלו אוטומציות</div>'}</div></section></div>`;
+  }
+
+  // ----- Impact -----
+  function vImpact() {
+    const im = O.impact(run, S), A = S.assumptions, k = (l, n, s) => `<div class="kpi"><div class="l">${l}</div><div class="n">${n}</div>${s ? `<div class="s">${s}</div>` : ''}</div>`;
+    return `<div class="kpis">${k('בעיות שזוהו', N(im.detected), 'חריגות ייחודיות, בלי כפילויות')}${k('משימות שטופלו', N(im.handled), 'מתוך ' + im.tasks + ' משימות')}${k('אומתו כנפתרו', N(im.verified), 'נסגרו רק אחרי בדיקה חוזרת')}
+      ${k('זמן ממוצע מזיהוי לטיפול', im.avgMinToHandle == null ? '—' : im.avgMinToHandle < 1 ? 'פחות מדקה' : N(im.avgMinToHandle < 120 ? Math.round(im.avgMinToHandle) + ' דק׳' : (im.avgMinToHandle / 60).toFixed(1) + ' שע׳'), 'זמן אמת, מהזיהוי ועד תחילת הטיפול')}
+      ${k('זוהו לפני החמרה', N(im.early), 'התחילו כצהוב ולא הגיעו לאדום')}${k('הוצאה עודפת שנמנעה (הערכה)', im.verified ? N(money(im.avoidedWeekly)) : '—', im.verified ? 'לשבוע, רק מאירועים שאומתו' : 'אין עדיין אירועים מאומתים')}
+      ${k('זמן עבודה שנחסך (הערכה)', N(im.time.savedHours.toFixed(0) + ' שע׳'), 'לחודש, לפי ההנחות למטה')}${k('זמן בדיקה ידנית חלופי', N((im.time.manualMin / 60).toFixed(0) + ' שע׳'), 'לחודש')}</div>
+      <section class="card pad" style="margin-bottom:14px"><div class="h2">Before / After · פעולות שהובילו לשיפור מדיד</div>
+      ${im.events.length ? `<table class="ft"><tr><th>אירוע</th><th>עלות לליד לפני</th><th>אחרי</th><th>לידים ליום אחרי</th><th>אומת</th></tr>${im.events.map(e => `<tr><td><a href="#client-${e.v.clientId}">${esc(e.v.title)}</a></td><td>${e.before.cpl ? N(money(e.before.cpl)) : '—'}</td><td><b>${e.after.cpl ? N(money(e.after.cpl)) : '—'}</b></td><td>${N((e.after.dailyLeads || 0).toFixed(1))}</td><td>${N(fmtDay(e.v.day))}</td></tr>`).join('')}</table>
+      <div class="note" style="margin-top:8px">"לפני" = 7 ימים בזמן יצירת המשימה. "אחרי" = הימים שמאז הביצוע ועד הבדיקה החוזרת. הוצאה עודפת שנמנעה = (עלות לפני − עלות אחרי) × לידים ליום × 7. זו הערכה ולא חיסכון בפועל.</div>` : `<div class="empty">עדיין אין אירועים מאומתים. הפעל את "יום בחיי מנהל סוכנות" או סגור משימה דרך בדיקה חוזרת. <button class="btn acc sm" data-act="tour">הפעל הדגמה</button></div>`}</section>
+      <section class="card pad"><div class="h2">הנחות לחישוב זמן (ניתנות לעריכה)</div><div class="row2" style="gap:14px;flex-wrap:wrap">
+        <label class="small tx2">דקות לבדיקה ידנית של לקוח ביום <input class="inp" type="number" min="0" style="width:80px" data-chg="assume" data-arg="minPerClient" value="${A.minPerClient}"></label>
+        <label class="small tx2">דקות טיפול בהתראה <input class="inp" type="number" min="0" style="width:80px" data-chg="assume" data-arg="minPerAlert" value="${A.minPerAlert}"></label>
+        <label class="small tx2">ימי עבודה בחודש <input class="inp" type="number" min="1" style="width:80px" data-chg="assume" data-arg="workdays" value="${A.workdays}"></label></div>
+        <div class="note" style="margin-top:8px">חישוב: (דקות לבדיקה × ${run.results.length} לקוחות × ימי עבודה) פחות (דקות טיפול × ${im.detected} התראות שזוהו).</div></section>`;
+  }
+
+  // ----- Lab -----
+  function vLab() {
+    const pick = O.pickDemoClient(run, S), opts = run.results.slice().sort((a, b) => a.name.localeCompare(b.name, 'he')).map(r => `<option value="${r.id}" ${pick && r.id === pick.id ? 'selected' : ''}>${esc(r.name)} · ${SL[r.status]}</option>`).join('');
+    return `<section class="card pad" style="margin-bottom:14px;background:linear-gradient(135deg,var(--accbg),transparent 60%),var(--card)"><div class="row2" style="flex-wrap:wrap;gap:14px"><div style="flex:1;min-width:260px"><div class="eyebrow">תרחיש דגל</div><h2 style="margin:4px 0 6px;font-size:22px">יום בחיי מנהל סוכנות</h2>
+      <div class="tx2">זיהוי חריגה ← חקירה ← המלצה ← משימה ← אישור וטיפול ← בדיקה חוזרת ← דוח תוצאות. כל שלב מבצע פעולה אמיתית על מצב המערכת.</div></div><button class="btn acc" data-act="tour">${ic('play', 14)}התחל הדגמה</button></div></section>
+      <div class="grid g2" style="align-items:start"><section class="card pad"><div class="h2">תרחישים חיים<div class="sp"></div><span class="mock">משנים נתוני דמו בלבד</span></div>
+        <label class="small tx2">לקוח יעד <select class="sel" id="labClient">${opts}</select></label>
+        <div class="grid" style="grid-template-columns:repeat(auto-fill,minmax(220px,1fr));margin-top:12px">${O.SCENARIOS.map(s => `<div class="hyp" style="margin:0;display:flex;flex-direction:column;gap:8px"><b>${esc(s.name)}</b><span class="small tx2" style="flex:1">${esc(s.desc)}</span><button class="btn sec sm" data-act="scen" data-arg="${s.id}">${ic('play', 12)}הפעל תרחיש חי</button></div>`).join('')}</div>
+        <div class="note" style="margin-top:10px">התרחיש משנה את נתוני הסימולציה של הלקוח, מריץ את מנוע הבקרה על כל 50 הלקוחות ומעדכן רמזור, התראות, משימות, אוטומציות וסיכום.</div></section>
+      <section class="card pad"><div class="h2">שעון הדמו</div><div class="tx2">היום: <b>${N(fmtDay(O.today(S)))}</b>${S.offset ? ' (' + S.offset + ' ימים אחרי תחילת הדמו)' : ''}. קידום השעון מייצר ימי נתונים חדשים ומריץ בדיקה, כולל אוטומציות של איחור, הסלמה ובדיקה חוזרת.</div>
+        <div class="row2" style="margin-top:12px;gap:8px"><button class="btn sec" data-act="advance" data-arg="1">+1 יום</button><button class="btn sec" data-act="advance" data-arg="3">+3 ימים</button><div class="sp"></div><button class="btn dng" data-act="reset">איפוס מלא של הדמו</button></div>
+        <div class="h2" style="margin-top:18px">שינויים פעילים בנתונים</div>${Object.keys(S.ops).filter(k => S.ops[k].length).map(k => `<div class="fi"><a href="#client-${k}" style="flex:1">${esc(run.byId[k].name)}</a><span class="muted small">${S.ops[k].map(o => o.op).join(', ')}</span><button class="btn sec sm" data-act="resetc" data-arg="${k}">החזר</button></div>`).join('') || '<div class="empty" style="padding:10px">אין שינויים. כל הלקוחות בנתוני המקור.</div>'}</section></div>`;
+  }
+  function vInteg() {
+    const st = { connected: ['p-green', 'מחובר'], not_connected: ['p-gray', 'לא מחובר'] };
+    return `<section class="card" style="overflow:hidden;margin-bottom:14px"><div class="toolbar"><div class="h2" style="margin:0">מקורות נתונים וערוצים</div><div class="sp"></div><span class="engine">שום חיבור לא מוצג כפעיל בלי אימות</span></div>
+      ${C.PROVIDERS.map(p => `<div class="rule"><span class="dot ${p.status === 'connected' ? 'd-green' : 'd-none'}"></span><div style="flex:1"><b>${esc(p.name)}</b><div class="small tx2">${esc(p.status === 'connected' ? p.note : 'נדרש: ' + p.needs)}</div></div><span class="pill ${st[p.status][0]}">${st[p.status][1]}</span></div>`).join('')}</section>
+      <section class="card pad"><div class="h2">ארכיטקטורה</div><ul class="ul">
+        <li><b>Data Providers:</b> ממשק אחיד (listClients / getDays) שמחזיר נתונים מנורמלים. המנוע לא יודע מאיפה הנתונים מגיעים.</li>
+        <li><b>Intelligence Engine:</b> כללים סטטיסטיים שלוקחים בחשבון גודל מדגם, תקציב, היסטוריה ויעדים, וחקירה לפי פירוק המשפך (CPM × CTR × המרה).</li>
+        <li><b>Operations:</b> מחזור חיים של התראות (בלי כפילויות), משימות עם אישורים, אוטומציות, בדיקה חוזרת ו-Audit trail.</li>
+        <li><b>מפתחות והרשאות:</b> לא נשמרים בצד הלקוח ולא מתבקשות סיסמאות. חיבורים אמיתיים ירוצו ב-Backend עם OAuth.</li>
+        <li><b>השלב הבא:</b> Backend (Node + Postgres) עם בידוד נתונים לכל סוכנות, משתמשים והרשאות, Audit Log ומשימות מתוזמנות לבדיקה יומית.</li></ul></section>`;
+  }
+
+  // ----- Report -----
+  function reportHTML() {
+    const { cid, days } = U.report, R = O.report(run, S, cid, days), c = R.cur, p = R.prev, r = R.client;
+    const k = (l, v, d) => `<div class="met"><div class="l">${l}</div><div class="v">${v}</div><div class="c">${d || ''}</div></div>`;
+    return `<div class="mh no-print"><b style="flex:1">דוח ללקוח</b><div class="seg">${[7, 30, 90].map(d => `<button class="${days === d ? 'on' : ''}" data-act="rdays" data-arg="${d}">${d} ימים</button>`).join('')}</div>
+      <button class="btn sec sm" data-act="copyrep">העתק כטקסט</button>${IN_FRAME ? '<button class="btn sec sm" disabled title="ההדפסה חסומה בתצוגה המוטמעת">הדפסה / PDF: פתח את index.html בדפדפן</button>' : '<button class="btn pri sm" data-act="print">הדפס / שמור PDF</button>'}<button class="iconbtn" data-act="close">${ic('x')}</button></div>
+    <div class="rep printable" id="repBody"><div class="row2"><div class="logo"><i></i></div><b>ClientPulse</b><div class="sp"></div><span class="mock">נתוני דמו מדומים</span></div>
+      <h3 style="margin-top:14px">דוח ביצועים · ${esc(r.name)}</h3><div class="tx2">תקופה: ${N(fmtDay(R.period.from))}–${N(fmtDay(R.period.to))} (${days} ימים) · השוואה ל-${days} הימים שלפני</div>
+      <h4>מדדים עיקריים</h4><div class="rk">${k('הוצאה', N(money(c.spend)), p && chg(c.spend, p.spend))}${k('לידים', N(c.leads), p && chg(c.leads, p.leads, true))}${k('עלות לליד', c.cpl ? N(money(c.cpl)) : '—', p && chg(c.cpl, p.cpl))}${k('CTR', c.ctr ? N((c.ctr * 100).toFixed(2) + '%') : '—', p && chg(c.ctr, p.ctr, true))}</div>
+      <h4>מגמה שבועית</h4><table><tr><th>שבוע</th><th>הוצאה</th><th>לידים</th><th>עלות לליד</th></tr>${R.weeks.map(w => `<tr><td>${N(fmtDay(w.from))}–${N(fmtDay(w.to))}</td><td>${N(money(w.s.spend))}</td><td>${N(w.s.leads)}</td><td>${w.s.cpl ? N(money(w.s.cpl)) : '—'}</td></tr>`).join('')}</table>
+      <h4>בעיות שטופלו</h4>${R.resolved.length ? `<table>${R.resolved.map(t => `<tr><td>${esc(t.title.split(' · ')[0])}</td><td>אומת ${N(fmtDay(t.verification.day))}</td><td>${t.verification.before.cpl && t.verification.after.cpl ? 'עלות לליד ' + N(money(t.verification.before.cpl)) + ' ← ' + N(money(t.verification.after.cpl)) : ''}</td></tr>`).join('')}</table>` : '<div class="tx2">לא היו בעיות שנסגרו בתקופה.</div>'}
+      <h4>פעולות שבוצעו</h4>${R.actions.length ? `<ul class="ul">${R.actions.map(e => `<li>${N(fmtDay(e.day))} · ${esc(e.text.replace(/^\[[^\]]+\] /, ''))}</li>`).join('')}</ul>` : '<div class="tx2">לא תועדו פעולות בתקופה.</div>'}
+      <h4>נושאים פתוחים</h4>${R.open.length ? `<ul class="ul">${R.open.map(a => `<li>${esc(a.title)}: ${esc(a.what)}</li>`).join('')}</ul>` : '<div class="tx2">אין נושאים פתוחים.</div>'}
+      <h4>תוכנית לתקופה הבאה</h4><ul class="ul">${R.plan.map(x => `<li>${esc(x)}</li>`).join('')}</ul>
+      <div class="note" style="margin-top:18px">הדוח מבוסס על נתוני הלקוח הזה בלבד. הנתונים מדומים לצורך הדגמה.</div></div>`;
+  }
+  function reportText() { return (document.getElementById('repBody') || {}).innerText || ''; }
+
+  // ---------------- overlays ----------------
+  function renderModal() {
+    const ov = document.getElementById('modalOv'), m = document.getElementById('modal');
+    if (U.report) { m.innerHTML = reportHTML(); ov.classList.add('on'); }
+    else if (U.more) { m.innerHTML = `<div class="mh"><b style="flex:1">עוד</b><button class="iconbtn" data-act="close">${ic('x')}</button></div><div class="more-sheet" style="padding:8px">${NAV.slice(4).map(n => `<a class="it" href="#${n[0]}" data-act="close">${ic(n[2])}${n[1]}</a>`).join('')}
+      <div style="padding:10px 14px" class="grid"><select class="sel" data-chg="user">${O.TEAM.map(u => `<option value="${u.id}" ${u.id === S.user ? 'selected' : ''}>${esc(u.name)} · ${esc(u.role)}</option>`).join('')}</select><div class="row2"><button class="btn sec" style="flex:1" data-act="theme">${S.theme === 'light' ? 'מצב כהה' : 'מצב בהיר'}</button><button class="btn sec" style="flex:1" data-act="advance" data-arg="1">+1 יום דמו</button></div></div></div>`; ov.classList.add('on'); }
+    else ov.classList.remove('on');
+  }
+  function renderNotif() {
+    const p = document.getElementById('notifP'), list = visibleNotifs();
+    p.classList.toggle('on', U.notif);
+    if (!U.notif) return;
+    p.innerHTML = `<div class="mh"><b style="flex:1">התראות פנימיות</b><button class="btn sec sm" data-act="readall">סמן הכל כנקרא</button></div>${list.slice(0, 40).map(n => `<button class="ni ${n.read ? '' : 'unread'}" data-act="nopen" data-arg="${n.id}"><span class="dot ${n.kind === 'warn' || n.kind === 'escalation' ? 'd-red' : n.kind === 'success' ? 'd-green' : 'd-imp'}" style="margin-top:6px"></span><div style="flex:1"><div>${esc(n.text.length > 220 ? n.text.slice(0, 220) + '…' : n.text)}</div><div class="muted small">${N(fmtDay(n.day))} · ${N(hhmm(n.t))}${n.to === 'approvers' ? ' · למנהלים' : ''}</div></div></button>`).join('') || '<div class="empty">אין התראות</div>'}
+      <div class="note" style="padding:10px 14px">התראות פנימיות בלבד. שליחה ב-WhatsApp או במייל דורשת חיבור.</div>`;
+  }
+  function palItems() {
+    const q = U.palQ.trim(), acts = [['הרץ בדיקת מערכת', () => check(true)], ['יום בחיי מנהל סוכנות', startTour], ['קדם את שעון הדמו ביום', () => advance(1)], ['החלף ערכת נושא', toggleTheme]].concat(NAV.map(n => ['עבור אל: ' + n[1], () => go(n[0])]));
+    const cl = run ? run.results.filter(r => !q || (r.name + r.industry).indexOf(q) >= 0).slice(0, q ? 12 : 6).map(r => ({ g: 'לקוחות', l: r.name, s: SL[r.status], dot: r.status, f: () => go('client-' + r.id) })) : [];
+    return cl.concat(acts.filter(a => !q || a[0].indexOf(q) >= 0).map(a => ({ g: 'פעולות ומסכים', l: a[0], f: a[1] })));
+  }
+  function renderPal() {
+    const ov = document.getElementById('palOv'); ov.classList.toggle('on', U.pal); if (!U.pal) return;
+    const it = palItems(); let g = '';
+    document.getElementById('palRes').innerHTML = it.map((x, i) => { const h = (x.g !== g ? `<div class="grp">${x.g}</div>` : '') + `<button class="it ${i === U.palI ? 'on' : ''}" data-act="palgo" data-arg="${i}">${x.dot ? `<span class="dot d-${x.dot}"></span>` : ic('back', 14)}<span style="flex:1">${esc(x.l)}</span>${x.s ? `<span class="muted small">${x.s}</span>` : ''}</button>`; g = x.g; return h; }).join('') || '<div class="empty">אין תוצאות</div>';
+  }
+  function openPal() { U.pal = true; U.palQ = ''; U.palI = 0; const i = document.getElementById('palIn'); i.value = ''; renderPal(); setTimeout(() => i.focus(), 20); }
+  function toast(msg, kind) {
+    const el = document.createElement('div'); el.className = 'toast'; el.innerHTML = `<span class="dot ${kind === 'err' ? 'd-red' : kind === 'ok' ? 'd-green' : 'd-imp'}" style="margin-top:6px"></span><span>${esc(msg)}</span>`;
+    document.getElementById('toasts').appendChild(el); setTimeout(() => { el.style.opacity = 0; el.style.transition = 'opacity .3s'; setTimeout(() => el.remove(), 320); }, 4200);
+  }
+
+  // ---------------- tour: a day in the life ----------------
+  function startTour() { U.tour = { step: 0 }; U.pal = false; renderPal(); renderTour(); }
+  const TS = [
+    { t: 'יום בחיי מנהל סוכנות', b: () => 'נבחר לקוח תקין עם נפח פעילות גבוה, ונגרום לחריגה אמיתית בנתוני הדמו שלו. אחר כך נעבור את כל המסלול: זיהוי, חקירה, משימה, אישור, בדיקה חוזרת ודוח.', btn: '1 · צור חריגה והרץ בדיקה',
+      run: () => { const p = O.pickDemoClient(run, S); U.tour.cid = p.id; O.applyScenario(S, p.id, 'cpl'); checkSync(); go('client-' + p.id); } },
+    { t: 'זיהוי', b: () => { const r = run.byId[U.tour.cid], a = r.alerts[0]; return a ? `${r.name} הפך ל${SL[r.status]}. ${a.title}: ${a.what} רמת ביטחון ${a.confidence}.` : 'המנוע לא זיהה חריגה מובהקת בלקוח הזה.'; }, btn: '2 · פתח חקירה',
+      run: () => { const r = run.byId[U.tour.cid], a = r.alerts[0]; if (a) { const el = document.getElementById('al-' + a.key.replace(':', '-')); if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' }); } } },
+    { t: 'חקירה', b: () => { const r = run.byId[U.tour.cid], a = r.alerts[0], i = a && C.investigate(r, a); return i ? `ההשערה המובילה: ${i.hypotheses[0].text} (${i.hypotheses[0].support}). ראיה: ${i.hypotheses[0].evidence} לא נקבעה סיבה שלא נבדקה: ${i.unknown[0]}.` : ''; }, btn: '3 · צור משימה מההמלצה',
+      run: () => { const r = run.byId[U.tour.cid], a = r.alerts[0]; let t = O.openTaskFor(S, a.key); U.tour.auto = !!t; if (!t) t = O.createTask(S, run, a.key, { by: S.user }); U.tour.tid = t.id; save(); go('task-' + t.id); } },
+    { t: 'משימה', b: () => { const t = S.tasks.find(x => x.id === U.tour.tid); return `${U.tour.auto ? 'המשימה כבר נוצרה אוטומטית (כלל: לקוח הופך לאדום)' : 'נוצרה משימה'} ל${byU[t.assignee].name}, עם יעד ${fmtDay(t.due)}. ${t.requiresApproval ? 'התוכנית כוללת ' + t.plan.filter(p => p.actionType !== 'check').map(p => O.ACTION[p.actionType]).join(' ו') + ', ולכן נדרש אישור של משתמש מורשה.' : ''}`; }, btn: () => '4 · ' + byU[S.tasks.find(x => x.id === U.tour.tid).assignee].name + ' מתחיל/ה ומגיש/ה לאישור',
+      run: () => { const t = S.tasks.find(x => x.id === U.tour.tid); if (t.status === 'new') O.taskAction(S, t, 'start', t.assignee); if (t.status === 'in_progress') O.taskAction(S, t, 'submit', t.assignee); save(); go('task-' + t.id); } },
+    { t: 'אישור', b: () => { const t = S.tasks.find(x => x.id === U.tour.tid); return `סטטוס: ${ST[t.status]}. עובד לא יכול לאשר. רק ניב או יובל. בדמו האישור לא משנה חשבון אמיתי, כי Meta לא מחובר.`; }, btn: '5 · אשר בתור ניב',
+      run: () => { const t = S.tasks.find(x => x.id === U.tour.tid); if (t.status === 'awaiting_approval') O.taskAction(S, t, 'approve', 'niv'); save(); go('task-' + t.id); } },
+    { t: 'בוצע, אבל עוד לא נסגר', b: () => { const t = S.tasks.find(x => x.id === U.tour.tid); return `"בוצע" לא סוגר את הבעיה. האוטומציה קבעה בדיקה חוזרת ל-${fmtDay(t.recheckDay)} לפי המדד: ${t.success.text}. עכשיו נחיל את השפעת התיקון על נתוני הדמו ונקדם את השעון לבדיקה.`; }, btn: '6 · החל תיקון וקדם לבדיקה החוזרת',
+      run: () => { const t = S.tasks.find(x => x.id === U.tour.tid); if (!t.fixSim) { O.simulateFix(S, t); t.fixSim = true; } O.advanceDays(S, Math.max(1, (t.recheckDay || O.today(S) + 3) - O.today(S))); checkSync(); go('task-' + t.id); } },
+    { t: 'בדיקה חוזרת', b: () => { const t = S.tasks.find(x => x.id === U.tour.tid), v = t.verification; return v ? (v.ok ? `אומת בנתונים: ${t.success.text}. עלות לליד ${money(v.before.cpl || 0)} ← ${money(v.after.cpl || 0)}. המשימה נסגרה, והאירוע נרשם ב-Impact Center.` : 'הבדיקה החוזרת לא אישרה שיפור, ולכן המשימה חזרה לטיפול. זו בדיוק ההתנהגות הנכונה.') : 'הבדיקה החוזרת עוד לא הגיעה.'; }, btn: '7 · הפק דוח תוצאות ללקוח',
+      run: () => { U.report = { cid: U.tour.cid, days: 30 }; go('client-' + U.tour.cid); } },
+    { t: 'סיום', b: () => 'זהו המסלול המלא. כל שלב רץ על מצב המערכת: הנתונים, הרמזור, המשימה, ההיסטוריה, ה-Impact Center והדוח. אפשר לחזור על ההדגמה עם לקוח אחר, או לאפס את הדמו.', btn: 'סיום', run: () => { U.tour = null; go('impact'); } }
+  ];
+  function renderTour() {
+    const box = document.getElementById('tourBox'); if (!U.tour) { box.innerHTML = ''; return; }
+    const s = TS[U.tour.step]; let body = ''; try { body = s.b(); } catch (e) { body = ''; }
+    box.innerHTML = `<div class="card tour"><div class="row2"><span class="eyebrow" style="flex:1">יום בחיי מנהל סוכנות · שלב ${U.tour.step + 1}/${TS.length}</span><button class="iconbtn" style="width:28px;height:28px" data-act="tourx" aria-label="סגור">${ic('x', 14)}</button></div>
+      <div class="steps">${TS.map((x, i) => `<i class="${i <= U.tour.step ? 'on' : ''}"></i>`).join('')}</div><b>${esc(s.t)}</b><p class="tx2" style="margin:6px 0 12px;font-size:13.5px">${esc(body)}</p>
+      <button class="btn acc" style="width:100%" data-act="tourgo">${esc(typeof s.btn === 'function' ? s.btn() : s.btn)}</button></div>`;
+  }
+
+  // ---------------- actions ----------------
+  function advance(n) { O.advanceDays(S, n); checkSync(); toast(`שעון הדמו: ${fmtDay(O.today(S))} · ${run.newAlerts.length} חריגות חדשות · ${run.cleared.length} נפתרו`, 'ok'); render(); }
+  function toggleTheme() { S.theme = S.theme === 'light' ? 'dark' : 'light'; save(); render(); }
+  function scenario(sid, cid) {
+    const before = run.byId[cid] ? run.byId[cid].status : null;
+    if (sid === 'ignored') {
+      let t = S.tasks.find(x => /new|in_progress/.test(x.status) && x.severity === 'red' && !byU[x.assignee].approver);
+      if (!t) { const d = run.decisions[0] || { alert: run.results.find(r => r.status === 'red').alerts[0] }; t = O.createTask(S, run, d.alert.key, { by: S.user }); }
+      if (byU[t.assignee].approver) t.assignee = 'dana';
+      t.due = O.today(S); O.ev(S, 'lab', 'Demo Lab · תרחיש "עובד לא מטפל": יעד המשימה נקבע להיום', { clientId: t.clientId, ref: t.id });
+      O.advanceDays(S, 1); checkSync(); U.taskTab = 'open'; toast(`${byU[t.assignee].name} לא טיפל/ה במשימה. היא עברה את היעד ונשלחה התראה פנימית`, 'ok'); go('task-' + t.id); return;
+    }
+    O.applyScenario(S, cid, sid); checkSync();
+    const r = run.byId[cid]; toast(`${r.name}: ${before ? SL[before] : ''} ← ${SL[r.status]}${r.alerts[0] ? ' · ' + r.alerts[0].title : ''}${r.improved ? ' · זוהה שיפור' : ''}`, 'ok'); go('client-' + cid);
+  }
+  document.addEventListener('click', e => {
+    const el = e.target.closest('[data-go],[data-act]'); if (!el || el.disabled) return;
+    if (el.dataset.go) { U.notif = false; go(el.dataset.go); return; }
+    const a = el.dataset.act, arg = el.dataset.arg;
+    if (el.tagName === 'A' && a === 'close') { U.more = false; renderModal(); return; }
+    e.preventDefault();
+    switch (a) {
+      case 'check': check(true); break;
+      case 'advance': advance(+arg); U.more = false; break;
+      case 'theme': toggleTheme(); break;
+      case 'reset': if (U.confirmReset) { try { localStorage.removeItem(KEY); } catch (x) {} S = O.newState(T0); S.theme = 'dark'; U.tour = null; U.chat = []; U.confirmReset = false; run = null; render(); check(false); toast('הדמו אופס לנתוני המקור', 'ok'); } else { U.confirmReset = true; toast('לחץ שוב על "איפוס" תוך 4 שניות כדי לאשר מחיקה של כל השינויים'); setTimeout(() => { U.confirmReset = false; }, 4000); } break;
+      case 'palette': openPal(); break;
+      case 'palgo': { const it = palItems()[+arg]; U.pal = false; renderPal(); if (it) it.f(); break; }
+      case 'notif': U.notif = !U.notif; renderNotif(); break;
+      case 'readall': S.notifications.forEach(n => { n.read = true; }); save(); chrome(); renderNotif(); break;
+      case 'nopen': { const n = S.notifications.find(x => x.id === arg); if (n) { n.read = true; save(); U.notif = false; if (n.route) go(n.route); else render(); } break; }
+      case 'filter': U.filter = arg; render(); break;
+      case 'period': U.period = +arg; render(); break;
+      case 'metric': U.metric = arg; render(); break;
+      case 'exp': U.exp = !U.exp; render(); break;
+      case 'ttab': U.taskTab = arg; U.hl = null; render(); break;
+      case 'mktask': { const t = O.createTask(S, run, arg, { by: S.user }); save(); toast('נוצרה משימה ל' + byU[t.assignee].name, 'ok'); go('task-' + t.id); break; }
+      case 'task': { const [id, act] = arg.split('|'), t = S.tasks.find(x => x.id === id);
+        if (act === 'fix') { O.simulateFix(S, t); t.fixSim = true; save(); toast('סימולציה: התיקון יחול על נתוני הדמו מהיום הבא', 'ok'); render(); break; }
+        const res = O.taskAction(S, t, act, S.user); save(); toast(res.msg, res.ok ? 'ok' : 'err'); U.hl = id; render(); break; }
+      case 'ask': doAsk(arg); break;
+      case 'askc': U.chat.push({ q: 'למה ' + run.byId[arg].name }); U.chat.push({ a: O.ask('למה ' + run.byId[arg].name, run, S) }); go('ask'); break;
+      case 'rule': S.rules[arg] = !S.rules[arg]; save(); toast((S.rules[arg] ? 'הופעל: ' : 'כובה: ') + O.RULES.find(r => r.id === arg).name); render(); break;
+      case 'scen': scenario(arg, document.getElementById('labClient').value); break;
+      case 'scen1': { const [sid, cid] = arg.split('|'); scenario(sid, cid); break; }
+      case 'resetc': delete S.ops[arg]; checkSync(); toast('הלקוח הוחזר לנתוני המקור', 'ok'); render(); break;
+      case 'note': { const i = document.getElementById('noteIn'); if (!i.value.trim()) { toast('ההערה ריקה', 'err'); break; } (S.notes[arg] = S.notes[arg] || []).unshift({ text: i.value.trim(), user: S.user, day: O.today(S), t: Date.now() }); save(); toast('ההערה נשמרה', 'ok'); render(); break; }
+      case 'report': U.report = { cid: arg, days: 30 }; renderModal(); break;
+      case 'rdays': U.report.days = +arg; renderModal(); break;
+      case 'print': try { window.print(); } catch (x) { toast('ההדפסה נחסמה בדפדפן הזה', 'err'); } break;
+      case 'copyrep': copy(reportText()); break;
+      case 'copy': copy(arg); break;
+      case 'close': U.report = null; U.more = false; renderModal(); break;
+      case 'more': U.more = true; renderModal(); break;
+      case 'tour': startTour(); break;
+      case 'tourx': U.tour = null; renderTour(); break;
+      case 'tourgo': { const s = TS[U.tour.step]; try { s.run(); if (U.tour) { U.tour.step = Math.min(U.tour.step + 1, TS.length - 1); } } catch (x) { console.error(x); toast('השלב נכשל: ' + x.message, 'err'); } save(); render(); break; }
+    }
+  });
+  function copy(t) { try { navigator.clipboard.writeText(t).then(() => toast('הועתק', 'ok'), () => toast('ההעתקה נחסמה בדפדפן', 'err')); } catch (x) { toast('ההעתקה נחסמה בדפדפן', 'err'); } }
+  document.addEventListener('change', e => {
+    const el = e.target; if (!el.dataset || !el.dataset.chg) return;
+    if (el.dataset.chg === 'assign') { const t = S.tasks.find(x => x.id === el.dataset.arg), r = O.taskAction(S, t, 'reassign', S.user, el.value); save(); toast(r.msg, r.ok ? 'ok' : 'err'); render(); }
+    if (el.dataset.chg === 'assume') { S.assumptions[el.dataset.arg] = Math.max(0, +el.value || 0); save(); render(); }
+    if (el.dataset.chg === 'user') { S.user = el.value; save(); render(); }
+  });
+  document.addEventListener('input', e => { if (e.target.id === 'cq') { U.q = e.target.value.trim(); document.getElementById('clist').innerHTML = rows(filtered()); } });
+  document.addEventListener('submit', e => { if (e.target.id === 'askF') { e.preventDefault(); const i = document.getElementById('askIn'); const q = i.value; i.value = ''; doAsk(q); setTimeout(() => { const j = document.getElementById('askIn'); if (j) j.focus(); }, 0); } });
+  document.addEventListener('keydown', e => {
+    if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') { e.preventDefault(); U.pal ? (U.pal = false, renderPal()) : openPal(); return; }
+    if (e.key === 'Escape') { U.pal = false; U.report = null; U.more = false; U.notif = false; renderPal(); renderModal(); renderNotif(); return; }
+    if (U.pal) { const n = palItems().length; if (e.key === 'ArrowDown') { U.palI = (U.palI + 1) % n; renderPal(); e.preventDefault(); } if (e.key === 'ArrowUp') { U.palI = (U.palI - 1 + n) % n; renderPal(); e.preventDefault(); } if (e.key === 'Enter') { const it = palItems()[U.palI]; U.pal = false; renderPal(); if (it) it.f(); } }
+  });
+  ['palOv', 'modalOv'].forEach(id => document.addEventListener('click', e => { if (e.target.id === id) { U.pal = false; U.report = null; U.more = false; renderPal(); renderModal(); } }));
+
+  // ---------------- boot ----------------
+  shell(); { const r = route(); if (r.v === 'clients' && r.f) U.filter = r.f; } render(); check(false);
+  window.__cp = { get run() { return run; }, get S() { return S; } }; // for automated UI tests
+})();
+</script>
+</body>
+</html>
