@@ -269,3 +269,12 @@ details summary{cursor:pointer;color:var(--tx2);font-size:12.5px;list-style:none
 textarea.inp{width:100%;min-height:90px;resize:vertical}
 .ok{color:var(--g)}.bad{color:var(--r)}
 @media (max-width:900px){.tbl .hide-m{display:none}.frm{grid-template-columns:1fr 1fr}}
+.tiles{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:6px}
+.tile{display:flex;flex-direction:column;gap:2px;text-align:start;padding:8px 10px;border-radius:10px;border:1px solid var(--line);border-inline-start:4px solid var(--line2);background:var(--card2);min-width:0;transition:transform .12s}
+.tile:hover{transform:translateY(-1px);border-color:var(--line2)}
+.tile b{font-size:12.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.tile span{font-size:11px;color:var(--mute);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.t-red{border-inline-start-color:var(--r);background:var(--rbg)}.t-yellow{border-inline-start-color:var(--y);background:var(--ybg)}.t-green{border-inline-start-color:var(--g)}.t-imp{border-inline-start-color:var(--b);background:var(--bbg)}
+.ycard{display:flex;flex-direction:column;border:1px solid var(--line);border-radius:12px;overflow:hidden}
+.yr{display:grid;grid-template-columns:120px 1fr;gap:10px;padding:8px 12px;border-top:1px solid var(--line);font-size:13.5px}.yr:first-child{border-top:0}
+.yk{color:var(--mute);font-weight:600;font-size:12.5px}.yv .ul{margin:0}
+@media (max-width:900px){.yr{grid-template-columns:1fr;gap:2px}.cards{grid-template-columns:1fr!important}}

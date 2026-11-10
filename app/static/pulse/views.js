@@ -35,7 +35,7 @@ A.startDemo = async (b) => {
 
 // ================================================================ מרכז פיקוד
 V.home = async (view) => {
-  const o = await api('/api/pulse/overview');
+  const [o, ab] = await Promise.all([api('/api/pulse/overview'), api('/api/pulse/alerts')]);
   const c = o.counts, w = o.week, t = o.tasks;
   const hour = new Date().getHours(), greet = hour < 12 ? 'בוקר טוב' : hour < 18 ? 'צהריים טובים' : 'ערב טוב';
   const lr = o.last_run;
@@ -44,19 +44,27 @@ V.home = async (view) => {
     <div class="meta"><span>${N(c.green + c.yellow + c.red)} לקוחות · נתונים עד ${N(st.me.ref_label)}</span>${lr ? `<span>· בדיקה אחרונה: ${lr.manual ? 'ידנית' : 'אוטומטית'}, ${N(lr.n)} לקוחות ב-${N(lr.ms)} מ"ש</span>` : ''}${o.demo ? '<span class="mock">דמו</span>' : ''}</div></div>
     <div class="sp"></div>${o.demo ? `<button class="btn sec sm" data-act="tourStart">${ic('play', 14)} חמש דקות בחיים של מנהל משרד</button>` : ''}</div>
   <div class="kpis">${kpi('דחוף', c.red, 'דורשים טיפול', 'red', 'clients?f=red')}${kpi('במעקב', c.yellow, 'חריגה או מגמה', 'yellow', 'clients?f=yellow')}${kpi('תקין', c.green, 'בתוך הטווח', 'green', 'clients?f=green')}${kpi('השתפרו', c.improved, 'שיפור מובהק', 'imp', 'clients?f=improved')}</div>
+  <div class="card pad" style="margin-bottom:14px"><div class="h2">${ic('users')} רמזור הלקוחות<span class="sp"></span><span class="note">לחיצה על לקוח פותחת את התיק שלו</span></div>
+    <div class="tiles">${ab.board.map((b) => `<button class="tile t-${b.improved && b.status === 'green' ? 'imp' : b.status}" data-act="go" data-arg="client/${b.id}" title="${esc(b.title)}"><b>${esc(b.name)}</b><span>${esc(b.title)}</span></button>`).join('')}</div></div>
+  <div class="grid g3" style="margin-bottom:14px">
+    <div class="card pad"><div class="h2">${ic('zap')} מה עושים היום</div>
+      <div class="stack" style="gap:8px">${o.today.length ? o.today.map((x, i) => `<button class="todo sev-${x.severity}" data-act="go" data-arg="${esc(x.route)}"><span class="n">${i + 1}</span><span><div>${esc(x.text)}</div><div class="why">${esc(x.why)}</div></span></button>`).join('') : empty('אין פעולות פתוחות. כל הלקוחות בטווח התקין.')}</div></div>
+    <div class="card pad"><div class="h2">${ic('bell')} מה קרה מאתמול</div>
+      <div class="feed">${ab.happened.length ? ab.happened.slice(0, 9).map(feedItem).join('') : empty('לא קרה שום דבר חדש מאתמול')}</div></div>
+    <div class="card pad"><div class="h2">${ic('search')} מה חסר</div>
+      <div class="stack" style="gap:6px">${ab.missing.length ? ab.missing.slice(0, 9).map((m) => `<button class="act" style="width:100%" data-act="go" data-arg="${esc(m.route)}"><i class="dot d-${m.kind === 'late' || m.kind === 'owner' ? 'red' : 'yellow'}"></i><span style="text-align:start" class="small">${esc(m.text)}</span></button>`).join('') : empty('לא חסר כלום: לכל חריגה יש מטפל והנתונים מעודכנים')}</div>
+      ${ab.missing.length > 9 ? `<a class="small" href="#/alerts">ועוד ${N(ab.missing.length - 9)} — לכל החריגות</a>` : ''}</div>
+  </div>
   <div class="grid g2">
     <div class="stack">
-      <div class="card pad"><div class="h2">${ic('zap')} מה עושים היום?<span class="sp"></span><span class="engine">לפי חומרה · תקציב · משך · מצב טיפול</span></div>
-        <div class="stack" style="gap:8px">${o.today.length ? o.today.map((x, i) => `<button class="todo sev-${x.severity}" data-act="go" data-arg="${esc(x.route)}"><span class="n">${i + 1}</span><span><div>${esc(x.text)}</div><div class="why">${esc(x.why)}</div></span></button>`).join('') : empty('אין פעולות פתוחות. כל הלקוחות בטווח התקין.')}</div>
-        <p class="sum" style="margin-top:14px"><span class="small tx2">${o.summary.map((p) => (p.route ? `<a class="lk" href="#/${p.route}">${esc(p.t)}</a>` : esc(p.t))).join('')}${o.excess > 0 ? ` הוצאה עודפת משוערת מחריגות השבוע: <b>${N(money(o.excess))}</b>.` : ''}</span></p></div>
+      <div class="card pad"><div class="h2">${ic('report')} סיכום</div>
+        <p class="sum" style="margin:0"><span class="small tx2">${o.summary.map((p) => (p.route ? `<a class="lk" href="#/${p.route}">${esc(p.t)}</a>` : esc(p.t))).join('')}${o.excess > 0 ? ` הוצאה עודפת משוערת מחריגות השבוע: <b>${N(money(o.excess))}</b>.` : ''}</span></p></div>
       <div class="card pad"><div class="h2">${ic('chart')} השבוע מול השבוע שעבר</div>
         <div class="mets" style="grid-template-columns:repeat(${w.sales != null ? 4 : 3},1fr)">
           <div class="met"><div class="l">הוצאה (כל הלקוחות)</div><div class="v">${N(money(w.spend))}</div>${chg(w.spend, w.prev_spend)}</div>
           <div class="met"><div class="l">לידים</div><div class="v">${N(w.leads.toLocaleString())}</div>${chg(w.leads, w.prev_leads)}</div>
           <div class="met"><div class="l">עלות לליד</div><div class="v">${N(money(w.cpl))}</div>${chg(w.cpl, w.prev_cpl, true)}</div>
           ${w.sales != null ? `<div class="met"><div class="l">מכירות מדווחות</div><div class="v">${N(w.sales)}</div>${chg(w.sales, w.prev_sales)}</div>` : ''}</div></div>
-      <div class="card pad"><div class="h2">${ic('bell')} שינויים מהיממה האחרונה</div>
-        <div class="feed">${o.changes.length ? o.changes.map(feedItem).join('') : empty('אין שינויים חדשים מאתמול')}</div></div>
     </div>
     <div class="stack">
       <div class="card pad"><div class="h2">${ic('check')} מצב הטיפול</div>
@@ -171,6 +179,35 @@ V.client = async (view, p) => {
   st._client = d;
 };
 
+function yuvalCard(c, compact) {
+  const row = (k, v) => `<div class="yr"><span class="yk">${k}</span><span class="yv">${v}</span></div>`;
+  const list = (xs) => (xs.length ? `<ul class="ul">${xs.map((x) => `<li>${esc(x)}</li>`).join('')}</ul>` : '—');
+  return `<div class="ycard">
+    ${row('מה קרה', esc(c.what))}
+    ${row('מתי התחיל', `${N(c.started_label)} · פתוח ${N(c.days_open)} ימים · ${esc(c.period)}`)}
+    ${row('מה השתנה', list(c.changed))}
+    ${row('חומרה', `<span class="pill p-${c.severity}">${esc(c.severity_label)}</span>`)}
+    ${compact ? '' : row('נתונים תומכים', list(c.evidence))}
+    ${row('הסברים אפשריים', list(compact ? c.explanations.slice(0, 1) : c.explanations))}
+    ${compact ? '' : row('מה לבדוק', list(c.check))}
+    ${row('הפעולה הבאה', `<b>${esc(c.next)}</b>`)}
+    ${row('מי אחראי', esc(c.owner_name) + (c.late ? ' <span class="pill p-red">באיחור</span>' : ''))}
+    ${row('האם טופל', esc(c.handled))}
+    ${row('האם השתפר', esc(c.improved))}
+  </div>`;
+}
+
+V.alerts = async (view, p) => {
+  const d = await api('/api/pulse/alerts');
+  const f = p.f || 'all';
+  const cards = d.cards.filter((c) => f === 'all' || (f === 'nohandler' ? !c.task_id : f === 'late' ? c.late : c.severity === f));
+  view.innerHTML = `<p class="tx2">כל חריגה פתוחה, בפורמט אחד: מה קרה, מתי, מה השתנה, כמה חמור, על סמך מה, למה זה יכול לקרות, מה לבדוק, מה הצעד הבא, מי אחראי, האם טופל והאם השתפר.</p>
+  <div class="chips tabs">${[['all', 'הכול'], ['red', 'אדום'], ['yellow', 'צהוב'], ['nohandler', 'בלי מטפל'], ['late', 'באיחור']].map(([k, t]) => `<button class="chip ${f === k ? 'on' : ''}" data-act="go" data-arg="alerts?f=${k}">${t} ${N(d.cards.filter((c) => k === 'all' || (k === 'nohandler' ? !c.task_id : k === 'late' ? c.late : c.severity === k)).length)}</button>`).join('')}</div>
+  <div class="cards" style="grid-template-columns:repeat(auto-fill,minmax(420px,1fr))">${cards.map((c) => `<div class="card pad sev-${c.severity}"><div class="row"><a href="#/client/${c.client_id}"><b>${esc(c.client)}</b></a>${demoTag(c.is_demo)}<span class="sp"></span>${pill(c.severity)}</div>
+    <h3 style="margin:8px 0 10px;font-size:16px">${esc(c.title)}</h3>${yuvalCard(c, true)}
+    <div class="row" style="margin-top:10px">${c.task_id ? `<button class="btn sec sm" data-act="go" data-arg="task/${c.task_id}">למשימה</button>` : `<button class="btn pri sm" data-act="createTask" data-arg="${esc(c.key)}">צור משימה</button>`}<button class="btn sec sm" data-act="go" data-arg="client/${c.client_id}">כל הפרטים והגרף</button></div></div>`).join('') || `<div class="card">${empty('אין חריגות פתוחות')}</div>`}</div>`;
+};
+
 function alertCard(a, d, primary) {
   const inv = a.inv, t = a.task;
   const sev = a.severity;
@@ -178,8 +215,8 @@ function alertCard(a, d, primary) {
     <div class="alh">${pill(sev)}<span class="t">${esc(a.title)}</span>${a.handling ? `<span class="pill p-gray">${esc(HANDLING[a.handling] || a.handling)}</span>` : ''}${a.early ? '<span class="pill p-imp">התרעה מוקדמת</span>' : ''}<span class="sp"></span>
       <span class="engine">${ic('spark', 12)} מנוע כללים סטטיסטי · ביטחון ${esc(a.confidence)}</span></div>
     <div class="meta2"><span>${esc(a.period)}</span>${a.first_day ? `<span>התחיל: ${N(dayLabel(a.first_day))}</span>` : ''}<span>משך: ${N(a.durationDays)} ימים</span></div>
-    <p style="margin:0 0 8px;font-size:15px">${esc(a.what)}</p><p class="tx2 small" style="margin:0 0 10px">${esc(a.why)}</p>
-    ${primary ? '' : '<details><summary>הצג חקירה מלאה</summary>'}
+    ${yuvalCard(a.card, !primary)}
+    <details style="margin-top:10px"><summary>חקירה מלאה: טבלת מדדים, משקל כל השערה ומדד הצלחה</summary>
     <div class="inv">
       <div class="blk"><div class="k"><span class="tag3 t-fact">עובדות</span> מה השתנה ביחס לתקופה קודמת</div><table class="ft"><tr><th>מדד</th><th>לפני</th><th>עכשיו</th><th>שינוי</th></tr>${inv.facts.map((f) => `<tr><td>${esc(f.label)}</td><td>${N(f.before)}</td><td>${N(f.after)}</td><td>${f.change == null ? '' : N((f.change > 0 ? '+' : '') + Math.round(f.change * 100) + '%')}</td></tr>`).join('')}</table></div>
       <div class="blk"><div class="k"><span class="tag3 t-hyp">השערות</span> הסברים אפשריים, לפי משקל בנתונים</div>${inv.hypotheses.map((x) => `<div class="hyp"><div><b>${esc(x.text)}</b></div><div class="small tx2">${esc(x.evidence)}</div><div class="note">${esc(x.support)}</div><div class="bar"><i style="width:${Math.round((x.share || 0) * 100)}%"></i></div></div>`).join('')}</div>
@@ -187,7 +224,7 @@ function alertCard(a, d, primary) {
       <div class="blk"><div class="k"><span class="tag3 t-rec">המלצה</span> תוכנית פעולה</div><ol class="plan">${inv.plan.map((x) => `<li><span>${esc(x.text)} ${SENS.has(x.actionType) ? `<span class="pill p-yellow">${esc(ACTION[x.actionType])} · דורש אישור</span>` : ''}</span></li>`).join('')}</ol></div>
       <div class="okbox"><b>מדד הצלחה:</b> ${esc(inv.success.text)} · בדיקה חוזרת אוטומטית אחרי ${N(inv.success.days)} ימים</div>
       <div class="unk">לא ידוע (חסר חיבור): ${inv.unknown.map(esc).join(' · ')}</div>
-    </div>${primary ? '' : '</details>'}
+    </div></details>
     <div class="row" style="margin-top:12px">${t ? `<button class="btn pri sm" data-act="go" data-arg="task/${t.id}">למשימה (${esc(STATUS[t.status])} · ${esc(memberName(t.assignee))})</button>` : `<select class="inp sm" id="as_${esc(a.key)}" aria-label="אחראי">${memberOpts(d.client.owner)}</select><button class="btn pri sm" data-act="createTask" data-arg="${esc(a.key)}">צור משימה ושייך</button>`}
       <span class="sp"></span>${a.feedback ? `<span class="note">משוב: ${a.feedback === 'useful' ? 'מועילה' : 'שווא'}</span>` : `<button class="btn sec sm" data-act="fb" data-arg="${esc(a.key)}|useful">מועילה</button><button class="btn sec sm" data-act="fb" data-arg="${esc(a.key)}|false_positive">התראת שווא</button>`}</div>
   </div>`;
@@ -260,7 +297,7 @@ V.tasks = async (view, p) => {
     <div class="row">${d.team.filter((m) => m.open || m.clients).map((m) => `<div class="met" style="min-width:150px"><div class="l">${esc(m.name)} · ${esc(m.role || '')}</div><div class="v">${N(m.open)} <span class="note">פתוחות</span></div><div class="c ${m.late ? 'bad' : 'muted'}">${N(m.late)} באיחור · ${N(m.not_started)} לא התחילו</div></div>`).join('')}</div></div>
   <div class="tabs chips">${[['open', 'פתוחות'], ['mine', 'שלי'], ['approval', 'ממתין לאישור'], ['verify', 'ממתין לבדיקה חוזרת'], ['late', 'באיחור'], ['closed', 'נסגרו'], ['all', 'הכול']].map(([k, t]) => `<button class="chip ${tab === k ? 'on' : ''}" data-act="go" data-arg="tasks?tab=${k}">${t} ${N(d.tasks.filter(F[k]).length)}</button>`).join('')}</div>
   <div class="cards">${list.map((t) => taskCard(t, ref, p.hl === t.id, late(t))).join('') || `<div class="card">${empty('אין משימות בתצוגה הזו')}</div>`}</div>`;
-  if (p.hl) document.getElementById('tk_' + p.hl)?.scrollIntoView({ block: 'center' });
+  if (p.hl) setTimeout(() => document.getElementById('tk_' + p.hl)?.scrollIntoView({ block: 'center' }), 50);
 };
 function taskCard(t, ref, hl, late) {
   const idx = FLOW.indexOf(t.status === 'done' ? 'awaiting_verification' : t.status);

@@ -758,6 +758,86 @@ def summary_text(db: Database, acc: str, run: dict) -> dict:
     return {"plain": plain, "parts": parts, "top": top}
 
 
+SEV = {"red": "דחוף (אדום)", "yellow": "דורש מעקב (צהוב)"}
+
+
+def alert_card(db: Database, acc: str, run: dict, r: dict, a: dict, st: dict | None, t: dict | None, tm: dict) -> dict:
+    """כרטיס חריגה בדיוק לפי הדרישה של יובל: מה קרה · מתי התחיל · מה השתנה · חומרה · נתונים תומכים · הסברים · מה לבדוק ·
+    הפעולה הבאה · מי אחראי · האם טופל · האם השתפר. כל שדה מחושב מנתונים / מצב אמיתי במערכת."""
+    st = st or {}
+    if not t:  # גם משימה שכבר נסגרה — כדי לענות "האם השתפר"
+        row = one(db, "SELECT * FROM pulse_tasks WHERE account_id=? AND alert_key=? ORDER BY created_at DESC LIMIT 1", (acc, a["key"]))
+        if not row:  # חריגה משנית אצל לקוח שכבר יש לו משימה פתוחה — מטופלת במסגרתה (אוטומציה פותחת משימה אחת ללקוח)
+            row = one(db, "SELECT * FROM pulse_tasks WHERE account_id=? AND client_id=? AND status!='closed' AND alert_key IS NOT NULL ORDER BY created_at LIMIT 1",
+                      (acc, r["id"]))
+        t = task_obj(row) if row else None
+    inv = engine.investigate(r, a)
+    ref = run["ref"]
+    first = st.get("first_day", ref)
+    big = sorted([f for f in inv["facts"] if f["change"] is not None], key=lambda f: -abs(f["change"]))[:3]
+    owner = (t or {}).get("assignee") or r["owner"]
+    if not t:
+        handled = "לא — עדיין לא נפתחה משימה"
+    else:
+        handled = {"new": "עוד לא — משימה פתוחה, הטיפול לא התחיל", "in_progress": "בטיפול עכשיו",
+                   "awaiting_approval": "טופל — ממתין לאישור מנהל", "awaiting_verification": "כן — טופל",
+                   "done": "כן — טופל", "closed": "כן — טופל ונסגר"}.get(t["status"], t["status"])
+    v = (t or {}).get("verification")
+    if t and t["status"] == "awaiting_verification":
+        improved = f"נבדק אוטומטית ב-{fmt_day(t['recheck_day'])} (מדד: {t['success']['text']})"
+    elif v:
+        improved = ("כן — אומת בנתונים" if v["ok"] else "לא — הבדיקה החוזרת הראתה שהבעיה עדיין קיימת")
+    else:
+        improved = "עוד אין מה למדוד — הטיפול לא בוצע"
+    return {
+        "key": a["key"], "client_id": r["id"], "client": r["name"], "is_demo": r["is_demo"], "severity": a["severity"], "title": a["title"],
+        "what": a["what"], "started": first, "started_label": fmt_day(first), "days_open": ref - first, "period": a["period"],
+        "changed": [f"{f['label']}: {f['before']} ← {f['after']} ({'+' if f['change'] > 0 else ''}{round(f['change'] * 100)}%)" for f in big],
+        "severity_label": SEV[a["severity"]] + f" · ביטחון {a['confidence']}",
+        "evidence": [" ".join(x for x in n if x) for n in a["numbers"]] + [a["why"]],
+        "explanations": [h["text"] + f" ({h['support']})" for h in inv["hypotheses"][:3]],
+        "check": inv["checks"][:3], "next": inv["plan"][0]["text"] if inv["plan"] else "—",
+        "owner": owner, "owner_name": (tm.get(owner) or {}).get("name", "לא שויך"),
+        "handled": handled, "improved": improved, "task_id": (t or {}).get("id"), "task_status": (t or {}).get("status"),
+        "late": bool(t and t.get("due_day") is not None and t["due_day"] < ref and t["status"] in ("new", "in_progress", "awaiting_approval")),
+        "priority": a["priority"]}
+
+
+def alert_board(db: Database, acc: str) -> dict:
+    run = analysis(db, acc)
+    states = alert_rows(db, acc)
+    tasks = {t["alert_key"]: t for t in open_tasks(db, acc)}
+    tm = team_map(db, acc)
+    cards = []
+    for r in run["results"]:
+        for a in r["alerts"]:
+            st = states.get(a["key"], {})
+            if st.get("status") == "dismissed":
+                continue
+            t = tasks.get(a["key"])
+            if not t:
+                row = one(db, "SELECT * FROM pulse_tasks WHERE account_id=? AND alert_key=? ORDER BY created_at DESC LIMIT 1", (acc, a["key"]))
+                t = task_obj(row) if row else None
+            cards.append(alert_card(db, acc, run, r, a, st, t, tm))
+    cards.sort(key=lambda c: -c["priority"])
+    ref = run["ref"]
+    happened = rows(db, "SELECT * FROM pulse_events WHERE account_id=? AND day>=? AND type IN ('alert','cleared','verified','verify_failed') ORDER BY id DESC LIMIT 30", (acc, ref - 1))
+    missing = []
+    for c in cards:
+        if not c["task_id"]:
+            missing.append({"text": f"אין מטפל: {c['title']} · {c['client']}", "route": f"client/{c['client_id']}", "kind": "owner"})
+        elif c["late"]:
+            missing.append({"text": f"באיחור: {c['title']} · {c['client']} ({c['owner_name']})", "route": f"task/{c['task_id']}", "kind": "late"})
+        elif c["task_status"] == "awaiting_approval":
+            missing.append({"text": f"ממתין לאישור שלך: {c['title']} · {c['client']}", "route": f"task/{c['task_id']}", "kind": "approval"})
+    for r in run["results"]:
+        if r["lag"] >= 1:
+            missing.append({"text": f"חסרים נתונים: {r['name']} ({'אין נתונים בכלל' if r['lag'] >= 99 else str(r['lag']) + ' ימים'})", "route": f"client/{r['id']}", "kind": "data"})
+    return {"cards": cards, "happened": happened, "missing": missing, "ref": ref,
+            "board": [{"id": r["id"], "name": r["name"], "status": r["status"], "improved": bool(r["improved"]),
+                       "title": r["alerts"][0]["title"] if r["alerts"] else ("השתפר" if r["improved"] else "תקין")} for r in run["results"]]}
+
+
 def top_actions(db: Database, acc: str, run: dict, n: int = 5) -> list[dict]:
     states = alert_rows(db, acc)
     tasks = {t["alert_key"]: t for t in open_tasks(db, acc)}

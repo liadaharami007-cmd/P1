@@ -225,3 +225,17 @@ def test_scheduler_runs_once_per_day(make_client, tmp_path):
     c.post("/api/pulse/demo")
     assert scheduler.tick(db) == 1
     assert scheduler.tick(db) == 0
+
+
+def test_alert_board_has_every_field_yuval_asked_for(make_client):
+    c = _login(make_client)
+    c.post("/api/pulse/demo")
+    d = c.get("/api/pulse/alerts").json()
+    assert d["cards"] and d["board"] and d["missing"]
+    for card in d["cards"]:
+        for k in ("what", "started_label", "changed", "severity_label", "evidence", "explanations", "check", "next", "owner_name", "handled", "improved"):
+            assert card[k] not in (None, ""), k
+    red = next(x for x in d["cards"] if x["severity"] == "red" and x["task_id"])
+    assert "טופל" in red["handled"] or "לא" in red["handled"]
+    cid = red["client_id"]
+    assert c.get(f"/api/pulse/clients/{cid}").json()["alerts"][0]["card"]["next"]

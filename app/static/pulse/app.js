@@ -33,11 +33,11 @@ const I = {
 export const ic = (n, s) => `<svg class="ic" viewBox="0 0 24 24" ${s ? `style="width:${s}px;height:${s}px"` : ''}>${I[n] || ''}</svg>`;
 
 export const NAV = [
-  ['', [['home', 'מרכז פיקוד', 'home'], ['clients', 'לקוחות', 'users'], ['tasks', 'משימות ואישורים', 'check'], ['ask', 'Ask ClientPulse', 'chat']]],
+  ['', [['home', 'רמזור · מה היום', 'home'], ['alerts', 'חריגות וטיפול', 'bell'], ['clients', 'לקוחות', 'users'], ['tasks', 'משימות ואישורים', 'check'], ['ask', 'Ask ClientPulse', 'chat']]],
   ['ניהול וצמיחה', [['opps', 'הזדמנויות', 'spark'], ['profit', 'רווחיות', 'coin'], ['team', 'צוות ועומסים', 'team'], ['impact', 'הוכחת ערך', 'trophy'], ['reports', 'דוחות', 'report']]],
   ['מערכת', [['automations', 'אוטומציות', 'zap'], ['integrations', 'חיבורים', 'plug'], ['lab', 'Demo Lab', 'flask']]],
 ];
-const TITLE = { home: 'מרכז פיקוד', clients: 'לקוחות', client: 'תיק לקוח 360', tasks: 'משימות ואישורים', task: 'משימות ואישורים', ask: 'Ask ClientPulse', opps: 'הזדמנויות צמיחה',
+const TITLE = { home: 'רמזור · מה היום', alerts: 'חריגות וטיפול', clients: 'לקוחות', client: 'תיק לקוח 360', tasks: 'משימות ואישורים', task: 'משימות ואישורים', ask: 'Ask ClientPulse', opps: 'הזדמנויות צמיחה',
   profit: 'רווחיות סוכנות', team: 'צוות ועומסים', impact: 'הוכחת ערך · לפני ואחרי', reports: 'דוחות', automations: 'מרכז אוטומציות', integrations: 'חיבורים', lab: 'Demo Lab' };
 
 // ---------------------------------------------------------------- API
@@ -62,8 +62,8 @@ export function toast(msg, kind) {
 
 // ---------------------------------------------------------------- ערכת נושא (העדפה מקומית בלבד)
 const THEME_KEY = 'clientpulse.theme';
-function theme() { try { return localStorage.getItem(THEME_KEY) || 'dark'; } catch { return 'dark'; } }
-function applyTheme(t) { document.documentElement.setAttribute('data-theme', t); try { localStorage.setItem(THEME_KEY, t); } catch { /* פרטי */ } }
+function theme() { try { return localStorage.getItem(THEME_KEY) || 'light'; } catch { return 'light'; } }
+function applyTheme(t) { document.documentElement.setAttribute('data-theme', t); document.querySelector('meta[name=theme-color]')?.setAttribute('content', t === 'light' ? '#F5F5F3' : '#0B0C0E'); try { localStorage.setItem(THEME_KEY, t); } catch { /* פרטי */ } }
 
 // ---------------------------------------------------------------- ניתוב
 export function go(r) { if (location.hash === '#/' + r) render(); else location.hash = '#/' + r; }
@@ -146,13 +146,13 @@ export async function render() {
   chrome();
   const view = document.getElementById('view');
   view.innerHTML = `<div class="stack"><div class="sk" style="height:80px"></div><div class="sk" style="height:220px"></div></div>`;
+  window.scrollTo(0, 0);
   try {
-    if (!st.me.clients && !['lab', 'integrations', 'client'].includes(st.route)) { await V.welcome(view); return; }
+    if (!st.me.clients && !['lab', 'integrations', 'client', 'alerts'].includes(st.route)) { await V.welcome(view); return; }
     await (V[st.route] || V.home)(view, st.params);
   } catch (e) {
     if (e.message !== 'auth') view.innerHTML = `<div class="card pad empty"><b>משהו נכשל בטעינת המסך.</b><p>${esc(e.message)}</p><button class="btn sec" data-act="reload">נסה שוב</button></div>`;
   }
-  view.scrollTop = 0; window.scrollTo(0, 0);
   if (st.tour) V.tourRender();
 }
 

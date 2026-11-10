@@ -235,6 +235,11 @@ def register(app: FastAPI, db: Database) -> None:
             raise HTTPException(400, "אי אפשר לייבא נתונים אמיתיים ללקוח דמו — צרו לקוח חדש")
         return S.import_csv(db, ctx.account_id, cid, body.csv)
 
+    @app.get("/api/pulse/alerts")
+    def alert_board(ctx: Ctx = Depends(current)):
+        W(ctx)
+        return S.alert_board(db, ctx.account_id)
+
     @app.get("/api/pulse/clients/{cid}")
     def client_detail(cid: str, days: int = 30, ctx: Ctx = Depends(current)):
         W(ctx)
@@ -246,10 +251,11 @@ def register(app: FastAPI, db: Database) -> None:
         c = run["clients"][cid]
         states = S.alert_rows(db, acc, cid)
         alerts = []
+        tm = S.team_map(db, acc)
         for a in r["alerts"]:
             st = states.get(a["key"], {})
             t = S.open_task_for(db, acc, a["key"])
-            alerts.append({**a, "inv": engine.investigate(r, a), "handling": st.get("status"), "first_day": st.get("first_day"),
+            alerts.append({**a, "card": S.alert_card(db, acc, run, r, a, st, t, tm), "inv": engine.investigate(r, a), "handling": st.get("status"), "first_day": st.get("first_day"),
                            "history": st.get("history", []), "feedback": st.get("feedback"), "task": t})
         past = [s for k, s in states.items() if s["status"] in ("cleared", "resolved", "dismissed") and k not in {a["key"] for a in r["alerts"]}]
         events = store.rows(db, "SELECT * FROM pulse_events WHERE account_id=? AND client_id=? ORDER BY id DESC LIMIT 60", (acc, cid))
