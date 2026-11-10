@@ -101,6 +101,15 @@ def _strip(r: dict) -> dict:
     return {k: v for k, v in r.items() if k not in ("days",)}
 
 
+def _time_saved(w: dict, n_clients: int, n_attention: int, ms: float) -> dict:
+    """הערכה שקופה לפי הנחה שהסוכנות קובעת (דקות לבדיקה ידנית של לקוח). מה שנחסך = סריקת כל החשבונות;
+    זמן הטיפול בבעיות עצמן קיים בשני המקרים ולכן לא נספר כחיסכון."""
+    A = w["settings"]["assumptions"]
+    manual = A["minPerClient"] * n_clients
+    return {"clients": n_clients, "attention": n_attention, "manual_min": manual, "saved_min": manual, "scan_ms": ms,
+            "per_client": A["minPerClient"]}
+
+
 def register(app: FastAPI, db: Database) -> None:
     store.ensure(db)
 
@@ -182,7 +191,8 @@ def register(app: FastAPI, db: Database) -> None:
                 "opps": sum(len(engine.opportunities(r, run["clients"][r["id"]])) for r in res),
                 "week": {"spend": tw["spend"], "leads": tw["leads"], "cpl": tw["cpl"], "prev_spend": lw["spend"], "prev_leads": lw["leads"], "prev_cpl": lw["cpl"],
                          "sales": tw["sales"] if tw["has_sales"] else None, "prev_sales": lw["sales"] if lw["has_sales"] else None},
-                "changes": changes, "feed": feed, "last_run": w["last_run"], "demo": w["settings"].get("demo", False)}
+                "changes": changes, "feed": feed, "last_run": w["last_run"], "demo": w["settings"].get("demo", False),
+                "time": _time_saved(w, len(res), run["counts"]["red"] + run["counts"]["yellow"], run["ms"])}
 
     # ---------------------------------------------------------------- לקוחות
     @app.get("/api/pulse/clients")

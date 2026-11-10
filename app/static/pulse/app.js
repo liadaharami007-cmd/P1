@@ -107,7 +107,7 @@ function shell() {
       <div class="row2"><button class="btn sec sm" style="flex:1" data-act="theme" id="themeBtn"></button><a class="btn sec sm" style="flex:1" href="/">P1</a><button class="btn sec sm" style="flex:1" data-act="logout">יציאה</button></div>
     </div></aside>
   <div class="main">
-    <header class="tb"><h1 id="ttl"></h1><span class="mock" id="demoMark" hidden>נתוני דמו</span><div class="sp"></div>
+    <header class="tb"><h1 id="ttl"></h1><span class="mock" id="demoMark" hidden>${window.__SNAPSHOT__ ? 'תצוגה לחיצה · נתוני דמו' : 'נתוני דמו'}</span><div class="sp"></div>
       <button class="kbd" data-act="palette" aria-label="חיפוש">${ic('search', 15)}<span>חיפוש לקוח או מסך</span><kbd>⌘K</kbd></button>
       <button class="btn pri sm" data-act="check" id="runBtn">הרץ בדיקה</button>
       <button class="iconbtn" data-act="notif" aria-label="התראות">${ic('bell')}<span id="bellC"></span></button>

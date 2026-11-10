@@ -278,3 +278,7 @@ textarea.inp{width:100%;min-height:90px;resize:vertical}
 .yr{display:grid;grid-template-columns:120px 1fr;gap:10px;padding:8px 12px;border-top:1px solid var(--line);font-size:13.5px}.yr:first-child{border-top:0}
 .yk{color:var(--mute);font-weight:600;font-size:12.5px}.yv .ul{margin:0}
 @media (max-width:900px){.yr{grid-template-columns:1fr;gap:2px}.cards{grid-template-columns:1fr!important}}
+.saved{background:linear-gradient(90deg,var(--card) 0%,var(--accbg) 100%)}
+.saved .sv{display:flex;flex-direction:column;gap:2px;min-width:180px}.saved .sv b{font-size:18px}.saved .sv.big{margin-inline-start:auto;text-align:start}.saved .sv.big b{font-size:26px;color:var(--acc)}
+.saved .arrow{font-size:22px;color:var(--mute)}
+@media (max-width:900px){.saved .arrow{display:none}.saved .sv.big{margin-inline-start:0}}

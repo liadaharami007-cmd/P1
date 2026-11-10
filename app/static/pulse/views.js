@@ -42,7 +42,13 @@ V.home = async (view) => {
   view.innerHTML = `
   <div class="hello"><div><h2>${greet}, ${esc(st.me.user.name)}</h2>
     <div class="meta"><span>${N(c.green + c.yellow + c.red)} לקוחות · נתונים עד ${N(st.me.ref_label)}</span>${lr ? `<span>· בדיקה אחרונה: ${lr.manual ? 'ידנית' : 'אוטומטית'}, ${N(lr.n)} לקוחות ב-${N(lr.ms)} מ"ש</span>` : ''}${o.demo ? '<span class="mock">דמו</span>' : ''}</div></div>
-    <div class="sp"></div>${o.demo ? `<button class="btn sec sm" data-act="tourStart">${ic('play', 14)} חמש דקות בחיים של מנהל משרד</button>` : ''}</div>
+    <div class="sp"></div>${o.demo && !window.__SNAPSHOT__ ? `<button class="btn sec sm" data-act="tourStart">${ic('play', 14)} חמש דקות בחיים של מנהל משרד</button>` : ''}</div>
+  ${o.time ? `<div class="card pad saved" style="margin-bottom:14px"><div class="row" style="gap:18px">
+    <div class="sv"><div class="note">בלי המערכת</div><b>לעבור על ${N(o.time.clients)} חשבונות</b><span class="note">~${N(Math.round(o.time.manual_min / 60 * 10) / 10)} שעות של בדיקה ידנית כל יום</span></div>
+    <div class="arrow">←</div>
+    <div class="sv"><div class="note">עם ClientPulse</div><b>${N(o.time.attention)} לקוחות שדורשים אותך</b><span class="note">כל ${N(o.time.clients)} החשבונות נבדקו ב-${N(o.time.scan_ms)} מ"ש</span></div>
+    <div class="sv big"><div class="note">זמן בדיקה שנחסך היום</div><b>~${N(Math.round(o.time.saved_min / 60 * 10) / 10)} שעות</b><span class="note">הערכה לפי ${N(o.time.per_client)} דק' לבדיקת לקוח · <a href="#/impact">שינוי ההנחה</a></span></div>
+  </div></div>` : ''}
   <div class="kpis">${kpi('דחוף', c.red, 'דורשים טיפול', 'red', 'clients?f=red')}${kpi('במעקב', c.yellow, 'חריגה או מגמה', 'yellow', 'clients?f=yellow')}${kpi('תקין', c.green, 'בתוך הטווח', 'green', 'clients?f=green')}${kpi('השתפרו', c.improved, 'שיפור מובהק', 'imp', 'clients?f=improved')}</div>
   <div class="card pad" style="margin-bottom:14px"><div class="h2">${ic('users')} רמזור הלקוחות<span class="sp"></span><span class="note">לחיצה על לקוח פותחת את התיק שלו</span></div>
     <div class="tiles">${ab.board.map((b) => `<button class="tile t-${b.improved && b.status === 'green' ? 'imp' : b.status}" data-act="go" data-arg="client/${b.id}" title="${esc(b.title)}"><b>${esc(b.name)}</b><span>${esc(b.title)}</span></button>`).join('')}</div></div>
@@ -412,7 +418,8 @@ V.reports = async (view) => {
   <div class="card pad"><div class="h2">${ic('users')} דוח ביצועים ללקוח</div><div class="row"><select class="inp" id="rc" style="flex:1">${d.clients.map((c) => `<option value="${c.id}">${esc(c.name)}${c.is_demo ? ' (דמו)' : ''}</option>`).join('')}</select><select class="inp" id="rd"><option value="7">7 ימים</option><option value="30" selected>30 ימים</option><option value="90">90 ימים</option></select></div>
     <div class="row" style="margin-top:10px"><button class="btn pri sm" data-act="openRep" data-arg="html">HTML</button><button class="btn sec sm" data-act="openRep" data-arg="pdf">PDF</button></div><p class="note">הדוח נבנה מנתונים קיימים בלבד: מדדים, השוואה לתקופה קודמת, גרף, מה טופל ואומת, וצעדים הבאים.</p></div></div>`;
 };
-A.openRep = (b, kind) => { const u = `/api/pulse/reports/client/${$('#rc').value}.${kind}?days=${$('#rd').value}`; if (kind === 'pdf') location.href = u; else window.open(u, '_blank', 'noopener'); };
+A.openRep = (b, kind) => {
+  if (window.__SNAPSHOT__) return toast('דוחות HTML ו-PDF נוצרים במערכת המלאה (בגרסת התצוגה אין שרת)', 'warn'); const u = `/api/pulse/reports/client/${$('#rc').value}.${kind}?days=${$('#rd').value}`; if (kind === 'pdf') location.href = u; else window.open(u, '_blank', 'noopener'); };
 
 // ================================================================ אוטומציות · חיבורים · Demo Lab
 V.automations = async (view) => {
