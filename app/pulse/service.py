@@ -566,6 +566,43 @@ def create_task(db: Database, acc: str, run: dict, key: str, by: str = "auto", a
     return get_task(db, acc, t["id"])  # type: ignore[return-value]
 
 
+def create_manual_task(db: Database, acc: str, client_id: str, title: str, assignee: str | None, due_days: int, by_name: str,
+                       source: str = "manual") -> dict:
+    """משימה שלא נולדה מהתראה (הזדמנות / בקשת לקוח). נסגרת כשמסמנים בוצע — אין מדד לבדיקה חוזרת."""
+    c = get_client(db, acc, client_id)
+    if not c:
+        raise KeyError("לקוח לא נמצא")
+    ref = ref_day(ws(db, acc))
+    tm = team_map(db, acc)
+    who = assignee if assignee in tm else (c["owner"] if c["owner"] in tm else next(iter(tm), None))
+    t = {"id": "t" + uuid.uuid4().hex[:10], "history": []}
+    _th(t, ref, by_name, "נוצרה משימה" + (" מהזדמנות" if source == "opportunity" else ""))
+    exe(db, """INSERT INTO pulse_tasks (id, account_id, client_id, alert_key, title, severity, description, plan_json, success_json,
+               requires_approval, assignee, due_day, status, created_by, created_day, before_json, history_json, created_at)
+               VALUES (?,?,?,NULL,?,?,?,?,NULL,0,?,?, 'new', ?,?,NULL,?,?)""",
+        (t["id"], acc, client_id, f"{title} · {c['name']}", "imp" if source == "opportunity" else "yellow", "", j([{"text": title, "actionType": "check"}]),
+         who, ref + max(1, min(30, due_days)), by_name, ref, j(t["history"]), now()))
+    ev(db, acc, ref, "task", f"נוצרה משימה: {title} · {c['name']} (אחראי: {(tm.get(who) or {}).get('name', '—')})", client_id, by_name, t["id"])
+    return get_task(db, acc, t["id"])  # type: ignore[return-value]
+
+
+def proposal_draft(db: Database, acc: str, client_id: str, kind: str, user_name: str) -> dict:
+    run = analysis(db, acc)
+    r = run["byId"].get(client_id)
+    if not r:
+        raise KeyError("לקוח לא נמצא")
+    op = next((o for o in engine.opportunities(r, run["clients"][client_id]) if o["kind"] == kind), None)
+    if not op:
+        raise KeyError("ההזדמנות כבר לא קיימת בנתונים")
+    txt = (f"שלום, רצינו לשתף תובנה מהנתונים של {r['name']}:\n{op['evidence']}\n\nההצעה שלנו: {op['action']}."
+           + (f"\n{op['potential']}." if op.get("potential") else "") + "\nנשמח לתאם שיחה קצרה כדי לסגור את הפרטים.")
+    ref = run["ref"]
+    exe(db, "INSERT INTO pulse_drafts (account_id, client_id, day, kind, channel, text, created_at) VALUES (?,?,?,?,?,?,?)",
+        (acc, client_id, ref, "proposal", "Email / WhatsApp", txt, now()))
+    ev(db, acc, ref, "note", f"הוכנה טיוטת הצעה: {op['title']}", client_id, user_name)
+    return {"ok": True, "text": txt, "msg": "טיוטת ההצעה נשמרה בתיק הלקוח (לא נשלחה)"}
+
+
 def task_action(db: Database, acc: str, tid: str, action: str, *, user_name: str, can_approve: bool, extra: Any = None) -> dict:
     t = get_task(db, acc, tid)
     if not t:
@@ -624,6 +661,12 @@ def task_action(db: Database, acc: str, tid: str, action: str, *, user_name: str
 
 def _mark_done(db: Database, acc: str, t: dict, user_name: str, ref: int, w: dict) -> dict:
     t["done_day"], t["status"] = ref, "done"
+    if not t.get("success"):  # משימה ידנית / הזדמנות: אין מדד לאימות
+        t["status"], t["closed_day"] = "closed", ref
+        _th(t, ref, user_name, "בוצע ונסגר")
+        _save_task(db, t)
+        ev(db, acc, ref, "task", f"בוצע: {t['title']}", t["client_id"], user_name, t["id"])
+        return {"ok": True, "msg": "בוצע ונסגר"}
     _th(t, ref, user_name, "סומן כבוצע. הבעיה לא נסגרת עד שהמדדים יאשרו")
     if w["settings"]["rules"].get("recheck"):
         t["status"] = "awaiting_verification"
@@ -638,7 +681,8 @@ def _mark_done(db: Database, acc: str, t: dict, user_name: str, ref: int, w: dic
 
 def verify_tasks(db: Database, acc: str, run: dict, ref: int, only: str | None = None) -> None:
     for t in open_tasks(db, acc):
-        if t["status"] != "awaiting_verification" or ref < (t["recheck_day"] or 0) or (only and t["id"] != only):
+        if (t["status"] != "awaiting_verification" or not t["alert_key"] or ref < (t["recheck_day"] or 0)
+                or (only and t["id"] != only)):
             continue
         r = run["byId"].get(t["client_id"])
         if not r:

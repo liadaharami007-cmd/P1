@@ -44,6 +44,19 @@ class TaskIn(BaseModel):
     assignee: str | None = Field(None, max_length=40)
 
 
+class ManualTaskIn(BaseModel):
+    client_id: str = Field(..., max_length=40)
+    title: str = Field(..., min_length=2, max_length=200)
+    assignee: str | None = Field(None, max_length=40)
+    due_days: int = Field(3, ge=1, le=30)
+    source: str = Field("manual", pattern="^(manual|opportunity)$")
+
+
+class DraftIn(BaseModel):
+    client_id: str = Field(..., max_length=40)
+    kind: str = Field(..., max_length=40)
+
+
 class TaskActIn(BaseModel):
     extra: str | int | None = None
 
@@ -284,6 +297,22 @@ def register(app: FastAPI, db: Database) -> None:
         W(ctx)
         try:
             return S.create_task(db, ctx.account_id, S.analysis(db, ctx.account_id), body.alert_key, by="user", assignee=body.assignee, by_name=uname(ctx))
+        except KeyError as e:
+            raise HTTPException(404, str(e))
+
+    @app.post("/api/pulse/tasks/manual", status_code=201)
+    def manual_task(body: ManualTaskIn, ctx: Ctx = Depends(current)):
+        W(ctx)
+        try:
+            return S.create_manual_task(db, ctx.account_id, body.client_id, body.title, body.assignee, body.due_days, uname(ctx), body.source)
+        except KeyError as e:
+            raise HTTPException(404, str(e))
+
+    @app.post("/api/pulse/opportunities/draft")
+    def opp_draft(body: DraftIn, ctx: Ctx = Depends(current)):
+        W(ctx)
+        try:
+            return S.proposal_draft(db, ctx.account_id, body.client_id, body.kind, uname(ctx))
         except KeyError as e:
             raise HTTPException(404, str(e))
 

@@ -58,6 +58,8 @@ FastAPI (app/main.py): request-id, JSON logs, CSRF origin check, CSP, auth על 
   static/welcome.html  אתר שיווקי ציבורי (/welcome) · static/sw.js + manifest.webmanifest = PWA
   intelligence/  engines.py (anthropic / ollama / rules — מציג איזה פעיל) · analyst.py · personas_ai.py · client.py (עלויות)
   monitor.py     Smart Monitor: tick כל דקה מה-worker, השוואה, התראות new/fixed/score
+  pulse/         ClientPulse OS (/pulse) — בקרת לקוחות לסוכנויות פרסום: engine (רמזור סטטיסטי, בריאות, הזדמנויות, סיכון, רווחיות) ·
+                 service (התראות→משימות→אישור→בדיקה חוזרת, 9 אוטומציות עם יומן+dedupe, Demo Lab, CSV) · ask · scheduler · report · routes. פירוט: clientpulse/README.md
   report/        data.py · pdf.py (PDF ע"י Chromium)
   static/demo-store/  חנות דמו "סדנת פשתן" עם בעיות מכוונות (חלון קופץ, מדיניות דלה, כפתור לא בולט, קופה עם הרשמה כפויה, קישור שבור…)
   db.py          SQLite + מיגרציות (user_version=4: business_profiles, actions, activity, missions, clients, password_resets, billing_events): agent_runs, fix_previews, monitors, notifications, findings.fix_status/priority…
@@ -113,7 +115,8 @@ python -m pytest -q                       # ~3 דק' — כולל מסעות ר�
 - ✅ **מנהל עסק מבצע:** Autopilot (סוכנים ברצף + handoff) · בונה דפי נחיתה · סרטוני MP4 · CRM (תזכורות, משפך, שליחה באישור) · WhatsApp/Shopify/WordPress (מוכנים, לא מחוברים) · מחקר מתחרים (ביקור באתרים מהפרופיל).
   ידוע: חיפוש Google בתוך Gemini לא כלול במסלול החינמי (quota 0).
 - ✅ **חיבורים לכל לקוח:** מסך "החשבונות שלי" · קוד הטמעה לטפסים (נבדק חוצה-אתרים באייפון) · כספת מוצפנת · GA4 OAuth (מוכן) · WooCommerce.
-- **הבא:** פריסה (באישור) · בדיקת טפסי לידים/וואטסאפ · התראות וואטסאפ/מייל · ModelBrain לסוכנים (Ollama/Claude מחליטים על הצעד הבא) · שכתוב AI ב-Fix Studio כשמנוע זמין · Postgres + worker נפרד + Redis ·
+- ✅ **ClientPulse OS:** `/pulse` — רמזור לקוחות לסוכנויות, תיק לקוח 360, משימות ואישורים, אוטומציות מתוזמנות, Ask, הוכחת ערך, Demo Lab (50 לקוחות דמו), ייבוא CSV. מקור: Artifact ClientPulse 2.0 (גיבוי ב-clientpulse/legacy).
+- **הבא:** מתאם Meta Ads / Google Ads ל-ClientPulse · פריסה (באישור) · בדיקת טפסי לידים/וואטסאפ · התראות וואטסאפ/מייל · ModelBrain לסוכנים (Ollama/Claude מחליטים על הצעד הבא) · שכתוב AI ב-Fix Studio כשמנוע זמין · Postgres + worker נפרד + Redis ·
   אימות בעלות (meta/DNS) · איפוס סיסמה/אימות מייל · צוותים · אחסון S3 · Shopify OAuth (store_data) · ספק תשלומים · פריסה (Docker) · תרגום טקסטי כללים לאנגלית.
 
 ## סטטוס וידוע
