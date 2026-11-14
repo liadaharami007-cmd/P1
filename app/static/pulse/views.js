@@ -61,12 +61,17 @@ V.focus = async (view) => {
   <footer class="proof">השבוע במשרד: ${N(w.detected || 0)} בעיות זוהו · ${N(w.handled || 0)} טופלו · ${N(w.improved || 0)} השתפרו ואומתו בנתונים · נבדקו ${N(b.clients)} חשבונות ב-${N(b.scan_ms)} מ"ש</footer>
   </div>`;
 };
-// ================================================================ מסך הבית: רמזור — לכל צבע תפקיד משלו
+// ================================================================ מסך הבית: רמזור קלאסי — שלוש שורות, כל צבע מתקבץ לפי סוג הבעיה
 const LIGHT = {
-  red: { t: 'דחוף', sub: 'צריכים טיפול עכשיו', col: 'מה לעשות' },
-  yellow: { t: 'במעקב', sub: 'חריגה או מגמה — לבדוק לפני שזה מחמיר', col: 'מה לבדוק' },
-  green: { t: 'תקין', sub: 'אפשר לחכות — מה אפשר להציע או לשפר', col: 'מה אפשר להציע' },
+  red: { t: 'דחוף', sub: 'צריכים טיפול עכשיו' },
+  yellow: { t: 'במעקב', sub: 'חריגה או מגמה — לבדוק לפני שזה מחמיר' },
+  green: { t: 'תקין', sub: 'אפשר לחכות — הזדמנויות להציע ולשפר' },
 };
+const GROUP = { cpl: 'עלות לליד זינקה', no_leads: 'אין לידים', spend_up: 'הוצאה עלתה בלי לידים', ctr: 'ירידה בהקלקות', cvr: 'ירידה בהמרה',
+  trend: 'הידרדרות הדרגתית', goal: 'מעל היעד', data: 'נתונים לא מתעדכנים', no_sales: 'לידים בלי מכירות', commitment: 'התחייבות באיחור',
+  contact: 'אין קשר עם הלקוח', satisfaction: 'שביעות רצון נמוכה', budget_headroom: 'תקציב לא מנוצל — אפשר להציע הגדלה',
+  scale: 'מתחת ליעד — אפשר לגדול', lead_handling: 'הרבה לידים, מעט מכירות', pricing: 'רווחיות נמוכה', site_check: 'כדאי לבדוק את האתר',
+  keep: 'יציבים — לשמור', data_missing: 'חסרים נתונים' };
 V.home = async (view, p = {}) => {
   if (p.v === 'big') return V.big(view);
   if (p.v === 'focus') return V.focus(view);
@@ -75,38 +80,62 @@ V.home = async (view, p = {}) => {
   const byClient = {};
   ab.cards.forEach((x) => { if (!byClient[x.client_id]) byClient[x.client_id] = x; });
   const rows = ab.board.map((x) => ({ ...x, card: byClient[x.id], st: x.status === 'nodata' ? 'green' : x.status }));
+  const gkey = (x) => (x.st === 'green' ? (x.status === 'nodata' ? 'data_missing' : x.suggest?.kind || 'keep') : x.card ? x.card.key.split(':')[1] : 'keep');
   const todo = (x) => x.card && (!x.card.task_id || x.card.task_status === 'new');
-  const order = (a, z) => (todo(z) - todo(a)) || (z.card?.potential_leads || 0) - (a.card?.potential_leads || 0);
-  const of = (k) => rows.filter((x) => x.st === k).sort(order);
-  const what = (x, k) => k === 'red' ? x.card?.next : k === 'yellow' ? (x.card?.check?.[0] || x.card?.next) : x.suggest?.text;
-  const head = `<div class="calm-head"><h2>${greet}, ${esc(st.me.user.name)}</h2>
-    <p class="lead">${c.red ? `${N(c.red)} צריכים טיפול, ${N(c.yellow)} במעקב, ${N(c.green + c.nodata)} בסדר.` : 'אין היום לקוחות דחופים.'}</p></div>
-    <div class="stabs"><button class="on" data-act="go" data-arg="home">רמזור</button><button data-act="go" data-arg="home?v=big">התמונה הגדולה</button></div>`;
-  if (!p.c) {
-    view.innerHTML = `<div class="calm">${head}
-    <div class="lights3">${['red', 'yellow', 'green'].map((k) => { const l = of(k); const n = k === 'green' ? c.green + c.nodata : c[k];
-      return `<button class="lp" data-act="go" data-arg="home?c=${k}"><div class="row"><i class="dot d-${k}" style="width:12px;height:12px"></i><b>${LIGHT[k].t}</b><span class="sp"></span><span class="lpn">${N(n)}</span></div>
-        <div class="note">${LIGHT[k].sub}</div><ul>${l.slice(0, 3).map((x) => `<li><span>${esc(x.name)}</span><span class="note">${esc(what(x, k) || '')}</span></li>`).join('') || '<li class="note">אין</li>'}</ul>
-        <span class="lpmore">${n > 3 ? `לכל ה-${N(n)} ←` : 'לפתוח ←'}</span></button>`; }).join('')}</div>
-    <footer class="proof">השבוע: ${N(w.detected || 0)} בעיות זוהו · ${N(w.handled || 0)} טופלו · ${N(w.improved || 0)} השתפרו ואומתו${b.potential ? ` · כ-${N(b.potential.leads_week)} לידים בשבוע אפשר להחזיר (הערכה)` : ''}</footer></div>`;
-    return;
-  }
-  const k = p.c, l = of(k), all = p.all === '1', list = all ? l : l.slice(0, 12);
-  const act = (x) => {
-    if (k === 'green') return x.suggest && x.suggest.action ? `<button class="btn sec sm" data-act="oppTask" data-arg="${x.id}|${esc(x.suggest.action)}">הפוך למשימה</button>` : '';
-    if (!x.card) return '';
-    if (!x.card.task_id) return `<button class="btn ${k === 'red' ? 'pri' : 'sec'} sm" data-act="handle" data-arg="${esc(x.card.key)}|start">${k === 'red' ? 'אני מטפל' : 'אני בודק'}</button>`;
-    if (x.card.task_status === 'new' || x.card.task_status === 'in_progress') return `<button class="btn sec sm" data-act="handle" data-arg="${esc(x.card.key)}|done">טיפלתי ✓</button>`;
-    return `<span class="note ok">טופל · ממתין לאימות</span>`;
+  const groups = (k) => {
+    const g = {};
+    rows.filter((x) => x.st === k).forEach((x) => { (g[gkey(x)] = g[gkey(x)] || []).push(x); });
+    return Object.entries(g).map(([key, items]) => ({ key, items: items.sort((a, z) => (todo(z) - todo(a)) || (z.card?.potential_leads || 0) - (a.card?.potential_leads || 0)),
+      pot: items.reduce((t, x) => t + (x.card?.potential_leads || 0), 0) })).sort((a, z) => (z.key === 'keep' ? -1 : 0) - (a.key === 'keep' ? -1 : 0) || z.items.length - a.items.length);
   };
-  view.innerHTML = `<div class="calm">${head}
-  <div class="row"><a class="back" href="#/home">${ic('back', 14)} רמזור</a><span class="sp"></span>${k === 'red' && l.some(todo) ? `<a class="btn sec sm" href="#/home?v=focus">טפל אחד-אחד</a>` : ''}</div>
-  <div class="lhead2"><i class="dot d-${k}" style="width:12px;height:12px"></i><h3>${LIGHT[k].t} · ${N(l.length)}</h3><span class="note">${LIGHT[k].sub}</span></div>
-  <div class="card ttable"><div class="tr th t3"><span>לקוח</span><span>${k === 'green' ? 'מצב' : 'מה קרה'}</span><span>${LIGHT[k].col}</span><span></span></div>
-  ${list.map((x) => `<div class="tr t3"><a class="tn" href="#/client/${x.id}">${esc(x.name)}${x.status === 'nodata' ? ' <span class="note">· אין מספיק מידע</span>' : ''}</a>
-    <span class="tx2">${esc(k === 'green' ? (x.cpl ? `עלות לליד ${money(x.cpl)} · ${x.leads} לידים בשבוע` : '—') : x.card ? x.card.title : x.title)}${k === 'red' && x.card?.potential_leads ? ` <span class="note">· ~${N(x.card.potential_leads)} לידים/שבוע</span>` : ''}</span>
-    <span>${esc(what(x, k) || '—')}</span><span class="ta">${act(x)}</span></div>`).join('') || '<div class="empty">אין לקוחות בצבע הזה</div>'}
-  ${l.length > 12 && !all ? `<button class="tmore" data-act="go" data-arg="home?c=${k}&all=1">הצג את כל ${N(l.length)}</button>` : ''}</div></div>`;
+  const open = p.o || '', og = p.g || '';
+  const rowAct = (x, k) => {
+    if (k === 'green') return x.suggest?.action ? `<button class="btn sec sm" data-act="oppTask" data-arg="${x.id}|${esc(x.suggest.action)}">הצע</button>` : '';
+    if (!x.card) return '';
+    if (!x.card.task_id) return `<button class="btn sec sm" data-act="handle" data-arg="${esc(x.card.key)}|start">${k === 'red' ? 'לטיפול' : 'לבדיקה'}</button>`;
+    if (['new', 'in_progress'].includes(x.card.task_status)) return `<button class="btn sec sm" data-act="handle" data-arg="${esc(x.card.key)}|done">טיפלתי ✓</button>`;
+    return '<span class="note ok">טופל ✓</span>';
+  };
+  const groupBlock = (k, gr) => {
+    const expanded = og === gr.key, list = expanded ? gr.items : gr.items.slice(0, 3);
+    const first = gr.items[0];
+    const tip = k === 'green' ? (first.suggest?.action || '') : (k === 'red' ? first.card?.next : (first.card?.check?.[0] || first.card?.next)) || '';
+    const bulkN = k === 'green' ? gr.items.filter((x) => x.suggest?.action).length : gr.items.filter((x) => x.card && !x.card.task_id).length;
+    return `<div class="grp2"><div class="grh"><b>${esc(GROUP[gr.key] || gr.key)}</b><span class="note">${N(gr.items.length)} לקוחות${gr.pot ? ` · ~${N(gr.pot)} לידים בשבוע אפשר להחזיר` : ''}</span><span class="sp"></span>
+      ${bulkN > 1 ? `<button class="btn ${k === 'red' ? 'pri' : 'sec'} sm" data-act="bulk" data-arg="${k}|${gr.key}">${k === 'green' ? `הצע לכל ה-${N(bulkN)}` : `${k === 'red' ? 'פתח טיפול' : 'סמן לבדיקה'} לכל ה-${N(bulkN)}`}</button>` : ''}</div>
+      ${tip && gr.key !== 'keep' ? `<div class="grtip">${k === 'green' ? 'מה להציע' : k === 'red' ? 'מה עושים' : 'מה בודקים'}: ${esc(tip)}</div>` : ''}
+      ${gr.key === 'keep' && !expanded ? '' : list.map((x) => `<div class="gri"><a href="#/client/${x.id}">${esc(x.name)}</a><span class="note">${esc(k === 'green' ? (x.cpl ? `עלות לליד ${money(x.cpl)} · ${x.leads} לידים בשבוע` : 'אין מספיק נתונים') : `${x.card?.owner_name || ''}${x.card?.potential_leads ? ` · ~${x.card.potential_leads} לידים/שבוע` : ''}`)}</span><span class="sp"></span>${rowAct(x, k)}</div>`).join('')}
+      ${gr.items.length > 3 && !expanded ? `<button class="grmore" data-act="go" data-arg="home?o=${k}&g=${gr.key}">${gr.key === 'keep' ? `הצג ${N(gr.items.length)} לקוחות יציבים` : `ועוד ${N(gr.items.length - 3)}`}</button>` : ''}</div>`;
+  };
+  const light = (k) => {
+    const gs = groups(k), n = gs.reduce((t, g) => t + g.items.length, 0), isOpen = open === k;
+    const summary = gs.filter((g) => g.key !== 'keep').slice(0, 3).map((g) => `${GROUP[g.key] || g.key} · ${g.items.length}`).join('   ');
+    return `<div class="tl3 ${isOpen ? 'open' : ''}"><button class="tlh" data-act="go" data-arg="${isOpen ? 'home' : 'home?o=' + k}"><span class="bulb b-${k}"></span>
+      <span class="tlt"><b>${LIGHT[k].t}</b><span class="note">${LIGHT[k].sub}</span></span><span class="tln">${N(n)}</span><span class="tls note">${esc(summary)}</span><span class="tlc">${isOpen ? '−' : '+'}</span></button>
+      ${isOpen ? `<div class="tlb">${k === 'red' && rows.some((x) => x.st === 'red' && todo(x)) ? `<div class="row"><span class="sp"></span><a class="btn sec sm" href="#/home?v=focus">טפל אחד-אחד</a></div>` : ''}${gs.map((g) => groupBlock(k, g)).join('') || '<div class="empty">אין</div>'}</div>` : ''}</div>`;
+  };
+  view.innerHTML = `<div class="calm">
+  <div class="calm-head"><h2>${greet}, ${esc(st.me.user.name)}</h2><p class="lead">${c.red ? `${N(c.red)} צריכים טיפול, ${N(c.yellow)} במעקב, ${N(c.green + c.nodata)} בסדר.` : 'אין היום לקוחות דחופים.'}</p></div>
+  <div class="stabs"><button class="on" data-act="go" data-arg="home">רמזור</button><button data-act="go" data-arg="home?v=big">התמונה הגדולה</button></div>
+  <div class="tlwrap">${['red', 'yellow', 'green'].map(light).join('')}</div>
+  <footer class="proof">השבוע: ${N(w.detected || 0)} בעיות זוהו · ${N(w.handled || 0)} טופלו · ${N(w.improved || 0)} השתפרו ואומתו${b.potential ? ` · כ-${N(b.potential.leads_week)} לידים בשבוע אפשר להחזיר (הערכה)` : ''}</footer></div>`;
+  st._home = { rows, gkey };
+};
+A.bulk = async (btn, arg) => {
+  const [k, g] = arg.split('|');
+  const { rows, gkey } = st._home || {};
+  if (!rows) return;
+  const items = rows.filter((x) => x.st === k && gkey(x) === g);
+  btn.disabled = true; btn.textContent = 'מבצע…';
+  let n = 0;
+  for (const x of items) {
+    try {
+      if (k === 'green') { if (x.suggest?.action) { await api('/api/pulse/tasks/manual', { method: 'POST', body: { client_id: x.id, title: x.suggest.action, source: 'opportunity', due_days: 7 } }); n++; } }
+      else if (x.card && !x.card.task_id) { await api('/api/pulse/alerts/handle', { method: 'POST', body: { key: x.card.key, mode: 'start' } }); n++; }
+    } catch { /* ממשיכים לשאר */ }
+  }
+  toast(k === 'green' ? `נוצרו ${n} משימות הצעה` : `נפתח טיפול ל-${n} לקוחות`);
+  await refreshMe(); render();
 };
 
 V.big = async (view) => {

@@ -368,3 +368,20 @@ details.more{margin-top:8px}details.more>summary{font-size:12.5px;color:var(--ac
 .lhead2{display:flex;align-items:center;gap:10px}.lhead2 h3{margin:0;font-size:18px}
 .tr.t3{grid-template-columns:minmax(140px,1.1fr) 1.6fr 1.9fr 120px}.ta{text-align:end}
 @media (max-width:900px){.lights3{grid-template-columns:1fr}.tr.t3{grid-template-columns:1fr auto}.tr.t3>span:nth-child(2),.tr.t3>span:nth-child(3){grid-column:1/-1}.tr.t3 .ta{grid-row:1;grid-column:2}}
+/* צבעי רמזור ברורים גם ברקע לבן */
+[data-theme=light]{--r:#E5484D;--y:#E8A800;--g:#2BA24C}
+.tlwrap{display:flex;flex-direction:column;gap:10px}
+.tl3{border:1px solid var(--line);border-radius:16px;background:var(--card);overflow:hidden}
+.tlh{display:grid;grid-template-columns:44px minmax(150px,1.2fr) 70px 2fr 28px;align-items:center;gap:14px;width:100%;padding:16px 18px;text-align:start}
+.tlh:hover{background:var(--hover)}.tlt{display:flex;flex-direction:column}.tlt b{font-size:17px}.tln{font-size:30px;font-weight:700;letter-spacing:-.5px}
+.tls{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.tlc{font-size:22px;color:var(--mute);text-align:center}
+.bulb{width:34px;height:34px;border-radius:50%;display:block}
+.b-red{background:var(--r);box-shadow:0 0 0 6px color-mix(in srgb,var(--r) 14%,transparent)}
+.b-yellow{background:var(--y);box-shadow:0 0 0 6px color-mix(in srgb,var(--y) 16%,transparent)}
+.b-green{background:var(--g);box-shadow:0 0 0 6px color-mix(in srgb,var(--g) 14%,transparent)}
+.tlb{border-top:1px solid var(--line);padding:14px 18px;display:flex;flex-direction:column;gap:14px;background:var(--card2)}
+.grp2{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px 16px}
+.grh{display:flex;align-items:center;gap:10px;flex-wrap:wrap}.grh b{font-size:15px}.grtip{font-size:13px;color:var(--tx2);margin-top:4px}
+.gri{display:flex;align-items:center;gap:10px;padding:9px 0;border-top:1px solid var(--line);font-size:14px;margin-top:8px}.gri a{color:var(--tx);font-weight:600}
+.gri+.gri{margin-top:0}.grmore{color:var(--acc);font-size:13px;padding-top:8px}
+@media (max-width:900px){.tlh{grid-template-columns:40px 1fr auto 24px;gap:10px}.tls{display:none}.tln{font-size:24px}.bulb{width:28px;height:28px}.gri{flex-wrap:wrap}.tlb{padding:12px}}
