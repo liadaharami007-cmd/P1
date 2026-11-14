@@ -285,3 +285,16 @@ def test_low_data_client_is_not_green_and_commitment_affects_status(make_client)
     c.post("/api/pulse/lab/advance", json={"days": 8})
     d = c.get(f"/api/pulse/clients/{green['id']}").json()
     assert any(a["type"] == "commitment" for a in d["alerts"]) and d["status_history"]
+
+
+def test_recovery_potential_and_client_update_draft(make_client):
+    c = _login(make_client)
+    c.post("/api/pulse/demo")
+    b = c.get("/api/pulse/brief").json()
+    assert b["potential"]["leads_week"] > 0
+    red = next(x for x in c.get("/api/pulse/clients").json()["clients"] if x["alerts"] and x["alerts"][0]["type"] == "cpl")
+    d = c.get(f"/api/pulse/clients/{red['id']}").json()
+    assert d["result"]["recovery"]["leads_week"] >= 3 and "לידים נוספים" in d["alerts"][0]["card"]["potential"]
+    r = c.post(f"/api/pulse/clients/{red['id']}/update-draft").json()
+    assert r["ok"] and "לידים" in r["text"] and "עלות לליד" in r["text"]
+    assert c.get(f"/api/pulse/clients/{red['id']}").json()["drafts"][0]["kind"] == "update"

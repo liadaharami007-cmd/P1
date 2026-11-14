@@ -938,7 +938,7 @@ def alert_card(db: Database, acc: str, run: dict, r: dict, a: dict, st: dict | N
         "explanations": [h["text"] + f" ({h['support']})" for h in inv["hypotheses"][:3]],
         "check": inv["checks"][:3], "next": inv["plan"][0]["text"] if inv["plan"] else "—",
         "owner": owner, "owner_name": (tm.get(owner) or {}).get("name", "לא שויך"),
-        "handled": handled, "improved": improved, "task_id": (t or {}).get("id"), "task_status": (t or {}).get("status"),
+        "handled": handled, "improved": improved, "potential": (r.get("recovery") or {}).get("text"), "task_id": (t or {}).get("id"), "task_status": (t or {}).get("status"),
         "late": bool(t and t.get("due_day") is not None and t["due_day"] < ref and t["status"] in ("new", "in_progress", "awaiting_approval")),
         "priority": a["priority"]}
 
@@ -1259,7 +1259,7 @@ def brief(db: Database, acc: str, since: float | None, can_approve: bool) -> dic
                     "למשימה", route=f"task/{t['id']}")
             elif t and t["status"] == "new":
                 add(600 + a["priority"] / 100, "notstarted", "red", f"{r['name']}: {a['title']}",
-                    f"{a['what']} המשימה אצל {(tm.get(t['assignee']) or {}).get('name', '—')} — הטיפול עוד לא התחיל.", "פתח הסבר", route=f"client/{r['id']}")
+                    (f"פוטנציאל: ~{r['recovery']['leads_week']} לידים בשבוע. " if r.get("recovery") else "") + f"{a['what']} המשימה אצל {(tm.get(t['assignee']) or {}).get('name', '—')} — הטיפול עוד לא התחיל.", "פתח הסבר", route=f"client/{r['id']}")
             elif ref - st.get("first_day", ref) >= 3 and t and t["status"] != "awaiting_verification":
                 add(450, "stuck", "yellow", f"בעיה פתוחה {ref - st['first_day']} ימים: {r['name']}", a["title"], "למשימה", route=f"task/{t['id']}")
             seen_c.add(r["id"])
@@ -1282,7 +1282,8 @@ def brief(db: Database, acc: str, since: float | None, can_approve: bool) -> dic
         add(150, "opportunity", "imp", f"הזדמנות: {r['name']}", r["improved"]["what"], "לבחון הרחבה", route=f"client/{r['id']}")
     items.sort(key=lambda x: -x["score"])
     ver = rows(db, "SELECT * FROM pulse_verifications WHERE account_id=? ORDER BY id DESC LIMIT 3", (acc,))
-    return {"since": since, "items": items[:8], "more": max(0, len(items) - 8), "counts": run["counts"],
+    pot = [r["recovery"] for r in run["results"] if r.get("recovery")]
+    return {"since": since, "items": items[:8], "potential": {"leads_week": sum(p["leads_week"] for p in pot), "clients": len(pot)} if pot else None, "more": max(0, len(items) - 8), "counts": run["counts"],
             "verified": [{"title": v["title"], "client_id": v["client_id"], "before": uj(v["before_json"], {}), "after": uj(v["after_json"], {})} for v in ver],
             "ref": ref, "scan_ms": run["ms"], "clients": len(run["results"])}
 
@@ -1324,3 +1325,39 @@ def decisions(db: Database, acc: str, client_id: str | None = None) -> list[dict
         q += " AND client_id=?"
         a.append(client_id)
     return rows(db, q + " ORDER BY id DESC LIMIT 100", tuple(a))
+
+
+def update_draft(db: Database, acc: str, cid: str, by: str) -> dict:
+    """טיוטת עדכון ללקוח מנתוני המערכת בלבד: מה המצב, מה מצאנו, מה עושים, הצעד הבא. נשמרת בתיק — לא נשלחת."""
+    run = analysis(db, acc)
+    r = run["byId"].get(cid)
+    if not r:
+        raise KeyError("לקוח לא נמצא")
+    c = run["clients"][cid]
+    contact = one(db, "SELECT name FROM pulse_contacts WHERE account_id=? AND client_id=? ORDER BY id LIMIT 1", (acc, cid))
+    rc, b = r["rec"], r["base"]
+    lines = [f"היי {contact['name'].split()[0] if contact else ''}, עדכון שבועי על הקמפיינים:".replace("היי ,", "היי,"),
+             f"• 7 הימים האחרונים: {rc['leads']} לידים, עלות לליד {money(rc['cpl'])}" + (f" (לעומת {money(b['cpl'])} בממוצע)" if b["cpl"] else "") + "."]
+    tgt = (c.get("goals") or {}).get("targetCpl")
+    if tgt and rc["cpl"]:
+        lines.append(f"• מול היעד שסיכמנו ({money(tgt)}): " + ("עומדים ביעד." if rc["cpl"] <= tgt else "עדיין מעל היעד."))
+    perf = [a for a in r["alerts"] if a.get("source") != "ops"]
+    if r["improved"]:
+        lines.append("• החדשות הטובות: " + r["improved"]["what"])
+    if perf:
+        a = perf[0]
+        t = open_task_for(db, acc, a["key"])
+        lines.append(f"• מה זיהינו: {a['what']}")
+        lines.append("• מה אנחנו עושים: " + engine.investigate(r, a)["plan"][0]["text"] + (" (כבר בטיפול)" if t and t["status"] != "new" else "") + ".")
+    elif not r["improved"]:
+        lines.append("• הקמפיינים יציבים ובטווח התקין.")
+    done = rows(db, "SELECT title FROM pulse_verifications WHERE account_id=? AND client_id=? ORDER BY id DESC LIMIT 1", (acc, cid))
+    if done:
+        lines.append("• טופל ואומת: " + done[0]["title"].split(" · ")[0] + ".")
+    lines.append("נמשיך לעקוב ונעדכן. שאלות? אנחנו כאן.")
+    txt = "\n".join(lines)
+    ref = run["ref"]
+    exe(db, "INSERT INTO pulse_drafts (account_id, client_id, day, kind, channel, text, created_at) VALUES (?,?,?,?,?,?,?)",
+        (acc, cid, ref, "update", "WhatsApp", txt, now()))
+    ev(db, acc, ref, "note", "הוכנה טיוטת עדכון ללקוח", cid, by)
+    return {"ok": True, "text": txt, "msg": "הטיוטה נשמרה בתיק הלקוח (לא נשלחה). אפשר להעתיק ולשלוח."}

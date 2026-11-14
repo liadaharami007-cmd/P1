@@ -45,6 +45,7 @@ V.home = async (view) => {
   <div class="lights">${[['red', 'דחוף', c.red], ['yellow', 'במעקב', c.yellow], ['green', 'תקין', c.green], ['nodata', 'אין מספיק מידע', c.nodata]].map(([k, t, n]) =>
     `<button class="light l-${k}" data-act="go" data-arg="clients?f=${k}"><i></i><b>${N(n)}</b><span>${t}</span></button>`).join('')}
     ${tm ? `<div class="light saved-mini"><span class="note">נבדקו ${N(tm.clients)} חשבונות ב-${N(tm.scan_ms)} מ"ש</span><b>~${N(Math.round(tm.saved_min / 6) / 10)} שעות</b><span class="note">בדיקה ידנית שנחסכה היום (הערכה)</span></div>` : ''}</div>
+  ${b.potential ? `<div class="card pad pot"><b>~${N(b.potential.leads_week)} לידים בשבוע אפשר להחזיר</b><span class="small tx2">אצל ${N(b.potential.clients)} לקוחות, אם העלות לליד תחזור לממוצע של כל לקוח באותה הוצאה. הערכה מהנתונים, לא הבטחה.</span></div>` : ''}
   <div class="card pad brief"><div class="h2">${ic('zap')} מה דורש אותך עכשיו<span class="sp"></span><span class="note">${b.items.length} הכי חשובים, לפי חומרה, דחיפות והשפעה${b.more ? ` · ועוד ${N(b.more)} ב<a href="#/alerts">כל החריגות</a>` : ''}</span></div>
     ${b.items.length ? b.items.map((x, i) => `<div class="bi sev-${x.severity === 'imp' ? 'imp' : x.severity === 'green' ? 'green' : x.severity}"><span class="n">${i + 1}</span><div class="bt"><b>${esc(x.title)}</b><div class="small tx2">${esc(x.detail)}</div></div>
       <button class="btn ${i < 3 ? 'pri' : 'sec'} sm" ${x.action.route ? `data-act="go" data-arg="${esc(x.action.route)}"` : `data-act="${esc(x.action.act)}" data-arg="${esc(x.action.arg)}"`}>${esc(x.action.label)}</button></div>`).join('')
@@ -54,6 +55,7 @@ V.home = async (view) => {
     <div class="tiles">${ab.board.map((x) => `<button class="tile t-${x.improved && x.status === 'green' ? 'imp' : x.status}" data-act="go" data-arg="client/${x.id}" title="${esc(x.title)}"><b>${esc(x.name)}</b><span>${esc(x.status === 'nodata' ? 'אין מספיק מידע' : x.title)}</span></button>`).join('')}</div></div>`;
 };
 A.setSat = async (b, arg) => { const [cid, n] = arg.split('|'); await api(`/api/pulse/clients/${cid}/satisfaction`, { method: 'PUT', body: { score: Number(n) } }); toast('שביעות הרצון עודכנה'); render(); };
+A.updDraft = async (b, cid) => { const r = await api(`/api/pulse/clients/${cid}/update-draft`, { method: 'POST' }); toast(r.msg); render(); };
 A.commitDone = async (b, id) => { const r = await api(`/api/pulse/commitments/${id}`, { method: 'PATCH', body: { status: 'done' } }); toast(r.msg); render(); };
 
 // ================================================================ ניתוח מודעות (הבקשה של יובל: מה לשפר בהצעה, בקופי ובקריאייטיב)
@@ -175,7 +177,7 @@ V.client = async (view, p) => {
   view.innerHTML = `<a class="back" href="#/clients">${ic('back', 14)} כל הלקוחות</a>
   <div class="ch">${healthRing(h.score)}<div><h2>${esc(c.name)} ${demoTag(c.is_demo)}</h2><div class="meta2" style="margin:4px 0 0">${pill(r.status)} <span>${esc(c.industry || '')}</span><span>אחראי: ${esc(memberName(c.owner))}</span><span>${esc((c.platforms || []).join(' · '))}</span><span>מקור נתונים: ${esc({ demo: 'דמו', csv: 'CSV', manual: 'לא יובאו נתונים' }[c.source] || c.source)}</span></div></div>
     <div class="sp"></div><div class="row"><a class="btn sec sm" href="/api/pulse/reports/client/${c.id}.html?days=30" target="_blank" rel="noopener">${ic('report', 14)} דוח ללקוח</a><a class="btn sec sm" href="/api/pulse/reports/client/${c.id}.pdf?days=30">PDF</a>
-    <button class="btn sec sm" data-act="go" data-arg="ask?q=${encodeURIComponent('למה ' + c.name + ' במצב הזה?')}">${ic('chat', 14)} שאל על הלקוח</button><button class="btn sec sm" data-act="editClient" data-arg="${c.id}">הגדרות ויעדים</button></div></div>
+    <button class="btn sec sm" data-act="go" data-arg="ask?q=${encodeURIComponent('למה ' + c.name + ' במצב הזה?')}">${ic('chat', 14)} שאל על הלקוח</button><button class="btn sec sm" data-act="updDraft" data-arg="${c.id}">${ic('chat', 14)} נסח עדכון ללקוח</button><button class="btn sec sm" data-act="editClient" data-arg="${c.id}">הגדרות ויעדים</button></div></div>
   ${r.lowData ? `<div class="okbox" style="background:var(--ybg);margin-bottom:12px">${esc(r.info[0] || 'מעט נתונים')}</div>` : ''}
   ${top ? alertCard(top, d, true) : r.improved ? `<div class="card al imp" style="margin-bottom:14px"><div class="alh">${pill('imp')}<span class="t">שיפור מובהק</span><span class="engine">ביטחון ${esc(r.improved.confidence)}</span></div><p>${esc(r.improved.what)}</p></div>` : `<div class="card pad okbox" style="margin-bottom:14px">${ic('check', 15)} אין חריגות פתוחות. כל המדדים בטווח ההיסטורי של הלקוח${r.goals.targetCpl ? ' ובהתאם ליעד' : ''}.</div>`}
   <div class="card pad" style="margin-bottom:14px"><div class="h2">ביצועים<span class="sp"></span>
@@ -241,6 +243,7 @@ function yuvalCard(c, compact) {
     ${row('הסברים אפשריים', list(compact ? c.explanations.slice(0, 1) : c.explanations))}
     ${compact ? '' : row('מה לבדוק', list(c.check))}
     ${row('הפעולה הבאה', `<b>${esc(c.next)}</b>`)}
+    ${c.potential ? row('פוטנציאל', `<span class="ok">${esc(c.potential)}</span> <span class="note">(הערכה)</span>`) : ''}
     ${row('מי אחראי', esc(c.owner_name) + (c.late ? ' <span class="pill p-red">באיחור</span>' : ''))}
     ${row('האם טופל', esc(c.handled))}
     ${row('האם השתפר', esc(c.improved))}

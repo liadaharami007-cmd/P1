@@ -389,6 +389,14 @@ def register(app: FastAPI, db: Database) -> None:
         S.ev(db, ctx.account_id, run["ref"], "note", f"הוצעו גרסאות קופי ל{ad['name']} ({eng.id})", cid, uname(ctx))
         return {"variants": (data or {}).get("variants", [])[:3], "engine": f"{eng.id} ({eng.model})"}
 
+    @app.post("/api/pulse/clients/{cid}/update-draft")
+    def update_draft(cid: str, ctx: Ctx = Depends(current)):
+        W(ctx)
+        try:
+            return S.update_draft(db, ctx.account_id, cid, uname(ctx))
+        except KeyError as e:
+            raise HTTPException(404, str(e))
+
     @app.get("/api/pulse/my")
     def my(member: str | None = None, ctx: Ctx = Depends(current)):
         W(ctx)

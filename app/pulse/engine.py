@@ -195,7 +195,7 @@ def analyze_client(c: dict, days: list[dict], ref: int) -> dict:
         if ss:
             alerts.append({"type": "spend_up", "severity": ss, "durationDays": 7, "confidence": "בינונית" if rec["n"] >= 6 else "נמוכה", "period": CMP,
                            "title": "ההוצאה עלתה בלי תוספת לידים מתאימה",
-                           "what": f"ההוצאה היומית עלתה ב-{pct(s_up)}%, ואילו הלידים ליום השתנו ב-{sgn(l_up)}.",
+                           "what": f"ההוצאה היומית עלתה ב-{pct(s_up)}%, ואילו הלידים ליום: {sgn(l_up)}.",
                            "numbers": [["הוצאה יומית", money(base["dailySpend"]), money(rec["dailySpend"]), sgn(s_up)],
                                        ["לידים ליום", f"{base['dailyLeads']:.1f}", f"{rec['dailyLeads']:.1f}"]],
                            "why": "התקציב הנוסף לא מייצר תוצאה בהתאם, וזה כסף של הלקוח.", "immediate": ss == "red"})
@@ -286,7 +286,21 @@ def analyze_client(c: dict, days: list[dict], ref: int) -> dict:
            "base": base, "rec": rec, "weeks": weeks, "excess": excess, "lastIdx": last, "lag": lag, "days": days,
            "sales28": b_s if b_s["has_sales"] else None}
     res["health"] = health_score(res, T)
+    res["recovery"] = recovery(res)
     return res
+
+
+def recovery(r: dict) -> dict | None:
+    """כמה לידים בשבוע 'חסרים' ביחס לממוצע של הלקוח עצמו, באותה הוצאה. הערכה מנתונים — לא הבטחה."""
+    b, rc = r["base"], r["rec"]
+    if r["lowData"] or not b["cpl"] or not rc["spend"] or rc["n"] < 5:
+        return None
+    # שמרני: לא יותר מ-120% מכמות הלידים השבועית הרגילה של הלקוח (הוצאה נוספת לא מביאה לידים באופן ליניארי)
+    gap = min(rc["spend"] / b["cpl"], b["dailyLeads"] * 7 * 1.2) - rc["leads"]
+    if gap < 3 or not any(a["type"] in ("cpl", "no_leads", "spend_up", "cvr", "ctr", "trend", "goal") for a in r["alerts"]):
+        return None
+    return {"leads_week": round(gap), "base_cpl": b["cpl"],
+            "text": f"אם העלות לליד תחזור לממוצע של הלקוח ({money(b['cpl'])}): כ-{round(gap)} לידים נוספים בשבוע (הערכה שמרנית)"}
 
 
 def status_of(alerts: list[dict], low_data: bool, has_days: bool) -> str:
