@@ -320,7 +320,7 @@ def register(app: FastAPI, db: Database) -> None:
                 "contacts": store.rows(db, "SELECT * FROM pulse_contacts WHERE account_id=? AND client_id=? ORDER BY id", (acc, cid)),
                 "commitments": store.rows(db, "SELECT * FROM pulse_commitments WHERE account_id=? AND client_id=? ORDER BY status='open' DESC, due_day", (acc, cid)),
                 "status_history": store.rows(db, "SELECT * FROM pulse_status_history WHERE account_id=? AND client_id=? ORDER BY id DESC LIMIT 30", (acc, cid)),
-                "decisions": S.decisions(db, acc, cid),
+                "decisions": S.decisions(db, acc, cid), "benchmark": S.benchmark(run, cid),
                 "thresholds": {k: {"label": v[0], "min": v[1], "max": v[2], "default": engine.THRESHOLDS[k], "value": c["thresholds"].get(k)}
                                for k, v in engine.EDITABLE.items()},
                 "ref": run["ref"]}

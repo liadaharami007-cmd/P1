@@ -42,16 +42,18 @@ V.home = async (view) => {
   const list = (status) => ab.board.filter((x) => x.status === status).map((x) => ({ ...x, card: byClient[x.id] }));
   const red = list('red'), yellow = list('yellow');
   const untreated = red.filter((x) => !x.card || !x.card.task_id || x.card.task_status === 'new').length;
-  const row = (x) => `<button class="lrow" data-act="go" data-arg="client/${x.id}"><i class="dot d-${x.status}"></i><span class="ln">${esc(x.name)}</span>
-    <span class="lr">${esc(x.card ? x.card.title : x.title)}</span><span class="lo">${esc(x.card ? x.card.owner_name : '')}</span>
-    <span class="lh ${x.card && x.card.late ? 'bad' : ''}">${esc(!x.card ? '' : !x.card.task_id ? 'אין מטפל' : x.card.late ? 'באיחור' : x.card.task_status === 'new' ? 'לא התחיל' : x.card.task_status === 'awaiting_verification' ? 'ממתין לבדיקה' : 'בטיפול')}</span></button>`;
+  const quick = (x) => !x.card ? '' : !x.card.task_id ? `<button class="btn sec sm" data-act="createTask" data-arg="${esc(x.card.key)}">שייך ל${esc(x.card.owner_name)}</button>`
+    : x.card.task_status === 'new' ? `<button class="btn sec sm" data-act="task" data-arg="${esc(x.card.task_id)}|start">התחלתי טיפול</button>` : '';
+  const row = (x) => `<div class="lrow"><i class="dot d-${x.status}"></i><a class="ln" href="#/client/${x.id}">${esc(x.name)}</a>
+    <a class="lr" href="#/client/${x.id}">${esc(x.card ? x.card.title : x.title)}</a><span class="lo">${esc(x.card ? x.card.owner_name : '')}</span>
+    <span class="lh ${x.card && x.card.late ? 'bad' : ''}">${quick(x) || esc(!x.card ? '' : x.card.late ? 'באיחור' : x.card.task_status === 'awaiting_verification' ? 'ממתין לבדיקה' : x.card.task_status === 'awaiting_approval' ? 'ממתין לאישור' : 'בטיפול')}</span></div>`;
   view.innerHTML = `<div class="calm">
   <div class="calm-head"><h2>${greet}, ${esc(st.me.user.name)}</h2>
-    <p class="lead">${c.red ? `${N(c.red)} לקוחות דחופים${untreated ? `, ${N(untreated)} מהם עוד לא בטיפול` : ', וכולם בטיפול'}.` : 'אין היום לקוחות דחופים.'} ${c.yellow ? `${N(c.yellow)} במעקב.` : ''}</p>
+    <p class="lead">${c.red ? `${N(c.red)} לקוחות דחופים${untreated ? `, ${N(untreated)} מהם עוד לא בטיפול` : ', וכולם בטיפול'}.` : 'אין היום לקוחות דחופים.'} ${c.yellow ? `${N(c.yellow)} במעקב.` : ''}${o.week && o.week.leads ? `<br><span class="small">השבוע נכנסו ${N(o.week.leads.toLocaleString())} לידים בכל המשרד${o.week.prev_leads ? ` (${o.week.leads >= o.week.prev_leads ? '+' : ''}${N(Math.round((o.week.leads / o.week.prev_leads - 1) * 100))}% משבוע שעבר)` : ''}, בעלות ממוצעת של ${N(money(o.week.cpl))} לליד.</span>` : ''}</p>
     <div class="counts">${[['red', 'דחוף'], ['yellow', 'במעקב'], ['green', 'תקין'], ['nodata', 'אין מספיק מידע']].map(([k, t]) => `<a href="#/clients?f=${k}"><i class="dot d-${k}"></i>${N(c[k])} ${t}</a>`).join('')}${o.demo ? '<span class="mock">דמו</span>' : ''}</div></div>
   <section><h3>שלושה דברים להיום</h3>${b.items.slice(0, 3).map((x, i) => `<div class="todo3"><span class="n">${i + 1}</span><div class="bt"><b>${esc(x.title)}</b><div class="small tx2 clamp">${esc(x.detail)}</div></div>
     <button class="btn ${i === 0 ? 'pri' : 'sec'} sm" ${x.action.route ? `data-act="go" data-arg="${esc(x.action.route)}"` : `data-act="${esc(x.action.act)}" data-arg="${esc(x.action.arg)}"`}>${esc(x.action.label)}</button></div>`).join('') || '<p class="tx2">אין שום דבר דחוף. יום שקט.</p>'}</section>
-  ${red.length ? `<section><h3>דחוף <span class="note">${N(red.length)}</span></h3><div class="lhead"><span></span><span>לקוח</span><span>הבעיה</span><span>אחראי</span><span>טיפול</span></div>${red.map(row).join('')}</section>` : ''}
+  ${red.length ? `<section><h3>דחוף <span class="note">${N(red.length)}</span></h3><div class="lhead"><span></span><span>לקוח</span><span>הבעיה</span><span>אחראי</span><span>מצב / פעולה</span></div>${red.map(row).join('')}</section>` : ''}
   ${yellow.length ? `<section><h3>במעקב <span class="note">${N(yellow.length)}</span></h3>${yellow.map(row).join('')}</section>` : ''}
   <a class="rest" href="#/clients?f=green"><i class="dot d-green"></i>${N(c.green)} לקוחות תקינים${c.nodata ? ` · ${N(c.nodata)} בלי מספיק מידע` : ''} — לרשימה</a>
   <footer class="proof">נבדקו ${N(b.clients)} חשבונות ב-${N(b.scan_ms)} מ"ש${o.time ? ` · ~${N(Math.round(o.time.saved_min / 6) / 10)} שעות בדיקה ידנית נחסכו` : ''}${b.potential ? ` · כ-${N(b.potential.leads_week)} לידים בשבוע אפשר להחזיר` : ''}${b.verified.length ? ` · ${N(b.verified.length)} תיקונים אומתו בנתונים` : ''} <span class="note">(הערכות מסומנות כהערכה)</span></footer>
@@ -59,6 +61,31 @@ V.home = async (view) => {
 };
 A.setSat = async (b, arg) => { const [cid, n] = arg.split('|'); await api(`/api/pulse/clients/${cid}/satisfaction`, { method: 'PUT', body: { score: Number(n) } }); toast('שביעות הרצון עודכנה'); render(); };
 A.updDraft = async (b, cid) => { const r = await api(`/api/pulse/clients/${cid}/update-draft`, { method: 'POST' }); toast(r.msg); render(); };
+// ================================================================ מצב פגישה עם לקוח — מסך נקי להצגה ללקוח עצמו (בלי נתונים פנימיים)
+V.meet = async (view, p) => {
+  const d = await api(`/api/pulse/clients/${encodeURIComponent(p.id)}?days=90`);
+  const c = d.client, r = d.result, s = d.series;
+  const last = s.slice(-30), prev = s.slice(-60, -30);
+  const sum = (a, k) => a.reduce((t, x) => t + (x[k] || 0), 0);
+  const L = sum(last, 'leads'), Lp = sum(prev, 'leads'), Sp = sum(last, 'spend'), Spp = sum(prev, 'spend');
+  const cpl = L ? Sp / L : null, cplp = Lp ? Spp / Lp : null;
+  const done = d.tasks.filter((t) => t.verification && t.verification.ok);
+  const doing = d.tasks.filter((t) => t.status !== 'closed');
+  const next = d.alerts.length ? d.alerts.slice(0, 2).map((a) => a.card.next) : ['להמשיך באותו קו ולבחון הגדלה הדרגתית של התקציב'];
+  const k = (l, v, pv, goodDown) => `<div class="mk"><div class="note">${l}</div><b>${N(v)}</b>${pv ? `<div class="note">${pv}</div>` : ''}</div>`;
+  const ch = (a, b) => (a != null && b ? `${a >= b ? '+' : ''}${Math.round((a / b - 1) * 100)}% מהחודש הקודם` : '');
+  view.innerHTML = `<div class="meet"><a class="back" href="#/client/${c.id}">${ic('back', 14)} חזרה לתיק</a>
+    <h1>${esc(c.name)}</h1><p class="lead">סיכום 30 הימים האחרונים</p>
+    <div class="mks">${k('לידים', L.toLocaleString(), ch(L, Lp))}${k('עלות לליד', money(cpl), ch(cpl, cplp))}${k('השקעה בפרסום', money(Sp), ch(Sp, Spp))}${c.goals.targetCpl ? k('היעד שסיכמנו', money(c.goals.targetCpl), cpl ? (cpl <= c.goals.targetCpl ? 'עומדים ביעד' : 'מעל היעד — בטיפול') : '') : ''}</div>
+    <div class="card pad"><div class="note" style="margin-bottom:6px">עלות לליד לאורך החודש (ממוצע נע 7 ימים)</div><div id="meetChart"></div></div>
+    <div class="mcols"><div><h3>מה עשינו</h3><ul>${done.map((t) => `<li>${esc(t.title.split(' · ')[0])} — אומת בנתונים</li>`).join('')}${doing.map((t) => `<li>${esc(t.plan?.[0]?.text || t.title.split(' · ')[0])} (בתהליך)</li>`).join('')}${!done.length && !doing.length ? '<li>שמרנו על הקמפיינים יציבים ועקבנו אחרי הביצועים</li>' : ''}</ul></div>
+      <div><h3>מה הלאה</h3><ul>${next.map((x) => `<li>${esc(x)}</li>`).join('')}</ul></div></div>
+    ${c.is_demo ? '<p class="note">נתוני דמו</p>' : ''}</div>`;
+  const roll = d.rolling.slice(-30);
+  chart($('#meetChart'), { labels: roll.map((x) => x.date.slice(8, 10) + '.' + Number(x.date.slice(5, 7))), target: c.goals.targetCpl, fmt: (v) => money(v), h: 200,
+    series: [{ name: 'עלות לליד', color: 'var(--acc)', w: 2.6, vals: roll.map((x) => x.cpl) }] });
+};
+
 A.commitDone = async (b, id) => { const r = await api(`/api/pulse/commitments/${id}`, { method: 'PATCH', body: { status: 'done' } }); toast(r.msg); render(); };
 
 // ================================================================ ניתוח מודעות (הבקשה של יובל: מה לשפר בהצעה, בקופי ובקריאייטיב)
@@ -187,11 +214,12 @@ V.client = async (view, p) => {
     <div class="meta2" style="margin:6px 0 0"><span>${esc(SL[r.status])}</span><span>${esc(c.industry || '')}</span><span>אחראי: ${esc(memberName(c.owner))}</span>${h.score != null ? `<span>בריאות ${N(h.score)}/100</span>` : ''}</div></div>
     <div class="sp"></div><div class="row"><button class="btn pri sm" data-act="updDraft" data-arg="${c.id}">נסח עדכון ללקוח</button>
       <details class="menu"><summary class="btn sec sm">עוד</summary><div class="menu-list"><a href="/api/pulse/reports/client/${c.id}.html?days=30" target="_blank" rel="noopener">דוח ללקוח</a><a href="/api/pulse/reports/client/${c.id}.pdf?days=30">PDF</a>
-        <a href="#/ask?q=${encodeURIComponent('למה ' + c.name + ' במצב הזה?')}">שאל על הלקוח</a>${c.is_demo ? `<a href="#/ads?client=${c.id}">ניתוח המודעות</a>` : ''}<button data-act="editClient" data-arg="${c.id}">הגדרות ויעדים</button></div></details></div></div>
+        <a href="#/meet/${c.id}">מצב פגישה עם הלקוח</a><a href="#/ask?q=${encodeURIComponent('למה ' + c.name + ' במצב הזה?')}">שאל על הלקוח</a>${c.is_demo ? `<a href="#/ads?client=${c.id}">ניתוח המודעות</a>` : ''}<button data-act="editClient" data-arg="${c.id}">הגדרות ויעדים</button></div></details></div></div>
   ${cd ? `<div class="card hero">
       <div class="hrow"><span class="hk">מה קרה</span><div class="hv big">${esc(cd.what)}</div></div>
       <div class="hrow"><span class="hk">למה</span><div class="hv">${esc((cd.explanations[0] || '').replace(/ \([^)]*\)$/, ''))}</div></div>
       <div class="hrow"><span class="hk">מה עושים</span><div class="hv"><b>${esc(cd.next)}</b>${cd.potential ? `<div class="note ok">${esc(cd.potential)}</div>` : ''}</div></div>
+      ${d.benchmark ? `<div class="hrow"><span class="hk">השוואה</span><div class="hv tx2">${esc(d.benchmark.text)}</div></div>` : ''}
       <div class="hrow"><span class="hk">מי ומתי</span><div class="hv tx2">${esc(cd.owner_name)} · ${esc(cd.handled)}${cd.late ? ' · <span class="bad">באיחור</span>' : ''}</div></div>
       <div class="row" style="margin-top:14px">${top.task ? `<button class="btn pri" data-act="go" data-arg="task/${top.task.id}">למשימה</button>` : `<select class="inp sm" id="as_${esc(top.key)}" aria-label="אחראי">${memberOpts(c.owner)}</select><button class="btn pri" data-act="createTask" data-arg="${esc(top.key)}">צור משימה ושייך</button>`}
         ${d.alerts.length > 1 ? `<span class="note">ועוד ${N(d.alerts.length - 1)} נושאים בלשונית "פרטי הבעיה"</span>` : ''}</div></div>`

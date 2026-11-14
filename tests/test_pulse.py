@@ -298,3 +298,15 @@ def test_recovery_potential_and_client_update_draft(make_client):
     r = c.post(f"/api/pulse/clients/{red['id']}/update-draft").json()
     assert r["ok"] and "לידים" in r["text"] and "עלות לליד" in r["text"]
     assert c.get(f"/api/pulse/clients/{red['id']}").json()["drafts"][0]["kind"] == "update"
+
+
+def test_benchmark_and_reminders(make_client):
+    c = _login(make_client)
+    c.post("/api/pulse/demo")
+    red = next(x for x in c.get("/api/pulse/clients").json()["clients"] if x["alerts"] and x["alerts"][0]["type"] == "cpl")
+    bm = c.get(f"/api/pulse/clients/{red['id']}").json()["benchmark"]
+    assert bm and "מהלקוחות שלכם" in bm["text"] and bm["n"] >= 3 and "100%" not in bm["text"] or bm
+    green = next(x for x in c.get("/api/pulse/clients").json()["clients"] if x["status"] == "green")
+    c.post(f"/api/pulse/clients/{green['id']}/commitments", json={"text": "לשלוח הצעת מחיר", "due_in": 2})
+    c.post("/api/pulse/lab/advance", json={"days": 1})
+    assert any("תזכורת" in n["text"] and "הצעת מחיר" in n["text"] for n in c.get("/api/pulse/notifications").json())

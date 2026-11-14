@@ -26,6 +26,7 @@ RULES = [
     {"id": "recheck", "when": "משימה סומנה כבוצעה", "then": "קבע בדיקה חוזרת אוטומטית לפי מדד ההצלחה", "on": True},
     {"id": "overdue", "when": "משימה עברה את מועד היעד", "then": "התראה פנימית לאחראי ולמנהלים", "on": True},
     {"id": "data_health", "when": "מקור נתונים הפסיק להתעדכן", "then": "צור התראת תקינות נתונים", "on": True},
+    {"id": "remind", "when": "יום לפני מועד של התחייבות או משימה", "then": "תזכורת לאחראי במערכת", "on": True},
     {"id": "daily_summary", "when": "תחילת יום (הבדיקה הראשונה ביום)", "then": "הפק סיכום בוקר", "on": True},
     {"id": "weekly_report", "when": "סוף שבוע (שישי)", "then": "הפק דוח ביצועים שבועי למשרד", "on": True},
 ]
@@ -596,6 +597,24 @@ def automations(db: Database, acc: str, run: dict, w: dict, ref: int, fresh: lis
                     exe(db, "UPDATE pulse_tasks SET overdue_notified=? WHERE id=?", (ref, t["id"]))
                     return txt
                 _once(db, acc, "overdue", f"overdue:{t['id']}:{ref}", od, log, dry)
+    if on("remind"):
+        for cm in rows(db, "SELECT * FROM pulse_commitments WHERE account_id=? AND status='open' AND due_day=?", (acc, ref + 1)):
+            def rm(d: bool, cm=cm):
+                txt = f"תזכורת: מחר יעד להתחייבות \"{cm['text']}\" · {(run['byId'].get(cm['client_id']) or {}).get('name', '')} · {name_of(cm['owner'])}"
+                if d:
+                    return txt
+                notify(db, acc, ref, txt, "info", f"client/{cm['client_id']}")
+                return txt
+            _once(db, acc, "remind", f"remind:c{cm['id']}:{ref}", rm, log, dry)
+        for t in open_tasks(db, acc):
+            if t["due_day"] == ref + 1 and t["status"] in ("new", "in_progress"):
+                def rt(d: bool, t=t):
+                    txt = f"תזכורת: מחר יעד למשימה \"{t['title']}\" · {name_of(t['assignee'])}"
+                    if d:
+                        return txt
+                    notify(db, acc, ref, txt, "info", f"task/{t['id']}")
+                    return txt
+                _once(db, acc, "remind", f"remind:t{t['id']}:{ref}", rt, log, dry)
     if on("daily_summary"):
         def ds(d: bool):
             txt = summary_text(db, acc, run)["plain"]
@@ -1361,3 +1380,27 @@ def update_draft(db: Database, acc: str, cid: str, by: str) -> dict:
         (acc, cid, ref, "update", "WhatsApp", txt, now()))
     ev(db, acc, ref, "note", "הוכנה טיוטת עדכון ללקוח", cid, by)
     return {"ok": True, "text": txt, "msg": "הטיוטה נשמרה בתיק הלקוח (לא נשלחה). אפשר להעתיק ולשלוח."}
+
+
+def benchmark(run: dict, cid: str) -> dict | None:
+    """השוואה ללקוחות אחרים של אותה סוכנות באותו ענף (או לכל התיק כשאין מספיק). מהנתונים של המשרד בלבד."""
+    r = run["byId"].get(cid)
+    if not r or not r["rec"]["cpl"] or r["lowData"]:
+        return None
+    same = [x for x in run["results"] if x["id"] != cid and x["industry"] == r["industry"] and x["rec"]["cpl"] and not x["lowData"]]
+    if len(same) >= 3:  # אותו ענף: משווים עלות לליד ישירות
+        worse = sum(1 for x in same if x["rec"]["cpl"] < r["rec"]["cpl"]) / len(same)
+        text = f"העלות לליד ({money(r['rec']['cpl'])}) " + (f"יקרה מ-{round(worse * 100)}%" if worse >= 0.5 else f"זולה מ-{round((1 - worse) * 100)}%") + f" מהלקוחות שלכם ב{r['industry']}"
+        share = worse
+    else:  # ענפים שונים: משווים ביחס ליעד של כל לקוח (השוואה הוגנת בין ענפים)
+        tgt = (r.get("goals") or {}).get("targetCpl")
+        same = [x for x in run["results"] if x["id"] != cid and x["rec"]["cpl"] and not x["lowData"] and (x.get("goals") or {}).get("targetCpl")]
+        if not tgt or len(same) < 5:
+            return None
+        ratio = r["rec"]["cpl"] / tgt
+        share = sum(1 for x in same if x["rec"]["cpl"] / x["goals"]["targetCpl"] < ratio) / len(same)
+        pos = f"{round(abs(ratio - 1) * 100)}% {'מעל היעד' if ratio > 1 else 'מתחת ליעד'}"
+        text = (f"ביחס ליעד שלו ({pos}), זה הלקוח במצב החלש ביותר בתיק" if share >= 0.99
+                else f"ביחס ליעד שלו ({pos}), הלקוח במצב חלש מ-{round(share * 100)}% מהלקוחות שלכם" if share >= 0.5
+                else f"ביחס ליעד שלו ({pos}), הלקוח במצב טוב מ-{round((1 - share) * 100)}% מהלקוחות שלכם")
+    return {"text": text + f" ({len(same)} לקוחות להשוואה, 7 ימים)", "share": share, "n": len(same)}
