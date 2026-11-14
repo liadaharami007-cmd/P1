@@ -10,7 +10,7 @@ from pydantic import BaseModel, Field
 
 from ..db import Database
 from ..saas.auth import Ctx, current
-from . import ask as ask_mod, demo, engine, report, service as S, store
+from . import adlab, ask as ask_mod, demo, engine, report, service as S, store
 
 STATIC = Path(__file__).resolve().parent.parent / "static" / "pulse"
 
@@ -336,6 +336,89 @@ def register(app: FastAPI, db: Database) -> None:
              {"note": "הערה", "call": "תיעוד שיחה", "meeting": "סיכום פגישה", "decision": "החלטה"}[body.kind] + ": " + body.text[:80], cid, uname(ctx), body.kind)
         S.bump(db, ctx.account_id)
         return {"ok": True}
+
+    # ---------------------------------------------------------------- ניתוח מודעות · המשימות שלי
+    def _ads_for(run: dict, cid: str) -> list[dict]:
+        c, r = run["clients"].get(cid), run["byId"].get(cid)
+        return adlab.demo_ads(c, r) if c and r and c["is_demo"] else []
+
+    @app.get("/api/pulse/ads")
+    def ads(client: str | None = None, ctx: Ctx = Depends(current)):
+        W(ctx)
+        run = S.analysis(db, ctx.account_id)
+        lst = []
+        for r in run["results"]:
+            a = adlab.analyze(_ads_for(run, r["id"]))
+            if a["summary"]:
+                lst.append({"id": r["id"], "name": r["name"], "status": r["status"], "owner": r["owner"], "to_fix": a["summary"]["to_fix"],
+                            "waste": a["summary"]["waste"], "headline": a["summary"]["headline"]})
+        lst.sort(key=lambda x: (-x["waste"], -x["to_fix"]))
+        cid = client or (lst[0]["id"] if lst else None)
+        r = run["byId"].get(cid) if cid else None
+        real_note = None if (r and r["is_demo"]) else "ללקוח הזה אין עדיין נתוני מודעות. הם יגיעו מחיבור Meta Ads (צריך הרשאה) — ההשוואה בין מודעות והבדיקה של הטקסט יעבדו עליהם אוטומטית."
+        from ..intelligence import engines
+        try:
+            eng = engines.active_engine()
+        except Exception:  # noqa: BLE001
+            eng = None
+        return {"clients": lst, "client": {"id": r["id"], "name": r["name"], "status": r["status"], "industry": r["industry"], "is_demo": r["is_demo"]} if r else None,
+                "analysis": adlab.analyze(_ads_for(run, cid)) if cid else {"ads": [], "summary": None}, "note": real_note,
+                "ai": f"{eng.id} ({eng.model})" if eng else None}
+
+    @app.post("/api/pulse/ads/{ad_id}/rewrite")
+    async def ad_rewrite(ad_id: str, ctx: Ctx = Depends(current)):
+        W(ctx)
+        from ..intelligence import engines
+        eng = engines.active_engine()
+        if not eng:
+            raise HTTPException(409, "Gemini לא מחובר עדיין — הצעות קופי חדשות זמינות אחרי חיבור. ההמלצות שמעל עובדות גם בלעדיו.")
+        cid = ad_id.rsplit("-ad", 1)[0]
+        run = S.analysis(db, ctx.account_id)
+        an = adlab.analyze(_ads_for(run, cid))
+        ad = next((a for a in an["ads"] if a["id"] == ad_id), None)
+        if not ad:
+            raise HTTPException(404, "מודעה לא נמצאה")
+        payload = {"business": run["clients"][cid].get("industry"), "ad": {k: ad[k] for k in ("headline", "text", "offer", "format")},
+                   "problems": [f"{x['area']}: {x['issue']} ({x['why']})" for x in ad["recs"]]}
+        import json as _j
+        try:
+            data, _u = await eng.structured(system=adlab.COPY_SYSTEM, content=[{"type": "text", "text": _j.dumps(payload, ensure_ascii=False)}],
+                                            schema=adlab.COPY_SCHEMA, effort="low", max_tokens=1500)
+        except Exception as e:  # noqa: BLE001
+            raise HTTPException(503, f"Gemini לא הגיב ({type(e).__name__}). נסו שוב בעוד רגע.")
+        S.ev(db, ctx.account_id, run["ref"], "note", f"הוצעו גרסאות קופי ל{ad['name']} ({eng.id})", cid, uname(ctx))
+        return {"variants": (data or {}).get("variants", [])[:3], "engine": f"{eng.id} ({eng.model})"}
+
+    @app.get("/api/pulse/my")
+    def my(member: str | None = None, ctx: Ctx = Depends(current)):
+        W(ctx)
+        acc = ctx.account_id
+        team = S.team(db, acc)
+        mine = next((m for m in team if m.get("user_id") == ctx.user_id), None)
+        mid = member or (mine["id"] if mine else (team[0]["id"] if team else None))
+        run = S.analysis(db, acc)
+        ref = run["ref"]
+        tasks = [t for t in S.open_tasks(db, acc) if t["assignee"] == mid]
+        names = {r["id"]: r["name"] for r in run["results"]}
+        for t in tasks:
+            t["client_name"] = names.get(t["client_id"], "—")
+            t["late"] = t["due_day"] is not None and t["due_day"] < ref and t["status"] in ("new", "in_progress", "awaiting_approval")
+        tasks.sort(key=lambda t: (not t["late"], t["severity"] != "red", t["status"] != "new"))
+        commits = store.rows(db, "SELECT * FROM pulse_commitments WHERE account_id=? AND owner=? AND status='open' AND due_day<=? ORDER BY due_day", (acc, mid, ref + 3))
+        for c in commits:
+            c["client_name"] = names.get(c["client_id"], "—")
+        has_task = {t["client_id"] for t in S.open_tasks(db, acc)}
+        need = [{"id": r["id"], "name": r["name"], "status": r["status"], "title": r["alerts"][0]["title"]} for r in run["results"]
+                if r["owner"] == mid and r["status"] in ("red", "yellow") and r["id"] not in has_task and r["alerts"]]
+        ads_fix = []
+        for r in run["results"]:
+            if r["owner"] != mid:
+                continue
+            for a in adlab.analyze(_ads_for(run, r["id"]))["ads"]:
+                if a["tone"] == "red" and a["recs"]:
+                    ads_fix.append({"client_id": r["id"], "client": r["name"], "ad": a["name"], "verdict": a["verdict"], "first": a["recs"][0]})
+        return {"member": mid, "team": team, "tasks": tasks, "commitments": commits, "need": need[:6], "ads": ads_fix[:5], "ref": ref,
+                "clients": sum(1 for r in run["results"] if r["owner"] == mid)}
 
     # ---------------------------------------------------------------- סקירת בוקר · התחייבויות · אנשי קשר · שביעות רצון
     @app.get("/api/pulse/brief")

@@ -239,3 +239,49 @@ def test_alert_board_has_every_field_yuval_asked_for(make_client):
     assert "טופל" in red["handled"] or "לא" in red["handled"]
     cid = red["client_id"]
     assert c.get(f"/api/pulse/clients/{cid}").json()["alerts"][0]["card"]["next"]
+
+
+def test_ads_analysis_my_view_and_brief(make_client):
+    c = _login(make_client)
+    c.post("/api/pulse/demo")
+    d = c.get("/api/pulse/ads").json()
+    assert d["clients"] and d["analysis"]["ads"] and d["analysis"]["summary"]
+    areas = {r["area"] for a in d["analysis"]["ads"] for r in a["recs"]}
+    assert areas & {"הצעה", "קופי", "קריאייטיב"}
+    ad = d["analysis"]["ads"][0]
+    assert c.post(f"/api/pulse/ads/{ad['id']}/rewrite").status_code == 409  # בלי Gemini: לא ממציאים קופי
+    my = c.get("/api/pulse/my?member=dana").json()
+    assert my["member"] == "dana" and (my["tasks"] or my["need"])
+    b = c.get("/api/pulse/brief").json()
+    assert 0 < len(b["items"]) <= 8 and all(i["action"]["label"] for i in b["items"])
+
+
+def test_member_role_cannot_approve_or_change_settings(make_client, tmp_path):
+    from app.db import Database
+    db = Database(tmp_path / "r.db")
+    owner = make_client(db=db)
+    register(owner, "owner@a.co")
+    owner.post("/api/pulse/demo")
+    assert owner.post("/api/pulse/team/login", json={"name": "דנה", "email": "dana@a.co", "password": "dana-password-123"}).status_code == 201
+    worker = make_client(db=db)
+    assert worker.post("/api/auth/login", json={"email": "dana@a.co", "password": "dana-password-123"}).status_code == 200
+    assert worker.get("/api/pulse/clients").json()["clients"]  # רואה את נתוני הסוכנות
+    assert worker.put("/api/pulse/automations/red_task", json={"on": False}).status_code == 403
+    assert worker.put("/api/pulse/settings/thresholds", json={"thresholds": {"cplRed": 1}}).status_code == 403
+    t = next(t for t in worker.get("/api/pulse/tasks").json()["tasks"] if t["requires_approval"])
+    worker.post(f"/api/pulse/tasks/{t['id']}/start")
+    worker.post(f"/api/pulse/tasks/{t['id']}/submit")
+    r = worker.post(f"/api/pulse/tasks/{t['id']}/approve").json()
+    assert r["ok"] is False and "בעלים" in r["msg"]
+
+
+def test_low_data_client_is_not_green_and_commitment_affects_status(make_client):
+    c = _login(make_client)
+    cl = c.post("/api/pulse/clients", json={"name": "לקוח חדש"}).json()
+    assert c.get(f"/api/pulse/clients/{cl['id']}").json()["result"]["status"] in ("red", "nodata")  # אין נתונים → לא ירוק
+    c.post("/api/pulse/demo")
+    green = next(x for x in c.get("/api/pulse/clients").json()["clients"] if x["status"] == "green" and not x["alerts"])
+    c.post(f"/api/pulse/clients/{green['id']}/commitments", json={"text": "לשלוח דוח", "due_in": 0})
+    c.post("/api/pulse/lab/advance", json={"days": 8})
+    d = c.get(f"/api/pulse/clients/{green['id']}").json()
+    assert any(a["type"] == "commitment" for a in d["alerts"]) and d["status_history"]

@@ -14,8 +14,8 @@ export const chg = (a, b, goodDown) => {
   const x = a / b - 1, bad = goodDown ? x > 0.05 : x < -0.05, good = goodDown ? x < -0.05 : x > 0.05;
   return `<span class="chg ${bad ? 'up' : good ? 'down' : 'muted'}">${N((x > 0 ? '+' : '') + Math.round(x * 100) + '%')}</span>`;
 };
-export const SL = { green: 'תקין', yellow: 'במעקב', red: 'דחוף' };
-export const pill = (s) => `<span class="pill p-${s === 'imp' ? 'imp' : s}"><i class="dot d-${s === 'imp' ? 'imp' : s}"></i>${esc(SL[s] || 'הזדמנות')}</span>`;
+export const SL = { green: 'תקין', yellow: 'במעקב', red: 'דחוף', nodata: 'אין מספיק מידע' };
+export const pill = (s) => `<span class="pill p-${s}"><i class="dot d-${s}"></i>${esc(SL[s] || 'הזדמנות')}</span>`;
 export const dayLabel = (idx) => { const d = new Date(idx * 864e5); return d.getUTCDate() + '.' + (d.getUTCMonth() + 1); };
 export const memberName = (id) => (st.me?.team || []).find((m) => m.id === id)?.name || id || '—';
 export const demoTag = (on) => (on ? '<span class="badge-demo">דמו</span>' : '');
@@ -33,11 +33,14 @@ const I = {
 export const ic = (n, s) => `<svg class="ic" viewBox="0 0 24 24" ${s ? `style="width:${s}px;height:${s}px"` : ''}>${I[n] || ''}</svg>`;
 
 export const NAV = [
-  ['', [['home', 'רמזור · מה היום', 'home'], ['alerts', 'חריגות וטיפול', 'bell'], ['clients', 'לקוחות', 'users'], ['tasks', 'משימות ואישורים', 'check'], ['ask', 'Ask ClientPulse', 'chat']]],
-  ['ניהול וצמיחה', [['opps', 'הזדמנויות', 'spark'], ['profit', 'רווחיות', 'coin'], ['team', 'צוות ועומסים', 'team'], ['impact', 'הוכחת ערך', 'trophy'], ['reports', 'דוחות', 'report']]],
-  ['מערכת', [['automations', 'אוטומציות', 'zap'], ['integrations', 'חיבורים', 'plug'], ['lab', 'Demo Lab', 'flask']]],
+  ['', [['home', 'מה היום', 'home'], ['clients', 'לקוחות', 'users'], ['ads', 'ניתוח מודעות', 'spark'], ['my', 'המשימות שלי', 'check'], ['ask', 'שאל את המערכת', 'chat']]],
+  ['', [['settings', 'הגדרות וכלים', 'more']]],
 ];
-const TITLE = { home: 'רמזור · מה היום', alerts: 'חריגות וטיפול', clients: 'לקוחות', client: 'תיק לקוח 360', tasks: 'משימות ואישורים', task: 'משימות ואישורים', ask: 'Ask ClientPulse', opps: 'הזדמנויות צמיחה',
+// מסכים משניים: נגישים מ"הגדרות וכלים" ומתוך ההקשר — לא בתפריט הראשי (יובל: כמה שפחות עומס)
+export const MORE = [['alerts', 'כל החריגות', 'bell'], ['tasks', 'כל המשימות והאישורים', 'check'], ['reports', 'דוחות', 'report'], ['impact', 'הוכחת ערך', 'trophy'],
+  ['profit', 'רווחיות', 'coin'], ['team', 'צוות ומשתמשים', 'team'], ['opps', 'הזדמנויות', 'spark'], ['knowledge', 'ידע הסוכנות', 'report'],
+  ['automations', 'אוטומציות', 'zap'], ['integrations', 'חיבורים', 'plug'], ['lab', 'Demo Lab', 'flask']];
+const TITLE = { home: 'מה היום', ads: 'ניתוח מודעות', my: 'המשימות שלי', settings: 'הגדרות וכלים', knowledge: 'ידע הסוכנות', alerts: 'כל החריגות', clients: 'לקוחות', client: 'תיק לקוח 360', tasks: 'משימות ואישורים', task: 'משימות ואישורים', ask: 'שאל את המערכת', opps: 'הזדמנויות צמיחה',
   profit: 'רווחיות סוכנות', team: 'צוות ועומסים', impact: 'הוכחת ערך · לפני ואחרי', reports: 'דוחות', automations: 'מרכז אוטומציות', integrations: 'חיבורים', lab: 'Demo Lab' };
 
 // ---------------------------------------------------------------- API
@@ -114,7 +117,7 @@ function shell() {
     </header>
     <main class="view" id="view"></main></div>
   <nav class="bn" aria-label="ניווט">
-    ${[['home', 'פיקוד', 'home'], ['clients', 'לקוחות', 'users'], ['tasks', 'משימות', 'check'], ['ask', 'שאל', 'chat']].map(([r, t, i]) => `<a href="#/${r}" data-r="${r}">${ic(i)}${t}</a>`).join('')}
+    ${[['home', 'היום', 'home'], ['clients', 'לקוחות', 'users'], ['ads', 'מודעות', 'spark'], ['my', 'שלי', 'check']].map(([r, t, i]) => `<a href="#/${r}" data-r="${r}">${ic(i)}${t}</a>`).join('')}
     <button data-act="more">${ic('more')}עוד</button></nav>
   <div class="sheet" id="sheet"></div>
   <div class="ov" id="palOv"><div class="pal" role="dialog" aria-label="חיפוש"><input id="palIn" placeholder="חפש לקוח, מסך או פעולה…" autocomplete="off"><div class="res" id="palRes"></div></div></div>
@@ -133,7 +136,7 @@ export function chrome() {
   document.getElementById('themeBtn').innerHTML = ic(theme() === 'dark' ? 'sun' : 'moon', 15);
   const b = document.getElementById('bellC');
   b.innerHTML = me.unread ? `<span class="dotc">${me.unread > 99 ? '99+' : me.unread}</span>` : '';
-  document.querySelectorAll('[data-r]').forEach((a) => a.classList.toggle('on', a.dataset.r === (st.route === 'client' ? 'clients' : st.route === 'task' ? 'tasks' : st.route)));
+  document.querySelectorAll('[data-r]').forEach((a) => a.classList.toggle('on', a.dataset.r === (st.route === 'client' ? 'clients' : MORE.some(([r]) => r === st.route) || st.route === 'task' ? 'settings' : st.route)));
   document.getElementById('ttl').textContent = TITLE[st.route] || '';
 }
 
@@ -148,7 +151,7 @@ export async function render() {
   view.innerHTML = `<div class="stack"><div class="sk" style="height:80px"></div><div class="sk" style="height:220px"></div></div>`;
   window.scrollTo(0, 0);
   try {
-    if (!st.me.clients && !['lab', 'integrations', 'client', 'alerts'].includes(st.route)) { await V.welcome(view); return; }
+    if (!st.me.clients && !['lab', 'integrations', 'client', 'alerts', 'settings', 'team'].includes(st.route)) { await V.welcome(view); return; }
     await (V[st.route] || V.home)(view, st.params);
   } catch (e) {
     if (e.message !== 'auth') view.innerHTML = `<div class="card pad empty"><b>משהו נכשל בטעינת המסך.</b><p>${esc(e.message)}</p><button class="btn sec" data-act="reload">נסה שוב</button></div>`;
@@ -188,7 +191,7 @@ async function onClick(e) {
 
 function openSheet() {
   const s = document.getElementById('sheet');
-  s.innerHTML = NAV.flatMap(([, items]) => items).filter(([r]) => !['home', 'clients', 'tasks', 'ask'].includes(r))
+  s.innerHTML = [['ask', 'שאל את המערכת', 'chat'], ['settings', 'הגדרות וכלים', 'more'], ...MORE]
     .map(([r, t, i]) => `<a class="it" href="#/${r}" data-act="go" data-arg="${r}" style="display:flex;gap:10px;padding:12px 14px">${ic(i)}${t}</a>`).join('')
     + `<div class="row" style="padding:10px 14px"><button class="btn sec sm" data-act="theme">ערכת נושא</button><a class="btn sec sm" href="/">P1</a><button class="btn sec sm" data-act="logout">יציאה</button></div>`;
   s.classList.add('on'); st.sheet = true;
@@ -221,7 +224,7 @@ async function openPal() {
 }
 function palItems() {
   const q = st.palQ.trim();
-  const screens = NAV.flatMap(([, items]) => items).map(([r, t, i]) => ({ g: 'מסכים', t, r, i }));
+  const screens = [...NAV.flatMap(([, items]) => items), ...MORE].map(([r, t, i]) => ({ g: 'מסכים', t, r, i }));
   const cl = (st.clients || []).map((c) => ({ g: 'לקוחות', t: c.name, r: 'client/' + c.id, s: c.status, sub: c.alerts[0]?.title || SL[c.status] }));
   const acts = [{ g: 'פעולות', t: 'הרץ בדיקה עכשיו', act: 'check' }, { g: 'פעולות', t: 'שאל: מה קורה היום במשרד?', r: 'ask?q=' + encodeURIComponent('מה קורה היום במשרד?') }];
   const all = [...screens, ...cl, ...acts];

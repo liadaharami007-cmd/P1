@@ -1,5 +1,5 @@
 // ClientPulse OS — מסכים. כל מסך עונה על שאלה עסקית אחת; כל כפתור קורא ל-API אמיתי.
-import { api, chart, chg, closeModal, demoTag, esc, go, ic, memberName, modal, money, N, pctf, pill, refreshMe, render, SL, st, toast, dayLabel } from './app.js';
+import { MORE, api, chart, chg, closeModal, demoTag, esc, go, ic, memberName, modal, money, N, pctf, pill, refreshMe, render, SL, st, toast, dayLabel } from './app.js';
 
 const $ = (s, el = document) => el.querySelector(s);
 const STATUS = { new: 'חדש', in_progress: 'בטיפול', awaiting_approval: 'ממתין לאישור', done: 'בוצע', awaiting_verification: 'ממתין לבדיקה חוזרת', closed: 'נסגר' };
@@ -9,7 +9,7 @@ const SENS = new Set(['campaign_change', 'budget_change', 'client_message']);
 const HANDLING = { open: 'פתוחה', in_progress: 'בטיפול', resolved: 'נפתרה', cleared: 'חזרה לתקין', dismissed: 'סומנה כשווא' };
 const kpi = (label, n, sub, dot, route) => `<${route ? `button data-act="go" data-arg="${route}"` : 'div'} class="kpi"><div class="l">${dot ? `<i class="dot d-${dot}"></i>` : ''}${label}</div><div class="n">${N(n)}</div>${sub ? `<div class="s">${sub}</div>` : ''}</${route ? 'button' : 'div'}>`;
 const empty = (t) => `<div class="empty">${t}</div>`;
-const healthRing = (h) => `<div class="ring" style="--v:${h};--c:var(--${h >= 75 ? 'g' : h >= 45 ? 'y' : 'r'})" title="ציון בריאות"><b>${N(h)}</b></div>`;
+const healthRing = (h) => `<div class="ring" style="--v:${h ?? 0};--c:var(--${h == null ? 'line2' : h >= 75 ? 'g' : h >= 45 ? 'y' : 'r'})" title="ציון בריאות"><b>${N(h ?? '—')}</b></div>`;
 const memberOpts = (sel) => (st.me.team || []).map((m) => `<option value="${esc(m.id)}" ${m.id === sel ? 'selected' : ''}>${esc(m.name)} · ${esc(m.role || '')}</option>`).join('');
 
 export const V = { actions: {} };
@@ -35,56 +35,88 @@ A.startDemo = async (b) => {
 
 // ================================================================ מרכז פיקוד
 V.home = async (view) => {
-  const [o, ab] = await Promise.all([api('/api/pulse/overview'), api('/api/pulse/alerts')]);
-  const c = o.counts, w = o.week, t = o.tasks;
-  const hour = new Date().getHours(), greet = hour < 12 ? 'בוקר טוב' : hour < 18 ? 'צהריים טובים' : 'ערב טוב';
-  const lr = o.last_run;
+  const [b, o, ab] = await Promise.all([api('/api/pulse/brief'), api('/api/pulse/overview'), api('/api/pulse/alerts')]);
+  const c = b.counts, hour = new Date().getHours(), greet = hour < 12 ? 'בוקר טוב' : hour < 18 ? 'צהריים טובים' : 'ערב טוב';
+  const tm = o.time;
   view.innerHTML = `
   <div class="hello"><div><h2>${greet}, ${esc(st.me.user.name)}</h2>
-    <div class="meta"><span>${N(c.green + c.yellow + c.red)} לקוחות · נתונים עד ${N(st.me.ref_label)}</span>${lr ? `<span>· בדיקה אחרונה: ${lr.manual ? 'ידנית' : 'אוטומטית'}, ${N(lr.n)} לקוחות ב-${N(lr.ms)} מ"ש</span>` : ''}${o.demo ? '<span class="mock">דמו</span>' : ''}</div></div>
-    <div class="sp"></div>${o.demo && !window.__SNAPSHOT__ ? `<button class="btn sec sm" data-act="tourStart">${ic('play', 14)} חמש דקות בחיים של מנהל משרד</button>` : ''}</div>
-  ${o.time ? `<div class="card pad saved" style="margin-bottom:14px"><div class="row" style="gap:18px">
-    <div class="sv"><div class="note">בלי המערכת</div><b>לעבור על ${N(o.time.clients)} חשבונות</b><span class="note">~${N(Math.round(o.time.manual_min / 60 * 10) / 10)} שעות של בדיקה ידנית כל יום</span></div>
-    <div class="arrow">←</div>
-    <div class="sv"><div class="note">עם ClientPulse</div><b>${N(o.time.attention)} לקוחות שדורשים אותך</b><span class="note">כל ${N(o.time.clients)} החשבונות נבדקו ב-${N(o.time.scan_ms)} מ"ש</span></div>
-    <div class="sv big"><div class="note">זמן בדיקה שנחסך היום</div><b>~${N(Math.round(o.time.saved_min / 60 * 10) / 10)} שעות</b><span class="note">הערכה לפי ${N(o.time.per_client)} דק' לבדיקת לקוח · <a href="#/impact">שינוי ההנחה</a></span></div>
-  </div></div>` : ''}
-  <div class="kpis">${kpi('דחוף', c.red, 'דורשים טיפול', 'red', 'clients?f=red')}${kpi('במעקב', c.yellow, 'חריגה או מגמה', 'yellow', 'clients?f=yellow')}${kpi('תקין', c.green, 'בתוך הטווח', 'green', 'clients?f=green')}${kpi('השתפרו', c.improved, 'שיפור מובהק', 'imp', 'clients?f=improved')}</div>
-  <div class="card pad" style="margin-bottom:14px"><div class="h2">${ic('users')} רמזור הלקוחות<span class="sp"></span><span class="note">לחיצה על לקוח פותחת את התיק שלו</span></div>
-    <div class="tiles">${ab.board.map((b) => `<button class="tile t-${b.improved && b.status === 'green' ? 'imp' : b.status}" data-act="go" data-arg="client/${b.id}" title="${esc(b.title)}"><b>${esc(b.name)}</b><span>${esc(b.title)}</span></button>`).join('')}</div></div>
-  <div class="grid g3" style="margin-bottom:14px">
-    <div class="card pad"><div class="h2">${ic('zap')} מה עושים היום</div>
-      <div class="stack" style="gap:8px">${o.today.length ? o.today.map((x, i) => `<button class="todo sev-${x.severity}" data-act="go" data-arg="${esc(x.route)}"><span class="n">${i + 1}</span><span><div>${esc(x.text)}</div><div class="why">${esc(x.why)}</div></span></button>`).join('') : empty('אין פעולות פתוחות. כל הלקוחות בטווח התקין.')}</div></div>
-    <div class="card pad"><div class="h2">${ic('bell')} מה קרה מאתמול</div>
-      <div class="feed">${ab.happened.length ? ab.happened.slice(0, 9).map(feedItem).join('') : empty('לא קרה שום דבר חדש מאתמול')}</div></div>
-    <div class="card pad"><div class="h2">${ic('search')} מה חסר</div>
-      <div class="stack" style="gap:6px">${ab.missing.length ? ab.missing.slice(0, 9).map((m) => `<button class="act" style="width:100%" data-act="go" data-arg="${esc(m.route)}"><i class="dot d-${m.kind === 'late' || m.kind === 'owner' ? 'red' : 'yellow'}"></i><span style="text-align:start" class="small">${esc(m.text)}</span></button>`).join('') : empty('לא חסר כלום: לכל חריגה יש מטפל והנתונים מעודכנים')}</div>
-      ${ab.missing.length > 9 ? `<a class="small" href="#/alerts">ועוד ${N(ab.missing.length - 9)} — לכל החריגות</a>` : ''}</div>
-  </div>
-  <div class="grid g2">
-    <div class="stack">
-      <div class="card pad"><div class="h2">${ic('report')} סיכום</div>
-        <p class="sum" style="margin:0"><span class="small tx2">${o.summary.map((p) => (p.route ? `<a class="lk" href="#/${p.route}">${esc(p.t)}</a>` : esc(p.t))).join('')}${o.excess > 0 ? ` הוצאה עודפת משוערת מחריגות השבוע: <b>${N(money(o.excess))}</b>.` : ''}</span></p></div>
-      <div class="card pad"><div class="h2">${ic('chart')} השבוע מול השבוע שעבר</div>
-        <div class="mets" style="grid-template-columns:repeat(${w.sales != null ? 4 : 3},1fr)">
-          <div class="met"><div class="l">הוצאה (כל הלקוחות)</div><div class="v">${N(money(w.spend))}</div>${chg(w.spend, w.prev_spend)}</div>
-          <div class="met"><div class="l">לידים</div><div class="v">${N(w.leads.toLocaleString())}</div>${chg(w.leads, w.prev_leads)}</div>
-          <div class="met"><div class="l">עלות לליד</div><div class="v">${N(money(w.cpl))}</div>${chg(w.cpl, w.prev_cpl, true)}</div>
-          ${w.sales != null ? `<div class="met"><div class="l">מכירות מדווחות</div><div class="v">${N(w.sales)}</div>${chg(w.sales, w.prev_sales)}</div>` : ''}</div></div>
-    </div>
-    <div class="stack">
-      <div class="card pad"><div class="h2">${ic('check')} מצב הטיפול</div>
-        <div class="kv"><span>משימות פתוחות</span><b>${N(t.open)}</b><span>טרם התחיל טיפול</span><b class="${t.not_started ? 'bad' : ''}">${N(t.not_started)}</b>
-        <span>באיחור</span><b class="${t.late ? 'bad' : ''}">${N(t.late)}</b><span>ממתינות לאישור</span><b>${N(t.approval)}</b></div>
-        <a class="btn sec sm" style="margin-top:10px" href="#/tasks">למרכז המשימות</a></div>
-      ${o.urgent.length ? `<div class="card pad"><div class="h2"><i class="dot d-red"></i> בעיות דחופות</div>${o.urgent.map((u) => `<button class="act" style="width:100%;margin-bottom:6px" data-act="go" data-arg="client/${u.id}"><div style="text-align:start"><b>${esc(u.name)}</b><div class="small tx2">${esc(u.title)} · ${esc(HANDLING[u.handling] || '')}</div></div></button>`).join('')}</div>` : ''}
-      ${o.risk.length ? `<div class="card pad"><div class="h2"><i class="dot d-yellow"></i> במגמת סיכון<span class="sp"></span><span class="note">אינדיקציה, לא חיזוי</span></div>${o.risk.map((u) => `<button class="act" style="width:100%;margin-bottom:6px" data-act="go" data-arg="client/${u.id}"><div style="text-align:start"><b>${esc(u.name)}</b> <span class="pill p-${u.level === 'high' ? 'red' : 'yellow'}">${u.level === 'high' ? 'סיכון גבוה' : 'סיכון בינוני'}</span><div class="small tx2">${esc(u.reasons.join(' · '))}</div></div></button>`).join('')}</div>` : ''}
-      ${o.improved.length ? `<div class="card pad"><div class="h2"><i class="dot d-imp"></i> השתפרו — הזדמנות<span class="sp"></span><a class="small" href="#/opps">${N(o.opps)} הזדמנויות</a></div>${o.improved.map((u) => `<button class="act" style="width:100%;margin-bottom:6px" data-act="go" data-arg="client/${u.id}"><div style="text-align:start"><b>${esc(u.name)}</b><div class="small tx2">${esc(u.what)}</div></div></button>`).join('')}</div>` : ''}
-      ${o.stale.length ? `<div class="card pad"><div class="h2">${ic('plug')} נתונים שלא התעדכנו</div>${o.stale.map((s) => `<div class="fi"><a href="#/client/${s.id}">${esc(s.name)}</a><span class="sp"></span><span class="note">${s.lag >= 99 ? 'אין נתונים בכלל' : N(s.lag) + ' ימים ללא נתונים'}</span></div>`).join('')}</div>` : ''}
-      <div class="card pad"><div class="h2">${ic('report')} יומן פעילות</div><div class="feed">${o.feed.map(feedItem).join('') || empty('אין פעילות')}</div></div>
-    </div>
-  </div>`;
+    <div class="meta"><span>${b.since ? 'מה השתנה מאז הכניסה הקודמת שלך' : 'תמונת המצב של היום'} · נתונים עד ${N(st.me.ref_label)}</span>${o.demo ? '<span class="mock">דמו</span>' : ''}</div></div>
+    <div class="sp"></div>${o.demo && !window.__SNAPSHOT__ ? `<button class="btn sec sm" data-act="tourStart">${ic('play', 14)} הדגמה: 5 דקות בחיים של מנהל</button>` : ''}</div>
+  <div class="lights">${[['red', 'דחוף', c.red], ['yellow', 'במעקב', c.yellow], ['green', 'תקין', c.green], ['nodata', 'אין מספיק מידע', c.nodata]].map(([k, t, n]) =>
+    `<button class="light l-${k}" data-act="go" data-arg="clients?f=${k}"><i></i><b>${N(n)}</b><span>${t}</span></button>`).join('')}
+    ${tm ? `<div class="light saved-mini"><span class="note">נבדקו ${N(tm.clients)} חשבונות ב-${N(tm.scan_ms)} מ"ש</span><b>~${N(Math.round(tm.saved_min / 6) / 10)} שעות</b><span class="note">בדיקה ידנית שנחסכה היום (הערכה)</span></div>` : ''}</div>
+  <div class="card pad brief"><div class="h2">${ic('zap')} מה דורש אותך עכשיו<span class="sp"></span><span class="note">${b.items.length} הכי חשובים, לפי חומרה, דחיפות והשפעה${b.more ? ` · ועוד ${N(b.more)} ב<a href="#/alerts">כל החריגות</a>` : ''}</span></div>
+    ${b.items.length ? b.items.map((x, i) => `<div class="bi sev-${x.severity === 'imp' ? 'imp' : x.severity === 'green' ? 'green' : x.severity}"><span class="n">${i + 1}</span><div class="bt"><b>${esc(x.title)}</b><div class="small tx2">${esc(x.detail)}</div></div>
+      <button class="btn ${i < 3 ? 'pri' : 'sec'} sm" ${x.action.route ? `data-act="go" data-arg="${esc(x.action.route)}"` : `data-act="${esc(x.action.act)}" data-arg="${esc(x.action.arg)}"`}>${esc(x.action.label)}</button></div>`).join('')
+    : empty('אין כרגע שום דבר דחוף. כל הלקוחות בטווח התקין ולכל בעיה יש מטפל.')}</div>
+  ${b.verified.length ? `<div class="card pad" style="margin-top:14px"><div class="h2">${ic('trophy')} טופל ואומת בנתונים</div>${b.verified.map((v) => `<div class="fi"><a href="#/client/${v.client_id}">${esc(v.title)}</a><span class="sp"></span><span class="ok small">עלות לליד ${N(money(v.before.cpl))} ← ${N(money(v.after.cpl))}</span></div>`).join('')}</div>` : ''}
+  <div class="card pad" style="margin-top:14px"><div class="h2">${ic('users')} רמזור הלקוחות<span class="sp"></span><a class="small" href="#/clients">לרשימה המלאה</a></div>
+    <div class="tiles">${ab.board.map((x) => `<button class="tile t-${x.improved && x.status === 'green' ? 'imp' : x.status}" data-act="go" data-arg="client/${x.id}" title="${esc(x.title)}"><b>${esc(x.name)}</b><span>${esc(x.status === 'nodata' ? 'אין מספיק מידע' : x.title)}</span></button>`).join('')}</div></div>`;
 };
+A.setSat = async (b, arg) => { const [cid, n] = arg.split('|'); await api(`/api/pulse/clients/${cid}/satisfaction`, { method: 'PUT', body: { score: Number(n) } }); toast('שביעות הרצון עודכנה'); render(); };
+A.commitDone = async (b, id) => { const r = await api(`/api/pulse/commitments/${id}`, { method: 'PATCH', body: { status: 'done' } }); toast(r.msg); render(); };
+
+// ================================================================ ניתוח מודעות (הבקשה של יובל: מה לשפר בהצעה, בקופי ובקריאייטיב)
+V.ads = async (view, p) => {
+  const d = await api('/api/pulse/ads' + (p.client ? `?client=${encodeURIComponent(p.client)}` : ''));
+  const an = d.analysis, s = an.summary;
+  const tone = { red: 'p-red', yellow: 'p-yellow', green: 'p-green' };
+  view.innerHTML = `<div class="row" style="margin-bottom:12px"><select class="inp" id="adC" style="flex:1;max-width:460px" aria-label="לקוח">${d.clients.map((c) => `<option value="${c.id}" ${d.client && c.id === d.client.id ? 'selected' : ''}>${esc(c.name)} · ${esc(c.headline)}</option>`).join('')}</select>
+    <span class="engine">${d.ai ? 'הצעות קופי: ' + esc(d.ai) : 'בדיקה לפי כללים · הצעות קופי יופעלו עם Gemini'}</span></div>
+  ${d.note ? `<div class="card pad">${esc(d.note)}</div>` : ''}
+  ${s ? `<div class="card pad" style="margin-bottom:14px"><div class="row"><div><h3 style="margin:0">${esc(d.client.name)} ${demoTag(d.client.is_demo)}</h3><div class="note">${esc(s.note)}</div></div><span class="sp"></span>
+    <div class="sv"><div class="note">מסקנה</div><b>${esc(s.headline)}</b></div>${s.waste ? `<div class="sv"><div class="note">כסף שהולך על מודעות חלשות (7 ימים)</div><b class="bad">${N(money(s.waste))}</b></div>` : ''}${s.winner ? `<div class="sv"><div class="note">המנצחת</div><b class="ok">${esc(s.winner)}</b></div>` : ''}</div></div>` : ''}
+  <div class="stack">${an.ads.map((a) => `<div class="card pad sev-${a.tone === 'green' ? 'green' : a.tone}">
+    <div class="row"><b>${esc(a.name)}</b>${demoTag(a.is_demo)}<span class="pill ${tone[a.tone]}">${esc(a.verdict)}</span><span class="sp"></span>
+      <span class="small tx2">הוצאה ${N(money(a.spend))} · CTR ${N(pctf(a.ctr, 2))} · המרה ${N(pctf(a.cvr, 1))} · עלות לליד ${N(money(a.cpl))} · תדירות ${N(a.frequency)}</span></div>
+    <div class="adbox"><div class="adh">${esc(a.headline)}</div><div class="small">${esc(a.text)}</div><div class="row small" style="margin-top:6px">${Object.entries(a.checks).map(([k, v]) => `<span class="pill ${v ? 'p-green' : 'p-red'}">${v ? '✓' : '✗'} ${esc(k)}</span>`).join('')}</div></div>
+    ${a.recs.length ? `<div class="recs">${a.recs.map((r) => `<div class="rec"><span class="pill p-gray">${esc(r.area)}</span><div><b>${esc(r.issue)}</b> — ${esc(r.why)}<div class="small">מה לעשות: ${esc(r.do)}</div></div></div>`).join('')}</div>` : '<p class="small ok">אין מה לתקן במודעה הזו לפי הנתונים.</p>'}
+    <div class="row" style="margin-top:10px">${a.recs.length ? `<button class="btn pri sm" data-act="adRewrite" data-arg="${esc(a.id)}">${ic('spark', 13)} הצע קופי משופר</button><button class="btn sec sm" data-act="oppTask" data-arg="${esc(d.client.id)}|${esc(a.name + ': ' + a.recs[0].do)}">צור משימה</button>` : ''}</div>
+    <div id="rw_${esc(a.id)}"></div></div>`).join('') || (d.note ? '' : `<div class="card">${empty('אין מודעות להצגה')}</div>`)}</div>`;
+  $('#adC').onchange = (e) => go('ads?client=' + e.target.value);
+};
+A.adRewrite = async (b, id) => {
+  b.disabled = true; b.textContent = 'כותב…';
+  try {
+    const r = await api(`/api/pulse/ads/${encodeURIComponent(id)}/rewrite`, { method: 'POST' });
+    document.getElementById('rw_' + id).innerHTML = `<div class="recs" style="margin-top:10px">${r.variants.map((v) => `<div class="rec"><span class="pill p-imp">גרסה</span><div><b>${esc(v.headline)}</b><div class="small">${esc(v.text)}</div><div class="note">${esc(v.why)}</div></div><button class="btn sec sm" data-act="copy" data-arg="${esc(v.headline + '\n' + v.text)}">העתק</button></div>`).join('')}<p class="note">נכתב ע"י ${esc(r.engine)} מתוך המודעה והבעיות שזוהו. לבדוק לפני שימוש.</p></div>`;
+  } catch { /* ההודעה הוצגה */ } finally { b.disabled = false; b.innerHTML = ic('spark', 13) + ' הצע קופי משופר'; }
+};
+
+// ================================================================ המשימות שלי — לכל עובד: מה דחוף ומה לעשות
+V.my = async (view, p) => {
+  const d = await api('/api/pulse/my' + (p.member ? `?member=${encodeURIComponent(p.member)}` : ''));
+  const mem = d.team.find((m) => m.id === d.member);
+  view.innerHTML = `<div class="row" style="margin-bottom:12px"><select class="inp" id="myM" aria-label="עובד">${d.team.map((m) => `<option value="${m.id}" ${m.id === d.member ? 'selected' : ''}>${esc(m.name)} · ${esc(m.role || '')}</option>`).join('')}</select>
+    <span class="note">${N(d.clients)} לקוחות באחריות ${esc(mem?.name || '')} · ${N(d.tasks.length)} משימות פתוחות</span></div>
+  ${d.need.length ? `<div class="card pad" style="margin-bottom:14px"><div class="h2"><i class="dot d-red"></i> לקוחות שלך שצריכים טיפול ואין עדיין משימה</div>${d.need.map((x) => `<div class="bi sev-${x.status}"><div class="bt"><b>${esc(x.name)}</b><div class="small tx2">${esc(x.title)}</div></div><button class="btn pri sm" data-act="go" data-arg="client/${x.id}">פתח הסבר</button></div>`).join('')}</div>` : ''}
+  ${d.commitments.length ? `<div class="card pad" style="margin-bottom:14px"><div class="h2">${ic('check')} התחייבויות ללקוחות (3 הימים הקרובים ובאיחור)</div>${d.commitments.map((x) => `<div class="bi sev-${x.due_day < d.ref ? 'red' : 'yellow'}"><div class="bt"><b>${esc(x.text)}</b><div class="small tx2">${esc(x.client_name)} · יעד ${N(dayLabel(x.due_day))}${x.due_day < d.ref ? ` · באיחור ${N(d.ref - x.due_day)} ימים` : ''}</div></div><button class="btn sec sm" data-act="commitDone" data-arg="${x.id}">בוצע</button></div>`).join('')}</div>` : ''}
+  ${d.ads.length ? `<div class="card pad" style="margin-bottom:14px"><div class="h2">${ic('spark')} מודעות לשפר אצל הלקוחות שלך</div>${d.ads.map((x) => `<div class="bi sev-red"><div class="bt"><b>${esc(x.client)} · ${esc(x.ad)}</b><div class="small tx2">${esc(x.first.issue)}: ${esc(x.first.do)}</div></div><button class="btn sec sm" data-act="go" data-arg="ads?client=${x.client_id}">לניתוח</button></div>`).join('')}</div>` : ''}
+  <div class="h2">${ic('check')} המשימות שלי</div><div class="cards">${d.tasks.map((t) => taskCard(t, d.ref, false, t.late)).join('') || `<div class="card">${empty('אין משימות פתוחות')}</div>`}</div>`;
+  $('#myM').onchange = (e) => go('my?member=' + e.target.value);
+};
+
+// ================================================================ הגדרות וכלים — כל המסכים המשניים במקום אחד
+V.settings = async (view) => {
+  const th = await api('/api/pulse/settings/thresholds');
+  view.innerHTML = `<div class="cards" style="margin-bottom:14px">${MORE.map(([r, t, i]) => `<a class="card pad setl" href="#/${r}">${ic(i)}<b>${esc(t)}</b></a>`).join('')}</div>
+  <div class="card pad"><div class="h2">${ic('zap')} ספי הרמזור של הסוכנות<span class="sp"></span><span class="note">ברירת מחדל לכל הלקוחות; אפשר לשנות גם ללקוח בודד בתיק שלו</span></div>
+    <form id="thF" class="frm">${Object.entries(th).map(([k, t]) => `<div class="fld"><label for="ath_${k}">${esc(t.label)} <span class="note">ברירת מחדל ${N(t.default)}</span></label><input class="inp" id="ath_${k}" data-th="${k}" type="number" step="any" min="${t.min}" max="${t.max}" value="${t.value ?? ''}" ${st.me.can_approve ? '' : 'disabled'}></div>`).join('')}
+    ${st.me.can_approve ? '<button class="btn pri sm">שמירה וחישוב מחדש</button>' : '<p class="note">שינוי ספים מותר לבעלים / מנהל</p>'}</form></div>`;
+  const f = $('#thF');
+  f.onsubmit = async (e) => { e.preventDefault(); const t = {}; f.querySelectorAll('[data-th]').forEach((i) => { if (i.value !== '') t[i.dataset.th] = Number(i.value); }); await api('/api/pulse/settings/thresholds', { method: 'PUT', body: { thresholds: t } }); toast('נשמר. הרמזור חושב מחדש לפי הספים.'); };
+};
+
+// ================================================================ ידע הסוכנות — מה עבד בעבר
+V.knowledge = async (view) => {
+  const d = await api('/api/pulse/knowledge');
+  view.innerHTML = `<p class="tx2">נבנה אוטומטית מטיפולים שאומתו בנתונים, ומלקחים שהצוות מתעד.</p>
+  <div class="cards">${d.patterns.map((g) => `<div class="card pad"><b>${esc(g.name)}</b><div class="small tx2">${N(g.fixed)} טופלו ואומתו${g.avg_days != null ? ` · ${N(g.avg_days)} ימים בממוצע` : ''}${g.failed_first ? ` · ${N(g.failed_first)} דרשו יותר מניסיון אחד` : ''}</div>${g.actions.length ? `<ul class="ul">${g.actions.map(([t, n]) => `<li>${esc(t)} <span class="note">(${N(n)})</span></li>`).join('')}</ul>` : ''}</div>`).join('') || `<div class="card">${empty('עוד אין טיפולים שאומתו. כל טיפול שיאומת יופיע כאן כדפוס שעבד.')}</div>`}</div>
+  <form class="card pad row" id="lsF" style="margin-top:14px"><input class="inp" id="lsT" placeholder="לקח לצוות, למשל: אצל מרפאות, ייעוץ חינם ממיר טוב יותר מהנחה" style="flex:1" required minlength="3"><button class="btn sec sm">שמירה</button></form>
+  ${d.lessons.map((l) => `<div class="fi"><span class="pill p-gray">לקח</span><div>${esc(l.text)}<div class="note">${esc(l.user_name || '')}</div></div></div>`).join('')}`;
+  $('#lsF').onsubmit = async (e) => { e.preventDefault(); await api('/api/pulse/knowledge', { method: 'POST', body: { text: $('#lsT').value } }); render(); };
+};
+
 function feedItem(e) {
   const col = { alert: 'red', cleared: 'green', verified: 'green', verify_failed: 'yellow', task: 'imp', automation: 'yellow', lab: 'none', note: 'none', check: 'none' }[e.type] || 'none';
   return `<div class="fi ev"><span class="tm">${N(dayLabel(e.day))}</span><i class="dot d-${col}" style="margin-top:7px"></i><div>${e.client_id ? `<a href="#/client/${esc(e.client_id)}">${esc(e.text)}</a>` : esc(e.text)}${e.user ? ` <span class="note">· ${esc(e.user)}</span>` : ''}</div></div>`;
@@ -98,10 +130,10 @@ V.clients = async (view, p) => {
   const rowsF = d.clients.filter((c) => (f === 'all' || (f === 'improved' ? c.improved : c.status === f)) && (!q || c.name.includes(q) || (c.industry || '').includes(q)));
   const cnt = (k) => d.clients.filter((c) => (k === 'all' ? 1 : k === 'improved' ? c.improved : c.status === k)).length;
   view.innerHTML = `<div class="card"><div class="toolbar"><input class="inp" id="cq" placeholder="חיפוש לקוח או ענף" value="${esc(q)}" style="flex:1;min-width:160px">
-    <div class="chips">${[['all', 'הכול'], ['red', 'דחוף'], ['yellow', 'במעקב'], ['green', 'תקין'], ['improved', 'השתפרו']].map(([k, t]) => `<button class="chip ${f === k ? 'on' : ''}" data-act="go" data-arg="clients?f=${k}">${t} ${N(cnt(k))}</button>`).join('')}</div>
+    <div class="chips">${[['all', 'הכול'], ['red', 'דחוף'], ['yellow', 'במעקב'], ['green', 'תקין'], ['nodata', 'אין מספיק מידע'], ['improved', 'השתפרו']].map(([k, t]) => `<button class="chip ${f === k ? 'on' : ''}" data-act="go" data-arg="clients?f=${k}">${t} ${N(cnt(k))}</button>`).join('')}</div>
     <button class="btn sec sm" data-act="addClient">+ לקוח</button></div>
     <div class="list"><div class="rw hd"><span>לקוח</span><span>מצב</span><span class="c-cpl">עלות לליד 7 ימים</span><span class="c-leads">לידים</span><span class="c-owner">אחראי</span><span>הנושא המרכזי</span></div>
-    ${rowsF.map((c) => `<button class="rw" data-act="go" data-arg="client/${c.id}"><span class="nm"><span class="ring" style="--v:${c.health};--c:var(--${c.health >= 75 ? 'g' : c.health >= 45 ? 'y' : 'r'});width:30px;height:30px"><b style="width:24px;height:24px;font-size:10.5px">${N(c.health)}</b></span><span style="min-width:0"><span class="t">${esc(c.name)}</span> ${demoTag(c.is_demo)}<div class="s">${esc(c.industry || '')}</div></span></span>
+    ${rowsF.map((c) => `<button class="rw" data-act="go" data-arg="client/${c.id}"><span class="nm"><span class="ring" style="--v:${c.health ?? 0};--c:var(--${c.health == null ? 'line2' : c.health >= 75 ? 'g' : c.health >= 45 ? 'y' : 'r'});width:30px;height:30px"><b style="width:24px;height:24px;font-size:10.5px">${N(c.health ?? '—')}</b></span><span style="min-width:0"><span class="t">${esc(c.name)}</span> ${demoTag(c.is_demo)}<div class="s">${esc(c.industry || '')}</div></span></span>
       <span>${pill(c.status)}</span><span class="c-cpl">${N(money(c.cpl))}${chg(c.cpl, c.base_cpl, true)}</span><span class="c-leads">${N(c.leads)}</span><span class="c-owner">${esc(memberName(c.owner))}</span>
       <span class="iss">${c.alerts.length ? esc(c.alerts[0].title) + (c.alerts.length > 1 ? ` <span class="note">+${c.alerts.length - 1}</span>` : '') + (c.alerts[0].handling && c.alerts[0].handling !== 'open' ? ` <span class="pill p-gray">${esc(HANDLING[c.alerts[0].handling])}</span>` : '') : c.improved ? '<span class="pill p-imp">השתפר</span>' : c.lowData ? '<span class="note">מעט נתונים</span>' : '<span class="muted">—</span>'}</span></button>`).join('') || empty('אין לקוחות בסינון הזה')}</div></div>`;
   const inp = $('#cq');
@@ -159,8 +191,18 @@ V.client = async (view, p) => {
     <div class="stack">
       <div class="card pad"><div class="h2">${ic('check')} משימות</div>${d.tasks.length ? d.tasks.map((t) => `<button class="act" style="width:100%;margin-bottom:6px" data-act="go" data-arg="task/${t.id}"><div style="text-align:start"><b>${esc(t.title.split(' · ')[0])}</b><div class="small tx2">${esc(STATUS[t.status])} · ${esc(memberName(t.assignee))}</div></div></button>`).join('') : empty('אין משימות')}
         <button class="btn sec sm" data-act="manualTask" data-arg="${c.id}">+ משימה ידנית</button></div>
+      <div class="card pad"><div class="h2">${ic('users')} אנשי קשר ושביעות רצון</div>
+        ${d.contacts.map((x) => `<div class="fi"><div><b>${esc(x.name)}</b> <span class="note">${esc(x.role || '')}</span><div class="small tx2"><bdi>${esc(x.phone || '')}</bdi> ${x.email ? '· <bdi>' + esc(x.email) + '</bdi>' : ''}</div></div></div>`).join('') || '<p class="small tx2">אין אנשי קשר</p>'}
+        <form id="ctF" class="row" style="margin-top:8px"><input class="inp" id="ctN" placeholder="שם" required style="flex:1;min-width:100px"><input class="inp" id="ctR" placeholder="תפקיד" style="width:110px"><input class="inp" id="ctP" placeholder="טלפון" style="width:120px" dir="ltr"><button class="btn sec sm">הוספה</button></form>
+        <div class="row" style="margin-top:12px"><span class="small">שביעות רצון${c.satisfaction ? ` (כרגע ${N(c.satisfaction)}/5)` : ' (לא תועדה)'}:</span>${[1, 2, 3, 4, 5].map((n) => `<button class="chip ${c.satisfaction === n ? 'on' : ''}" data-act="setSat" data-arg="${c.id}|${n}">${n}</button>`).join('')}</div></div>
+      <div class="card pad"><div class="h2">${ic('check')} התחייבויות ללקוח</div>
+        ${d.commitments.map((x) => `<div class="bi sev-${x.status !== 'open' ? 'green' : x.due_day < d.ref ? 'red' : 'yellow'}"><div class="bt"><b style="${x.status !== 'open' ? 'text-decoration:line-through;color:var(--mute)' : ''}">${esc(x.text)}</b><div class="small tx2">${esc(memberName(x.owner))} · יעד ${N(dayLabel(x.due_day))}${x.status === 'open' && x.due_day < d.ref ? ' · באיחור' : x.status === 'done' ? ' · בוצע' : x.status === 'cancelled' ? ' · בוטל' : ''}</div></div>${x.status === 'open' ? `<button class="btn sec sm" data-act="commitDone" data-arg="${x.id}">בוצע</button>` : ''}</div>`).join('') || '<p class="small tx2">אין התחייבויות פתוחות</p>'}
+        <form id="cmF" class="row" style="margin-top:8px"><input class="inp" id="cmT" placeholder="מה הבטחנו ללקוח" required minlength="2" style="flex:1;min-width:140px"><select class="inp" id="cmO" aria-label="אחראי">${memberOpts(c.owner)}</select><input class="inp" id="cmD" type="number" min="0" max="180" value="3" style="width:70px" aria-label="תוך ימים"><button class="btn sec sm">הוספה</button></form></div>
+      <div class="card pad"><div class="h2">${ic('chart')} היסטוריית הרמזור</div>${d.status_history.map((x) => `<div class="fi"><span class="tm">${N(dayLabel(x.day))}</span>${pill(x.status)}<div class="small">${esc(x.reason || '')}</div></div>`).join('') || '<p class="small tx2">אין עדיין שינויים</p>'}</div>
+      ${d.decisions.length ? `<div class="card pad"><div class="h2">${ic('check')} החלטות ותוצאות</div>${d.decisions.map((x) => `<div class="fi"><span class="tm">${N(dayLabel(x.day))}</span><div class="small"><b>${x.decision === 'approve' ? 'אושר' : 'נדחה'}</b> ע"י ${esc(x.by_name)}: ${esc(x.title)}${x.rationale ? `<div class="note">${esc(x.rationale)}</div>` : ''}<div class="${x.outcome === 'אומת בנתונים' ? 'ok' : x.outcome ? 'bad' : 'note'}">תוצאה: ${esc(x.outcome || 'ממתין לבדיקה חוזרת')}</div></div></div>`).join('')}</div>` : ''}
+      ${c.is_demo ? `<a class="card pad setl" href="#/ads?client=${c.id}">${ic('spark')}<b>ניתוח המודעות של הלקוח</b><span class="note">מה לשפר בהצעה, בקופי ובקריאייטיב</span></a>` : ''}
       ${d.opportunities.length ? `<div class="card pad"><div class="h2"><i class="dot d-imp"></i> הזדמנויות</div>${d.opportunities.map((o) => oppCard(o, c.id)).join('')}</div>` : ''}
-      <div class="card pad"><div class="h2">${ic('trophy')} ציון בריאות: ${N(h.score)}<span class="sp"></span><span class="note">ביטחון ${esc(h.confidence)}</span></div>
+      <div class="card pad"><div class="h2">${ic('trophy')} ציון בריאות: ${N(h.score ?? 'אין מספיק מידע')}<span class="sp"></span><span class="note">ביטחון ${esc(h.confidence)}</span></div>
         ${h.parts.length ? `<table class="ft">${h.parts.map((x) => `<tr><td>${esc(x.label)}</td><td class="bad">${N(x.points)}</td></tr>`).join('')}</table>` : '<p class="small tx2">אין קנסות — 100.</p>'}<p class="note">${esc(h.formula)}</p></div>
       <div class="card pad"><div class="h2">סיכון נטישה<span class="sp"></span>${d.risk.level === 'unknown' ? '<span class="pill p-gray">אין מספיק נתונים</span>' : `<span class="pill p-${d.risk.level === 'high' ? 'red' : d.risk.level === 'medium' ? 'yellow' : 'green'}">${{ high: 'גבוה', medium: 'בינוני', low: 'נמוך' }[d.risk.level]}</span>`}</div><ul class="ul">${d.risk.reasons.map((x) => `<li>${esc(x)}</li>`).join('')}</ul>${d.risk.note ? `<p class="note">${esc(d.risk.note)}</p>` : ''}</div>
       <div class="card pad"><div class="h2">${ic('coin')} רווחיות לסוכנות</div>${d.profit ? `<div class="kv"><span>הכנסה חודשית</span><b>${N(money(d.profit.fee))}</b><span>עלות עבודה</span><span>${N(money(d.profit.labor))} (${N(d.profit.hours)} ש')</span><span>עלויות נוספות</span><span>${N(money(d.profit.other))}</span><span>רווח גולמי</span><b class="${d.profit.profit < 0 ? 'bad' : 'ok'}">${N(money(d.profit.profit))} · ${N(pctf(d.profit.margin))}</b><span>תקציב פרסום 30 יום</span><span class="muted">${N(money(d.profit.ad_spend_30))} (של הלקוח)</span></div>${d.profit.complete ? '' : '<p class="note">חסרות שעות או עלות שעה — הרווחיות חלקית.</p>'}` : '<p class="small tx2">לא הוזנה הכנסה חודשית. הוסיפו בהגדרות כדי לראות רווחיות.</p>'}</div>
@@ -181,6 +223,8 @@ V.client = async (view, p) => {
     const k = metric, fmt = k === 'spend' ? money : k === 'ctr' ? (v) => v.toFixed(2) + '%' : (v) => Math.round(v);
     chart($('#chartBox'), { labels, fmt, series: [{ name: { leads: 'לידים', spend: 'הוצאה', ctr: 'CTR' }[k], color: 'var(--acc)', vals: s.map((x) => x[k]) }] });
   }
+  $('#ctF').onsubmit = async (e) => { e.preventDefault(); await api(`/api/pulse/clients/${c.id}/contacts`, { method: 'POST', body: { name: $('#ctN').value, role: $('#ctR').value || null, phone: $('#ctP').value || null } }); render(); };
+  $('#cmF').onsubmit = async (e) => { e.preventDefault(); await api(`/api/pulse/clients/${c.id}/commitments`, { method: 'POST', body: { text: $('#cmT').value, owner: $('#cmO').value, due_in: Number($('#cmD').value) } }); toast('ההתחייבות נשמרה ותיכנס לרמזור אם תאחר'); render(); };
   $('#noteF').onsubmit = async (e) => { e.preventDefault(); await api(`/api/pulse/clients/${c.id}/notes`, { method: 'POST', body: { kind: $('#nk').value, text: $('#nt').value } }); toast('נשמר בתיק הלקוח'); render(); };
   st._client = d;
 };
@@ -397,6 +441,13 @@ V.team = async (view) => {
   <div class="card scroll"><table class="tbl"><tr><th>עובד</th><th>תפקיד</th><th>לקוחות</th><th>פתוחות</th><th>באיחור</th><th>דחופות</th><th class="hide-m">זמן מתועד</th></tr>
   ${d.team.map((m) => `<tr><td>${esc(m.name)} ${m.is_demo ? demoTag(1) : ''}</td><td>${esc(m.role || '')}${m.approver ? ' · <span class="pill p-gray">מאשר</span>' : ''}</td><td>${N(m.clients)}</td><td>${N(m.open)}</td><td class="${m.late ? 'bad' : ''}">${N(m.late)}</td><td>${N(m.red)}</td><td class="hide-m">${N(Math.round(m.minutes / 6) / 10)} ש'</td></tr>`).join('')}</table></div>
   ${d.can_manage ? `<form class="card pad row" id="tmF" style="margin-top:14px"><input class="inp" id="tmN" placeholder="שם העובד" required><input class="inp" id="tmR" placeholder="תפקיד" value="מנהל/ת קמפיינים"><label class="row small"><input type="checkbox" id="tmA"> רשאי לאשר</label><button class="btn sec sm">הוספה</button></form><p class="note">עובדים כאן הם רשומות לשיוך משימות. גישה למערכת = משתמש P1 בחשבון. הרשאת אישור בפועל: בעלים / מנהל בחשבון.</p>` : ''}`;
+  if (d.can_manage) view.insertAdjacentHTML('beforeend', `<form class="card pad" id="lgF" style="margin-top:14px"><div class="h2">${ic('team')} כניסה למערכת לעובד</div><div class="frm">
+    <div class="fld"><label for="lgN">שם</label><input class="inp" id="lgN" required></div><div class="fld"><label for="lgE">אימייל</label><input class="inp" id="lgE" type="email" required dir="ltr"></div>
+    <div class="fld"><label for="lgP">סיסמה ראשונית (10 תווים ומעלה)</label><input class="inp" id="lgP" type="text" minlength="10" required dir="ltr"></div>
+    <div class="fld"><label for="lgR">הרשאה</label><select class="inp" id="lgR"><option value="member">עובד — מטפל במשימות, לא מאשר</option><option value="admin">מנהל — מאשר פעולות ומשנה הגדרות</option></select></div></div>
+    <button class="btn pri sm">יצירת כניסה</button><p class="note">ההרשאות נאכפות בשרת. עובד לא יכול לאשר שינויי תקציב או קמפיין ולא לשנות ספים ואוטומציות.</p></form>`);
+  const lg = $('#lgF');
+  if (lg) lg.onsubmit = async (e) => { e.preventDefault(); const r = await api('/api/pulse/team/login', { method: 'POST', body: { name: $('#lgN').value, email: $('#lgE').value, password: $('#lgP').value, role: $('#lgR').value } }); toast(r.msg); await refreshMe(); render(); };
   const f = $('#tmF');
   if (f) f.onsubmit = async (e) => { e.preventDefault(); await api('/api/pulse/team', { method: 'POST', body: { name: $('#tmN').value, role: $('#tmR').value, approver: $('#tmA').checked } }); await refreshMe(); render(); };
 };
