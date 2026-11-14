@@ -250,8 +250,8 @@ def test_ads_analysis_my_view_and_brief(make_client):
     assert areas & {"הצעה", "קופי", "קריאייטיב"}
     ad = d["analysis"]["ads"][0]
     assert c.post(f"/api/pulse/ads/{ad['id']}/rewrite").status_code == 409  # בלי Gemini: לא ממציאים קופי
-    my = c.get("/api/pulse/my?member=dana").json()
-    assert my["member"] == "dana" and (my["tasks"] or my["need"])
+    my = c.get("/api/pulse/my").json()  # משרד של אדם אחד: כל לקוחות הדמו של המשתמש המחובר
+    assert my["member"].startswith("u_") and my["tasks"] and my["clients"] == 50
     b = c.get("/api/pulse/brief").json()
     assert 0 < len(b["items"]) <= 8 and all(i["action"]["label"] for i in b["items"])
 

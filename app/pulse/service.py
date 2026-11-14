@@ -202,14 +202,15 @@ def import_csv(db: Database, acc: str, cid: str, text: str) -> dict:
 
 
 # ================================================================ דמו
-def seed_demo(db: Database, acc: str) -> dict:
+def seed_demo(db: Database, acc: str, owner: str | None = None) -> dict:
+    """owner: חבר הצוות של המשתמש המחובר. כשניתן — כל לקוחות הדמו שלו (משרד של אדם אחד, כמו אצל ניב)."""
     w = ws(db, acc)
     s = w["settings"]
     exe(db, "UPDATE pulse_workspaces SET day_offset=0 WHERE account_id=?", (acc,))
     s.update({"demo": True, "ops": {}, "improved_seen": {}, "summary_day": None, "weekly_day": None})
     save_settings(db, acc, s)
     reset_demo_data(db, acc)
-    for m in demo.TEAM:
+    for m in ([] if owner else demo.TEAM):
         exe(db, "INSERT OR IGNORE INTO pulse_team (account_id, id, name, role, approver, is_demo) VALUES (?,?,?,?,?,1)",
             (acc, m["id"], m["name"], m["role"], 1 if m["approver"] else 0))
     w = ws(db, acc)
@@ -219,7 +220,7 @@ def seed_demo(db: Database, acc: str) -> dict:
         exe(db, """INSERT OR REPLACE INTO pulse_clients (account_id, id, name, industry, owner, target_cpl, monthly_budget, fee_monthly,
                    hours_monthly, hourly_cost, other_costs_monthly, platforms_json, thresholds_json, is_demo, params_json, source, created_at)
                    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,1,?,'demo',?)""",
-            (acc, "d" + c["id"], c["name"], c["industry"], c["owner"], c["target_cpl"], c["monthly_budget"], c["fee_monthly"],
+            (acc, "d" + c["id"], c["name"], c["industry"], owner or c["owner"], c["target_cpl"], c["monthly_budget"], c["fee_monthly"],
              c["hours_monthly"], c["hourly_cost"], c["other_costs_monthly"], j(c["platforms"]), j({}), j(p), now()))
     sync_demo(db, acc)
     _seed_demo_ops(db, acc, T0)
@@ -771,6 +772,11 @@ def task_action(db: Database, acc: str, tid: str, action: str, *, user_name: str
     if action == "submit" and st == "in_progress":
         if t["requires_approval"] and not t["approved_by"]:
             kinds = ", ".join(ACTION[p["actionType"]] for p in t["plan"] if p["actionType"] in SENSITIVE)
+            if can_approve:  # מי שמגיש הוא גם המאשר (בעלים / מנהל): מתועד כהחלטה, בלי לחכות לעצמו
+                t["approved_by"] = user_name
+                _decision(db, acc, t, "approve", user_name, ref, kinds)
+                _th(t, ref, user_name, f"ביצע/ה ואישר/ה בעצמו ({kinds})")
+                return _mark_done(db, acc, t, user_name, ref, w)
             return go("awaiting_approval", f"הוגש לאישור (הפעולה כוללת {kinds})")
         return _mark_done(db, acc, t, user_name, ref, w)
     if action == "approve" and st == "awaiting_approval":
@@ -957,7 +963,7 @@ def alert_card(db: Database, acc: str, run: dict, r: dict, a: dict, st: dict | N
         "explanations": [h["text"] + f" ({h['support']})" for h in inv["hypotheses"][:3]],
         "check": inv["checks"][:3], "next": inv["plan"][0]["text"] if inv["plan"] else "—",
         "owner": owner, "owner_name": (tm.get(owner) or {}).get("name", "לא שויך"),
-        "handled": handled, "improved": improved, "potential": (r.get("recovery") or {}).get("text"), "task_id": (t or {}).get("id"), "task_status": (t or {}).get("status"),
+        "handled": handled, "improved": improved, "potential": (r.get("recovery") or {}).get("text"), "potential_leads": (r.get("recovery") or {}).get("leads_week"), "task_id": (t or {}).get("id"), "task_status": (t or {}).get("status"),
         "late": bool(t and t.get("due_day") is not None and t["due_day"] < ref and t["status"] in ("new", "in_progress", "awaiting_approval")),
         "priority": a["priority"]}
 
@@ -993,7 +999,8 @@ def alert_board(db: Database, acc: str) -> dict:
         if r["lag"] >= 1:
             missing.append({"text": f"חסרים נתונים: {r['name']} ({'אין נתונים בכלל' if r['lag'] >= 99 else str(r['lag']) + ' ימים'})", "route": f"client/{r['id']}", "kind": "data"})
     return {"cards": cards, "happened": happened, "missing": missing, "ref": ref,
-            "board": [{"id": r["id"], "name": r["name"], "status": r["status"], "improved": bool(r["improved"]),
+            "board": [{"id": r["id"], "name": r["name"], "status": r["status"], "improved": bool(r["improved"]), "cpl": r["rec"]["cpl"],
+                       "leads": r["rec"]["leads"], "base_cpl": r["base"]["cpl"],
                        "title": r["alerts"][0]["title"] if r["alerts"] else ("השתפר" if r["improved"] else "תקין")} for r in run["results"]]}
 
 

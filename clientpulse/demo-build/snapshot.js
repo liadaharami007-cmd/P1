@@ -66,7 +66,7 @@
       var t = findTask(D, mm[1]), a = mm[2]; if (!t) return { body: { detail: 'משימה לא נמצאה' }, status: 404 };
       var st = t.status, msg = null;
       if (a === 'start' && st === 'new') { t.status = 'in_progress'; msg = 'התחיל/ה טיפול'; }
-      else if (a === 'submit' && st === 'in_progress') { if (t.requires_approval && !t.approved_by) { t.status = 'awaiting_approval'; msg = 'הוגש לאישור מנהל'; } else { t.status = 'awaiting_verification'; t.recheck_day = ref(D) + 3; msg = 'סומן כבוצע. בדיקה חוזרת אוטומטית בעוד 3 ימים'; } }
+      else if (a === 'submit' && st === 'in_progress') { t.status = 'awaiting_verification'; t.recheck_day = ref(D) + 3; if (t.requires_approval) t.approved_by = me; msg = 'טופל. המערכת תבדוק אוטומטית בעוד 3 ימים אם המספרים חזרו ליעד'; }
       else if (a === 'approve' && st === 'awaiting_approval') { t.status = 'awaiting_verification'; t.approved_by = me; t.recheck_day = ref(D) + 3; msg = 'אושר. נקבעה בדיקה חוזרת אוטומטית בעוד 3 ימים'; }
       else if (a === 'reject' && st === 'awaiting_approval') { t.status = 'in_progress'; msg = 'הוחזר לטיפול'; }
       else if (a === 'reassign' && body.extra) { t.assignee = body.extra; msg = 'הועבר ל' + memberName(D, body.extra); }

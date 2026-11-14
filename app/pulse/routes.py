@@ -180,7 +180,8 @@ def register(app: FastAPI, db: Database) -> None:
     @app.post("/api/pulse/demo")
     def demo_start(ctx: Ctx = Depends(current)):
         W(ctx)
-        return {"ok": True, "check": S.seed_demo(db, ctx.account_id)}
+        mine = store.one(db, "SELECT id FROM pulse_team WHERE account_id=? AND user_id=?", (ctx.account_id, ctx.user_id))
+        return {"ok": True, "check": S.seed_demo(db, ctx.account_id, mine["id"] if mine else None)}
 
     @app.delete("/api/pulse/demo")
     def demo_remove(ctx: Ctx = Depends(current)):

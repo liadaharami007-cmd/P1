@@ -34,29 +34,37 @@ A.startDemo = async (b) => {
 };
 
 // ================================================================ מרכז פיקוד
-V.home = async (view) => {
+V.home = async (view, p = {}) => {
   const [b, o, ab] = await Promise.all([api('/api/pulse/brief'), api('/api/pulse/overview'), api('/api/pulse/alerts')]);
   const c = b.counts, hour = new Date().getHours(), greet = hour < 12 ? 'בוקר טוב' : hour < 18 ? 'צהריים טובים' : 'ערב טוב';
   const byClient = {};
   ab.cards.forEach((x) => { if (!byClient[x.client_id]) byClient[x.client_id] = x; });
-  const list = (status) => ab.board.filter((x) => x.status === status).map((x) => ({ ...x, card: byClient[x.id] }));
-  const red = list('red'), yellow = list('yellow');
-  const untreated = red.filter((x) => !x.card || !x.card.task_id || x.card.task_status === 'new').length;
-  const quick = (x) => !x.card ? '' : !x.card.task_id ? `<button class="btn sec sm" data-act="createTask" data-arg="${esc(x.card.key)}">שייך ל${esc(x.card.owner_name)}</button>`
-    : x.card.task_status === 'new' ? `<button class="btn sec sm" data-act="task" data-arg="${esc(x.card.task_id)}|start">התחלתי טיפול</button>` : '';
-  const row = (x) => `<div class="lrow"><i class="dot d-${x.status}"></i><a class="ln" href="#/client/${x.id}">${esc(x.name)}</a>
-    <a class="lr" href="#/client/${x.id}">${esc(x.card ? x.card.title : x.title)}</a><span class="lo">${esc(x.card ? x.card.owner_name : '')}</span>
-    <span class="lh ${x.card && x.card.late ? 'bad' : ''}">${quick(x) || esc(!x.card ? '' : x.card.late ? 'באיחור' : x.card.task_status === 'awaiting_verification' ? 'ממתין לבדיקה' : x.card.task_status === 'awaiting_approval' ? 'ממתין לאישור' : 'בטיפול')}</span></div>`;
+  const bucket = (x) => (!x.card ? 'ok' : !x.card.task_id || x.card.task_status === 'new' ? 'todo' : ['awaiting_verification', 'closed'].includes(x.card.task_status) ? 'done' : 'doing');
+  const rows = ab.board.map((x) => ({ ...x, card: byClient[x.id] })).map((x) => ({ ...x, b: bucket(x) }));
+  const tab = p.s || (c.red ? 'red' : c.yellow ? 'yellow' : 'green'), hf = p.h || 'all', more = p.all === '1';
+  const inTab = rows.filter((x) => x.status === tab);
+  const attention = rows.filter((x) => x.status === 'red' || x.status === 'yellow');
+  const cnt = { todo: attention.filter((x) => x.b === 'todo').length, doing: attention.filter((x) => x.b === 'doing').length, done: attention.filter((x) => x.b === 'done').length };
+  const shown = inTab.filter((x) => hf === 'all' || x.b === hf).sort((x, y) => ({ todo: 0, doing: 1, done: 2, ok: 3 }[x.b] - { todo: 0, doing: 1, done: 2, ok: 3 }[y.b]) || (y.card?.potential_leads || 0) - (x.card?.potential_leads || 0));
+  const list = more ? shown : shown.slice(0, 10);
+  const go_ = (q) => `home?s=${q.s ?? tab}&h=${q.h ?? hf}`;
+  const H = { todo: ['לא טופל', 'tx2'], doing: ['בטיפול', ''], done: ['טופל · ממתין לאימות', 'ok'], ok: ['', ''] };
+  const actBtn = (x) => !x.card ? '' : !x.card.task_id ? `<button class="btn pri sm" data-act="createTask" data-arg="${esc(x.card.key)}">פתח טיפול</button>`
+    : x.card.task_status === 'new' ? `<button class="btn sec sm" data-act="task" data-arg="${esc(x.card.task_id)}|start">התחלתי</button>`
+    : x.card.task_status === 'in_progress' ? `<button class="btn sec sm" data-act="task" data-arg="${esc(x.card.task_id)}|submit">סיימתי</button>` : '';
+  const isIssue = tab === 'red' || tab === 'yellow';
   view.innerHTML = `<div class="calm">
   <div class="calm-head"><h2>${greet}, ${esc(st.me.user.name)}</h2>
-    <p class="lead">${c.red ? `${N(c.red)} לקוחות דחופים${untreated ? `, ${N(untreated)} מהם עוד לא בטיפול` : ', וכולם בטיפול'}.` : 'אין היום לקוחות דחופים.'} ${c.yellow ? `${N(c.yellow)} במעקב.` : ''}${o.week && o.week.leads ? `<br><span class="small">השבוע נכנסו ${N(o.week.leads.toLocaleString())} לידים בכל המשרד${o.week.prev_leads ? ` (${o.week.leads >= o.week.prev_leads ? '+' : ''}${N(Math.round((o.week.leads / o.week.prev_leads - 1) * 100))}% משבוע שעבר)` : ''}, בעלות ממוצעת של ${N(money(o.week.cpl))} לליד.</span>` : ''}</p>
-    <div class="counts">${[['red', 'דחוף'], ['yellow', 'במעקב'], ['green', 'תקין'], ['nodata', 'אין מספיק מידע']].map(([k, t]) => `<a href="#/clients?f=${k}"><i class="dot d-${k}"></i>${N(c[k])} ${t}</a>`).join('')}${o.demo ? '<span class="mock">דמו</span>' : ''}</div></div>
-  <section><h3>שלושה דברים להיום</h3>${b.items.slice(0, 3).map((x, i) => `<div class="todo3"><span class="n">${i + 1}</span><div class="bt"><b>${esc(x.title)}</b><div class="small tx2 clamp">${esc(x.detail)}</div></div>
-    <button class="btn ${i === 0 ? 'pri' : 'sec'} sm" ${x.action.route ? `data-act="go" data-arg="${esc(x.action.route)}"` : `data-act="${esc(x.action.act)}" data-arg="${esc(x.action.arg)}"`}>${esc(x.action.label)}</button></div>`).join('') || '<p class="tx2">אין שום דבר דחוף. יום שקט.</p>'}</section>
-  ${red.length ? `<section><h3>דחוף <span class="note">${N(red.length)}</span></h3><div class="lhead"><span></span><span>לקוח</span><span>הבעיה</span><span>אחראי</span><span>מצב / פעולה</span></div>${red.map(row).join('')}</section>` : ''}
-  ${yellow.length ? `<section><h3>במעקב <span class="note">${N(yellow.length)}</span></h3>${yellow.map(row).join('')}</section>` : ''}
-  <a class="rest" href="#/clients?f=green"><i class="dot d-green"></i>${N(c.green)} לקוחות תקינים${c.nodata ? ` · ${N(c.nodata)} בלי מספיק מידע` : ''} — לרשימה</a>
-  <footer class="proof">נבדקו ${N(b.clients)} חשבונות ב-${N(b.scan_ms)} מ"ש${o.time ? ` · ~${N(Math.round(o.time.saved_min / 6) / 10)} שעות בדיקה ידנית נחסכו` : ''}${b.potential ? ` · כ-${N(b.potential.leads_week)} לידים בשבוע אפשר להחזיר` : ''}${b.verified.length ? ` · ${N(b.verified.length)} תיקונים אומתו בנתונים` : ''} <span class="note">(הערכות מסומנות כהערכה)</span></footer>
+    <p class="lead">${c.red + c.yellow ? `${N(c.red + c.yellow)} לקוחות צריכים תשומת לב. ${cnt.todo ? `${N(cnt.todo)} עוד לא טופלו.` : 'כולם בטיפול.'}` : 'כל הלקוחות תקינים היום.'}${b.potential ? ` <span class="small">אפשר להחזיר כ-${N(b.potential.leads_week)} לידים בשבוע (הערכה).</span>` : ''}</p></div>
+  <div class="hstrip">${[['todo', 'לא טופלו'], ['doing', 'בטיפול'], ['done', 'טופלו']].map(([k, t]) => `<button class="hs ${hf === k ? 'on' : ''}" data-act="go" data-arg="${go_({ h: hf === k ? 'all' : k, s: tab === 'green' || tab === 'nodata' ? 'red' : tab })}"><b>${N(cnt[k])}</b><span>${t}</span></button>`).join('')}</div>
+  <div class="stabs">${[['red', 'דחוף'], ['yellow', 'במעקב'], ['green', 'תקין'], ['nodata', 'אין מספיק מידע']].map(([k, t]) => `<button class="${tab === k ? 'on' : ''}" data-act="go" data-arg="${go_({ s: k, h: 'all' })}"><i class="dot d-${k}"></i>${t} <span class="note">${N(c[k])}</span></button>`).join('')}</div>
+  <div class="card ttable">${isIssue ? `<div class="tr th"><span>לקוח</span><span>הבעיה</span><span>מה לעשות</span><span>כמה</span><span>טיפול</span><span></span></div>` : `<div class="tr th tr-ok"><span>לקוח</span><span>לידים 7 ימים</span><span>עלות לליד</span><span>מול הממוצע שלו</span></div>`}
+    ${list.map((x) => isIssue ? `<div class="tr"><a class="tn" href="#/client/${x.id}">${esc(x.name)}</a><span class="tx2">${esc(x.card ? x.card.title : x.title)}</span><span>${esc(x.card ? x.card.next : '')}</span>
+      <span class="tx2">${x.card && x.card.potential_leads ? `~${N(x.card.potential_leads)} לידים/שבוע` : '—'}</span><span class="${H[x.b][1]}">${H[x.b][0]}${x.card && x.card.late ? ' · <b class="bad">באיחור</b>' : ''}</span><span>${actBtn(x)}</span></div>`
+      : `<div class="tr tr-ok"><a class="tn" href="#/client/${x.id}">${esc(x.name)}</a><span>${N(x.leads ?? '—')}</span><span>${N(money(x.cpl))}</span><span class="tx2">${x.cpl && x.base_cpl ? N((x.cpl <= x.base_cpl ? '' : '+') + Math.round((x.cpl / x.base_cpl - 1) * 100) + '%') : x.status === 'nodata' ? 'אין מספיק נתונים' : '—'}</span></div>`).join('')
+      || `<div class="empty">${hf === 'all' ? 'אין לקוחות בקטגוריה הזו' : 'אין לקוחות בסינון הזה'}</div>`}
+    ${shown.length > 10 && !more ? `<button class="tmore" data-act="go" data-arg="${go_({})}&all=1">הצג את כל ${N(shown.length)}</button>` : ''}</div>
+  <footer class="proof">נבדקו ${N(b.clients)} חשבונות ב-${N(b.scan_ms)} מ"ש${o.time ? ` · ~${N(Math.round(o.time.saved_min / 6) / 10)} שעות בדיקה ידנית נחסכו היום (הערכה)` : ''}${o.week && o.week.leads ? ` · ${N(o.week.leads.toLocaleString())} לידים השבוע בכל המשרד` : ''}</footer>
   </div>`;
 };
 A.setSat = async (b, arg) => { const [cid, n] = arg.split('|'); await api(`/api/pulse/clients/${cid}/satisfaction`, { method: 'PUT', body: { score: Number(n) } }); toast('שביעות הרצון עודכנה'); render(); };
