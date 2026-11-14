@@ -971,6 +971,22 @@ def alert_card(db: Database, acc: str, run: dict, r: dict, a: dict, st: dict | N
         "priority": a["priority"]}
 
 
+def suggestion(r: dict, client: dict) -> dict | None:
+    """לירוקים (ולמי שאין לו מספיק מידע): מה אפשר להציע או לשפר. מבוסס נתונים בלבד."""
+    if r["status"] == "nodata":
+        return {"text": "חסרים נתונים כדי לקבוע מצב — לבדוק שהנתונים מתעדכנים", "kind": "data"}
+    if r["status"] != "green":
+        return None
+    ops = engine.opportunities(r, client)
+    if ops:
+        return {"text": ops[0]["title"], "kind": ops[0]["kind"], "action": ops[0]["action"]}
+    tgt, rc = (r.get("goals") or {}).get("targetCpl"), r["rec"]["cpl"]
+    if tgt and rc and rc <= tgt * 0.9:
+        return {"text": f"העלות לליד {round((1 - rc / tgt) * 100)}% מתחת ליעד — אפשר להציע ללקוח הגדלת תקציב הדרגתית", "kind": "scale",
+                "action": "להציע ללקוח הגדלת תקציב של 10–20% לשבועיים"}
+    return {"text": "יציב — אין צורך בפעולה כרגע", "kind": "keep"}
+
+
 def alert_board(db: Database, acc: str) -> dict:
     run = analysis(db, acc)
     states = alert_rows(db, acc)
@@ -1003,7 +1019,7 @@ def alert_board(db: Database, acc: str) -> dict:
             missing.append({"text": f"חסרים נתונים: {r['name']} ({'אין נתונים בכלל' if r['lag'] >= 99 else str(r['lag']) + ' ימים'})", "route": f"client/{r['id']}", "kind": "data"})
     return {"cards": cards, "happened": happened, "missing": missing, "ref": ref,
             "board": [{"id": r["id"], "name": r["name"], "status": r["status"], "improved": bool(r["improved"]), "cpl": r["rec"]["cpl"],
-                       "leads": r["rec"]["leads"], "base_cpl": r["base"]["cpl"],
+                       "leads": r["rec"]["leads"], "base_cpl": r["base"]["cpl"], "suggest": suggestion(r, run["clients"][r["id"]]),
                        "title": r["alerts"][0]["title"] if r["alerts"] else ("השתפר" if r["improved"] else "תקין")} for r in run["results"]]}
 
 

@@ -35,9 +35,8 @@ A.startDemo = async (b) => {
 
 // ================================================================ מרכז פיקוד
 // ================================================================ מסך הבית: לקוח אחד בכל פעם (מיקוד). הטבלה המלאה ב"כל הרשימה".
-V.home = async (view, p = {}) => {
+V.focus = async (view) => {
   st.skip = st.skip || [];
-  if (p.v === 'big') return V.big(view);
   const [b, ab] = await Promise.all([api('/api/pulse/brief'), api('/api/pulse/alerts')]);
   const c = b.counts, w = b.week || {}, hour = new Date().getHours(), greet = hour < 12 ? 'בוקר טוב' : hour < 18 ? 'צהריים טובים' : 'ערב טוב';
   const seen = new Set(), queue = [];
@@ -48,7 +47,7 @@ V.home = async (view, p = {}) => {
   view.innerHTML = `<div class="calm focus">
   <div class="calm-head"><h2>${greet}, ${esc(st.me.user.name)}</h2>
     <div class="counts">${[['red', 'דחוף'], ['yellow', 'במעקב'], ['green', 'תקין']].map(([k, t]) => `<a href="#/queue?s=${k}"><i class="dot d-${k}"></i>${N(c[k])} ${t}</a>`).join('')}</div></div>
-  <div class="stabs"><button class="on">היום</button><button data-act="go" data-arg="home?v=big">התמונה הגדולה</button></div>
+  <a class="back" href="#/home?c=red">${ic('back', 14)} חזרה לרמזור</a>
   <div class="prog"><span><b>${N(w.handled_today || 0)}</b> טיפלת היום</span><span><b>${N(queue.length)}</b> נשארו</span>${b.potential ? `<span>~<b>${N(b.potential.leads_week)}</b> לידים בשבוע אפשר להחזיר</span>` : ''}</div>
   ${f ? `<div class="card fcard"><div class="row" style="gap:10px"><i class="dot d-${f.severity}" style="width:12px;height:12px"></i><span class="note">${f.severity === 'red' ? 'דחוף' : 'במעקב'} · הכי חשוב עכשיו</span></div>
     <h1>${esc(f.client)}</h1>
@@ -62,12 +61,60 @@ V.home = async (view, p = {}) => {
   <footer class="proof">השבוע במשרד: ${N(w.detected || 0)} בעיות זוהו · ${N(w.handled || 0)} טופלו · ${N(w.improved || 0)} השתפרו ואומתו בנתונים · נבדקו ${N(b.clients)} חשבונות ב-${N(b.scan_ms)} מ"ש</footer>
   </div>`;
 };
+// ================================================================ מסך הבית: רמזור — לכל צבע תפקיד משלו
+const LIGHT = {
+  red: { t: 'דחוף', sub: 'צריכים טיפול עכשיו', col: 'מה לעשות' },
+  yellow: { t: 'במעקב', sub: 'חריגה או מגמה — לבדוק לפני שזה מחמיר', col: 'מה לבדוק' },
+  green: { t: 'תקין', sub: 'אפשר לחכות — מה אפשר להציע או לשפר', col: 'מה אפשר להציע' },
+};
+V.home = async (view, p = {}) => {
+  if (p.v === 'big') return V.big(view);
+  if (p.v === 'focus') return V.focus(view);
+  const [b, ab] = await Promise.all([api('/api/pulse/brief'), api('/api/pulse/alerts')]);
+  const c = b.counts, w = b.week || {}, hour = new Date().getHours(), greet = hour < 12 ? 'בוקר טוב' : hour < 18 ? 'צהריים טובים' : 'ערב טוב';
+  const byClient = {};
+  ab.cards.forEach((x) => { if (!byClient[x.client_id]) byClient[x.client_id] = x; });
+  const rows = ab.board.map((x) => ({ ...x, card: byClient[x.id], st: x.status === 'nodata' ? 'green' : x.status }));
+  const todo = (x) => x.card && (!x.card.task_id || x.card.task_status === 'new');
+  const order = (a, z) => (todo(z) - todo(a)) || (z.card?.potential_leads || 0) - (a.card?.potential_leads || 0);
+  const of = (k) => rows.filter((x) => x.st === k).sort(order);
+  const what = (x, k) => k === 'red' ? x.card?.next : k === 'yellow' ? (x.card?.check?.[0] || x.card?.next) : x.suggest?.text;
+  const head = `<div class="calm-head"><h2>${greet}, ${esc(st.me.user.name)}</h2>
+    <p class="lead">${c.red ? `${N(c.red)} צריכים טיפול, ${N(c.yellow)} במעקב, ${N(c.green + c.nodata)} בסדר.` : 'אין היום לקוחות דחופים.'}</p></div>
+    <div class="stabs"><button class="on" data-act="go" data-arg="home">רמזור</button><button data-act="go" data-arg="home?v=big">התמונה הגדולה</button></div>`;
+  if (!p.c) {
+    view.innerHTML = `<div class="calm">${head}
+    <div class="lights3">${['red', 'yellow', 'green'].map((k) => { const l = of(k); const n = k === 'green' ? c.green + c.nodata : c[k];
+      return `<button class="lp" data-act="go" data-arg="home?c=${k}"><div class="row"><i class="dot d-${k}" style="width:12px;height:12px"></i><b>${LIGHT[k].t}</b><span class="sp"></span><span class="lpn">${N(n)}</span></div>
+        <div class="note">${LIGHT[k].sub}</div><ul>${l.slice(0, 3).map((x) => `<li><span>${esc(x.name)}</span><span class="note">${esc(what(x, k) || '')}</span></li>`).join('') || '<li class="note">אין</li>'}</ul>
+        <span class="lpmore">${n > 3 ? `לכל ה-${N(n)} ←` : 'לפתוח ←'}</span></button>`; }).join('')}</div>
+    <footer class="proof">השבוע: ${N(w.detected || 0)} בעיות זוהו · ${N(w.handled || 0)} טופלו · ${N(w.improved || 0)} השתפרו ואומתו${b.potential ? ` · כ-${N(b.potential.leads_week)} לידים בשבוע אפשר להחזיר (הערכה)` : ''}</footer></div>`;
+    return;
+  }
+  const k = p.c, l = of(k), all = p.all === '1', list = all ? l : l.slice(0, 12);
+  const act = (x) => {
+    if (k === 'green') return x.suggest && x.suggest.action ? `<button class="btn sec sm" data-act="oppTask" data-arg="${x.id}|${esc(x.suggest.action)}">הפוך למשימה</button>` : '';
+    if (!x.card) return '';
+    if (!x.card.task_id) return `<button class="btn ${k === 'red' ? 'pri' : 'sec'} sm" data-act="handle" data-arg="${esc(x.card.key)}|start">${k === 'red' ? 'אני מטפל' : 'אני בודק'}</button>`;
+    if (x.card.task_status === 'new' || x.card.task_status === 'in_progress') return `<button class="btn sec sm" data-act="handle" data-arg="${esc(x.card.key)}|done">טיפלתי ✓</button>`;
+    return `<span class="note ok">טופל · ממתין לאימות</span>`;
+  };
+  view.innerHTML = `<div class="calm">${head}
+  <div class="row"><a class="back" href="#/home">${ic('back', 14)} רמזור</a><span class="sp"></span>${k === 'red' && l.some(todo) ? `<a class="btn sec sm" href="#/home?v=focus">טפל אחד-אחד</a>` : ''}</div>
+  <div class="lhead2"><i class="dot d-${k}" style="width:12px;height:12px"></i><h3>${LIGHT[k].t} · ${N(l.length)}</h3><span class="note">${LIGHT[k].sub}</span></div>
+  <div class="card ttable"><div class="tr th t3"><span>לקוח</span><span>${k === 'green' ? 'מצב' : 'מה קרה'}</span><span>${LIGHT[k].col}</span><span></span></div>
+  ${list.map((x) => `<div class="tr t3"><a class="tn" href="#/client/${x.id}">${esc(x.name)}${x.status === 'nodata' ? ' <span class="note">· אין מספיק מידע</span>' : ''}</a>
+    <span class="tx2">${esc(k === 'green' ? (x.cpl ? `עלות לליד ${money(x.cpl)} · ${x.leads} לידים בשבוע` : '—') : x.card ? x.card.title : x.title)}${k === 'red' && x.card?.potential_leads ? ` <span class="note">· ~${N(x.card.potential_leads)} לידים/שבוע</span>` : ''}</span>
+    <span>${esc(what(x, k) || '—')}</span><span class="ta">${act(x)}</span></div>`).join('') || '<div class="empty">אין לקוחות בצבע הזה</div>'}
+  ${l.length > 12 && !all ? `<button class="tmore" data-act="go" data-arg="home?c=${k}&all=1">הצג את כל ${N(l.length)}</button>` : ''}</div></div>`;
+};
+
 V.big = async (view) => {
   const t = await api('/api/pulse/trend');
   const s = t.since, w = t.weeks;
   view.innerHTML = `<div class="calm focus">
   <div class="calm-head"><h2>התמונה הגדולה</h2><p class="lead">${esc(t.sentence || 'אין עדיין מספיק שבועות של נתונים')}</p></div>
-  <div class="stabs"><button data-act="go" data-arg="home">היום</button><button class="on">התמונה הגדולה</button></div>
+  <div class="stabs"><button data-act="go" data-arg="home">רמזור</button><button class="on">התמונה הגדולה</button></div>
   <div class="card pad"><div class="note">לידים בשבוע · כל המשרד · 12 שבועות</div><div id="bgLeads"></div></div>
   <div class="card pad"><div class="note">עלות לליד · ממוצע המשרד</div><div id="bgCpl"></div></div>
   <div class="card pad"><div class="h2">${ic('trophy')} מה המערכת עשתה${s.first_label ? ` מאז ${N(s.first_label)}` : ''}</div>
@@ -421,7 +468,7 @@ A.importCsv = async (b, cid) => {
 A.manualTask = (b, cid) => modal(`<div class="mh"><b>משימה ידנית</b><div class="sp"></div><button class="iconbtn" data-act="close">${ic('x')}</button></div>
   <form class="pad" id="mtF"><div class="fld"><label for="mtT">מה צריך לעשות</label><input class="inp" id="mtT" required minlength="2"></div><div class="frm"><div class="fld"><label for="mtA">אחראי</label><select class="inp" id="mtA">${memberOpts()}</select></div><div class="fld"><label for="mtD">תוך כמה ימים</label><input class="inp" id="mtD" type="number" min="1" max="30" value="3"></div></div><button class="btn pri">יצירה</button></form>`)
   || ($('#mtF').onsubmit = async (e) => { e.preventDefault(); const t = await api('/api/pulse/tasks/manual', { method: 'POST', body: { client_id: cid, title: $('#mtT').value, assignee: $('#mtA').value, due_days: Number($('#mtD').value) } }); closeModal(); go('task/' + t.id); });
-A.oppTask = async (b, arg) => { const [cid, title] = arg.split('|'); const t = await api('/api/pulse/tasks/manual', { method: 'POST', body: { client_id: cid, title, source: 'opportunity', due_days: 7 } }); toast('נוצרה משימה מהזדמנות'); go('task/' + t.id); };
+A.oppTask = async (b, arg) => { const [cid, title] = arg.split('|'); await api('/api/pulse/tasks/manual', { method: 'POST', body: { client_id: cid, title, source: 'opportunity', due_days: 7 } }); toast('נוצרה משימה: ' + title); b.outerHTML = '<span class="note ok">נוצרה משימה ✓</span>'; };
 A.oppDraft = async (b, arg) => { const [cid, kind] = arg.split('|'); const r = await api('/api/pulse/opportunities/draft', { method: 'POST', body: { client_id: cid, kind } }); toast(r.msg); go('client/' + cid); };
 A.copy = async (b, txt) => { try { await navigator.clipboard.writeText(txt); toast('הועתק'); } catch { toast('ההעתקה נחסמה בדפדפן', 'warn'); } };
 A.approveDraft = async (b, id) => { const r = await api(`/api/pulse/drafts/${id}/approve`, { method: 'POST' }); toast(r.msg); render(); };
