@@ -35,8 +35,9 @@ A.startDemo = async (b) => {
 
 // ================================================================ מרכז פיקוד
 // ================================================================ מסך הבית: לקוח אחד בכל פעם (מיקוד). הטבלה המלאה ב"כל הרשימה".
-V.home = async (view) => {
+V.home = async (view, p = {}) => {
   st.skip = st.skip || [];
+  if (p.v === 'big') return V.big(view);
   const [b, ab] = await Promise.all([api('/api/pulse/brief'), api('/api/pulse/alerts')]);
   const c = b.counts, w = b.week || {}, hour = new Date().getHours(), greet = hour < 12 ? 'בוקר טוב' : hour < 18 ? 'צהריים טובים' : 'ערב טוב';
   const seen = new Set(), queue = [];
@@ -47,6 +48,7 @@ V.home = async (view) => {
   view.innerHTML = `<div class="calm focus">
   <div class="calm-head"><h2>${greet}, ${esc(st.me.user.name)}</h2>
     <div class="counts">${[['red', 'דחוף'], ['yellow', 'במעקב'], ['green', 'תקין']].map(([k, t]) => `<a href="#/queue?s=${k}"><i class="dot d-${k}"></i>${N(c[k])} ${t}</a>`).join('')}</div></div>
+  <div class="stabs"><button class="on">היום</button><button data-act="go" data-arg="home?v=big">התמונה הגדולה</button></div>
   <div class="prog"><span><b>${N(w.handled_today || 0)}</b> טיפלת היום</span><span><b>${N(queue.length)}</b> נשארו</span>${b.potential ? `<span>~<b>${N(b.potential.leads_week)}</b> לידים בשבוע אפשר להחזיר</span>` : ''}</div>
   ${f ? `<div class="card fcard"><div class="row" style="gap:10px"><i class="dot d-${f.severity}" style="width:12px;height:12px"></i><span class="note">${f.severity === 'red' ? 'דחוף' : 'במעקב'} · הכי חשוב עכשיו</span></div>
     <h1>${esc(f.client)}</h1>
@@ -59,6 +61,21 @@ V.home = async (view) => {
   ${nxt.length ? `<div class="nextq"><span class="note">הבאים בתור:</span>${nxt.map((x) => `<a href="#/client/${x.client_id}"><i class="dot d-${x.severity}"></i>${esc(x.client)}</a>`).join('')}<a class="note" href="#/queue">כל הרשימה ←</a></div>` : '<a class="note" href="#/queue">כל הרשימה ←</a>'}
   <footer class="proof">השבוע במשרד: ${N(w.detected || 0)} בעיות זוהו · ${N(w.handled || 0)} טופלו · ${N(w.improved || 0)} השתפרו ואומתו בנתונים · נבדקו ${N(b.clients)} חשבונות ב-${N(b.scan_ms)} מ"ש</footer>
   </div>`;
+};
+V.big = async (view) => {
+  const t = await api('/api/pulse/trend');
+  const s = t.since, w = t.weeks;
+  view.innerHTML = `<div class="calm focus">
+  <div class="calm-head"><h2>התמונה הגדולה</h2><p class="lead">${esc(t.sentence || 'אין עדיין מספיק שבועות של נתונים')}</p></div>
+  <div class="stabs"><button data-act="go" data-arg="home">היום</button><button class="on">התמונה הגדולה</button></div>
+  <div class="card pad"><div class="note">לידים בשבוע · כל המשרד · 12 שבועות</div><div id="bgLeads"></div></div>
+  <div class="card pad"><div class="note">עלות לליד · ממוצע המשרד</div><div id="bgCpl"></div></div>
+  <div class="card pad"><div class="h2">${ic('trophy')} מה המערכת עשתה${s.first_label ? ` מאז ${N(s.first_label)}` : ''}</div>
+    <div class="since"><div><b>${N(s.detected)}</b><span>בעיות זוהו לפני שהלקוח התקשר</span></div><div><b>${N(s.handled)}</b><span>טופלו</span></div><div><b>${N(s.improved)}</b><span>השתפרו ואומתו בנתונים</span></div></div></div>
+  ${t.is_demo ? '<p class="note">נתוני דמו</p>' : ''}</div>`;
+  const lb = w.map((x) => x.label);
+  chart($('#bgLeads'), { labels: lb, h: 180, fmt: (v) => Math.round(v).toLocaleString(), series: [{ name: 'לידים', color: 'var(--acc)', w: 2.6, vals: w.map((x) => x.leads) }] });
+  chart($('#bgCpl'), { labels: lb, h: 160, fmt: (v) => money(v), series: [{ name: 'עלות לליד', color: 'var(--tx2)', w: 2.2, vals: w.map((x) => x.cpl) }] });
 };
 A.handle = async (b, arg) => {
   const [key, mode] = arg.split('|');
@@ -261,11 +278,12 @@ V.client = async (view, p) => {
       <div class="hrow"><span class="hk">מה קרה</span><div class="hv big">${esc(cd.what)}</div></div>
       <div class="hrow"><span class="hk">למה</span><div class="hv">${esc((cd.explanations[0] || '').replace(/ \([^)]*\)$/, ''))}</div></div>
       <div class="hrow"><span class="hk">מה עושים</span><div class="hv"><b>${esc(cd.next)}</b>${cd.potential ? `<div class="note ok">${esc(cd.potential)}</div>` : ''}</div></div>
+      ${d.trend_line ? `<div class="hrow"><span class="hk">האם זה עובד?</span><div class="hv tx2">${esc(d.trend_line)}</div></div>` : ''}
       ${d.benchmark ? `<div class="hrow"><span class="hk">השוואה</span><div class="hv tx2">${esc(d.benchmark.text)}</div></div>` : ''}
       <div class="hrow"><span class="hk">מי ומתי</span><div class="hv tx2">${esc(cd.owner_name)} · ${esc(cd.handled)}${cd.late ? ' · <span class="bad">באיחור</span>' : ''}</div></div>
       <div class="row" style="margin-top:14px">${top.task ? `<button class="btn pri" data-act="go" data-arg="task/${top.task.id}">למשימה</button>` : `<select class="inp sm" id="as_${esc(top.key)}" aria-label="אחראי">${memberOpts(c.owner)}</select><button class="btn pri" data-act="createTask" data-arg="${esc(top.key)}">צור משימה ושייך</button>`}
         ${d.alerts.length > 1 ? `<span class="note">ועוד ${N(d.alerts.length - 1)} נושאים בלשונית "פרטי הבעיה"</span>` : ''}</div></div>`
-    : `<div class="card hero"><div class="hv big">${r.status === 'nodata' ? 'אין מספיק נתונים כדי לקבוע מצב. ' + esc(r.info[0] || '') : r.improved ? esc(r.improved.what) : 'הכול תקין. כל המדדים בטווח הרגיל של הלקוח' + (r.goals.targetCpl ? ' ובהתאם ליעד.' : '.')}</div></div>`}
+    : `<div class="card hero">${d.trend_line ? `<div class="note" style="margin-bottom:8px">${esc(d.trend_line)}</div>` : ''}<div class="hv big">${r.status === 'nodata' ? 'אין מספיק נתונים כדי לקבוע מצב. ' + esc(r.info[0] || '') : r.improved ? esc(r.improved.what) : 'הכול תקין. כל המדדים בטווח הרגיל של הלקוח' + (r.goals.targetCpl ? ' ובהתאם ליעד.' : '.')}</div></div>`}
   <div class="seg tabbar">${top ? tabBtn('issue', 'פרטי הבעיה', d.alerts.length) : ''}${tabBtn('perf', 'ביצועים')}${tabBtn('work', 'טיפול', d.tasks.filter((t) => t.status !== 'closed').length || '')}${tabBtn('about', 'הלקוח')}</div>
   <div class="tabpane">${tab === 'issue' ? d.alerts.map((a, i) => alertCard(a, d, i === 0)).join('')
     : tab === 'perf' ? `  <div class="card pad" style="margin-bottom:14px"><div class="h2">ביצועים<span class="sp"></span>

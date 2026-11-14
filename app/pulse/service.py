@@ -1437,3 +1437,39 @@ def handle_alert(db: Database, acc: str, key: str, mode: str, user_name: str, ca
             r = task_action(db, acc, t["id"], "submit", user_name=user_name, can_approve=can_approve)
             return {"ok": r["ok"], "msg": "מעולה. " + r["msg"], "task_id": t["id"]}
     return {"ok": True, "msg": "רשמתי שאתה מטפל בזה", "task_id": t["id"]}
+
+
+def office_trend(db: Database, acc: str) -> dict:
+    """התמונה הגדולה: לידים ועלות לליד לכל המשרד, 12 שבועות + מה המערכת עשתה מאז שהתחילה."""
+    run = analysis(db, acc)
+    ref = run["ref"]
+    weeks = []
+    for w in range(11, -1, -1):
+        ds = [d for r in run["results"] for d in r["days"] if w * 7 <= ref - d["_i"] < w * 7 + 7]
+        st_ = engine.stats(ds)
+        weeks.append({"label": fmt_day(ref - w * 7 - 6), "leads": st_["leads"], "spend": round(st_["spend"]),
+                      "cpl": round(st_["cpl"], 1) if st_["cpl"] else None, "n": st_["n"]})
+    weeks = [w for w in weeks if w["n"]]
+    cur, month = (weeks[-1], weeks[-5]) if len(weeks) >= 5 else (weeks[-1] if weeks else None, None)
+    sentence = None
+    if cur and month and month["leads"]:
+        chg = cur["leads"] / month["leads"] - 1
+        sentence = (f"השבוע נכנסו {cur['leads']:,} לידים בכל המשרד, {'+' if chg >= 0 else ''}{round(chg * 100)}% לעומת לפני חודש. "
+                    f"העלות לליד {money(cur['cpl'])} (לפני חודש {money(month['cpl'])}).")
+    since = {"detected": one(db, "SELECT COUNT(*) n FROM pulse_alerts WHERE account_id=?", (acc,))["n"],
+             "handled": one(db, "SELECT COUNT(*) n FROM pulse_tasks WHERE account_id=? AND done_day IS NOT NULL", (acc,))["n"],
+             "improved": one(db, "SELECT COUNT(*) n FROM pulse_verifications WHERE account_id=?", (acc,))["n"],
+             "first_day": one(db, "SELECT MIN(day) d FROM pulse_events WHERE account_id=?", (acc,))["d"]}
+    since["first_label"] = fmt_day(since["first_day"]) if since["first_day"] is not None else None
+    return {"weeks": weeks, "sentence": sentence, "since": since, "is_demo": any(r["is_demo"] for r in run["results"])}
+
+
+def client_trend_line(r: dict) -> str | None:
+    """'האם זה עובד?' בשורה אחת: מגמת עלות לליד ב-4 השבועות האחרונים."""
+    ws = [w["cpl"] for w in r["weeks"] if w["cpl"]]
+    if len(ws) < 3 or r["lowData"]:
+        return None
+    first, last = ws[0], ws[-1]
+    ch = last / first - 1
+    verdict = "משתפר" if ch <= -0.08 else "מידרדר" if ch >= 0.08 else "יציב"
+    return f"עלות לליד ב-4 השבועות האחרונים: {' ← '.join(money(x) for x in ws)} · {verdict}"

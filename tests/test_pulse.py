@@ -326,3 +326,13 @@ def test_focus_handle_week_and_notify_on_change(make_client):
     c.post("/api/pulse/lab/scenario", json={"scenario": "zero_leads"})
     notes = c.get("/api/pulse/notifications").json()
     assert any("עבר ל" in n["text"] for n in notes[: len(notes) - n0])
+
+
+def test_office_trend_and_client_trend_line(make_client):
+    c = _login(make_client)
+    c.post("/api/pulse/demo")
+    t = c.get("/api/pulse/trend").json()
+    assert len(t["weeks"]) >= 10 and t["sentence"] and "לידים" in t["sentence"] and t["since"]["detected"] > 0
+    cl = next(x for x in c.get("/api/pulse/clients").json()["clients"] if x["status"] == "green")
+    line = c.get(f"/api/pulse/clients/{cl['id']}").json()["trend_line"]
+    assert line is None or any(v in line for v in ("משתפר", "יציב", "מידרדר"))
