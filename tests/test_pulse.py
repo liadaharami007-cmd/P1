@@ -310,3 +310,19 @@ def test_benchmark_and_reminders(make_client):
     c.post(f"/api/pulse/clients/{green['id']}/commitments", json={"text": "לשלוח הצעת מחיר", "due_in": 2})
     c.post("/api/pulse/lab/advance", json={"days": 1})
     assert any("תזכורת" in n["text"] and "הצעת מחיר" in n["text"] for n in c.get("/api/pulse/notifications").json())
+
+
+def test_focus_handle_week_and_notify_on_change(make_client):
+    c = _login(make_client)
+    c.post("/api/pulse/demo")
+    card = c.get("/api/pulse/alerts").json()["cards"][0]
+    r = c.post("/api/pulse/alerts/handle", json={"key": card["key"], "mode": "done"}).json()
+    assert r["ok"] and r["task_id"]
+    t = next(t for t in c.get("/api/pulse/tasks").json()["tasks"] if t["id"] == r["task_id"])
+    assert t["status"] == "awaiting_verification"  # בעלים: טיפלתי = בוצע ואושר, נקבעה בדיקה חוזרת
+    b = c.get("/api/pulse/brief").json()
+    assert b["week"]["handled_today"] >= 1 and b["week"]["detected"] > 0
+    n0 = len(c.get("/api/pulse/notifications").json())
+    c.post("/api/pulse/lab/scenario", json={"scenario": "zero_leads"})
+    notes = c.get("/api/pulse/notifications").json()
+    assert any("עבר ל" in n["text"] for n in notes[: len(notes) - n0])

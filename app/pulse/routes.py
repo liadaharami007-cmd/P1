@@ -58,6 +58,11 @@ class DraftIn(BaseModel):
     kind: str = Field(..., max_length=40)
 
 
+class HandleIn(BaseModel):
+    key: str = Field(..., max_length=80)
+    mode: str = Field("done", pattern="^(start|done)$")
+
+
 class TaskActIn(BaseModel):
     extra: str | int | None = None
 
@@ -542,6 +547,11 @@ def register(app: FastAPI, db: Database) -> None:
         return {"ok": True, "msg": f"נוצרה כניסה ל{body.name}. מסרו לו את האימייל והסיסמה."}
 
     # ---------------------------------------------------------------- התראות (משוב) · משימות
+    @app.post("/api/pulse/alerts/handle")
+    def handle(body: HandleIn, ctx: Ctx = Depends(current)):
+        W(ctx)
+        return S.handle_alert(db, ctx.account_id, body.key, body.mode, uname(ctx), can_approve(ctx))
+
     @app.post("/api/pulse/alerts/feedback")
     def feedback(body: FeedbackIn, ctx: Ctx = Depends(current)):
         W(ctx)

@@ -118,6 +118,18 @@
       var msgs = { satisfaction: 'שביעות הרצון עודכנה', notes: 'נשמר בתיק הלקוח', contacts: 'איש הקשר נוסף', commitments: 'ההתחייבות נשמרה', 'update-draft': 'הטיוטה נשמרה בלשונית "טיפול". אפשר להעתיק ולשלוח.' };
       return msgs[kind] ? { body: { ok: true, msg: msgs[kind] }, status: kind === 'satisfaction' || kind === 'update-draft' ? 200 : 201 } : null;
     }
+    if (url === '/api/pulse/alerts/handle') {
+      var cr = act(D, '/api/pulse/tasks', 'POST', { alert_key: body.key });
+      if (!cr || cr.status === 404) return { body: { ok: false, msg: 'החריגה לא נמצאה' } };
+      var tk = findTask(D, cr.body.id);
+      if (tk.status === 'new') act(D, '/api/pulse/tasks/' + tk.id + '/start', 'POST', {});
+      if (body.mode === 'done' && tk.status === 'in_progress') {
+        act(D, '/api/pulse/tasks/' + tk.id + '/submit', 'POST', {});
+        var w = D['/api/pulse/brief'].week; if (w) { w.handled_today++; w.handled++; }
+        return { body: { ok: true, msg: 'מעולה. טופל — המערכת תבדוק בעוד 3 ימים אם המספרים חזרו ליעד', task_id: tk.id } };
+      }
+      return { body: { ok: true, msg: 'רשמתי שאתה מטפל בזה', task_id: tk.id } };
+    }
     if (url === '/api/pulse/check') { var st0 = D['/api/pulse/state']; return { body: { n: st0.clients, ms: 11, new: 0, cleared: 0 } }; }
     if (url === '/api/pulse/alerts/feedback') return { body: { ok: true, msg: 'תודה — המשוב נשמר' } };
     return null;

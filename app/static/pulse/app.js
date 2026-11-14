@@ -37,10 +37,10 @@ export const NAV = [
   ['', [['settings', 'הגדרות וכלים', 'more']]],
 ];
 // מסכים משניים: נגישים מ"הגדרות וכלים" ומתוך ההקשר — לא בתפריט הראשי (יובל: כמה שפחות עומס)
-export const MORE = [['alerts', 'כל החריגות', 'bell'], ['tasks', 'כל המשימות והאישורים', 'check'], ['reports', 'דוחות', 'report'], ['impact', 'הוכחת ערך', 'trophy'],
+export const MORE = [['queue', 'כל הרשימה (טבלה)', 'users'], ['alerts', 'כל החריגות', 'bell'], ['tasks', 'כל המשימות והאישורים', 'check'], ['reports', 'דוחות', 'report'], ['impact', 'הוכחת ערך', 'trophy'],
   ['profit', 'רווחיות', 'coin'], ['team', 'צוות ומשתמשים', 'team'], ['opps', 'הזדמנויות', 'spark'], ['knowledge', 'ידע הסוכנות', 'report'],
   ['automations', 'אוטומציות', 'zap'], ['integrations', 'חיבורים', 'plug'], ['lab', 'Demo Lab', 'flask']];
-const TITLE = { meet: 'מצב פגישה', home: 'מה היום', ads: 'ניתוח מודעות', my: 'המשימות שלי', settings: 'הגדרות וכלים', knowledge: 'ידע הסוכנות', alerts: 'כל החריגות', clients: 'לקוחות', client: 'תיק לקוח 360', tasks: 'משימות ואישורים', task: 'משימות ואישורים', ask: 'שאל את המערכת', opps: 'הזדמנויות צמיחה',
+const TITLE = { queue: 'כל הרשימה', meet: 'מצב פגישה', home: 'מה היום', ads: 'ניתוח מודעות', my: 'המשימות שלי', settings: 'הגדרות וכלים', knowledge: 'ידע הסוכנות', alerts: 'כל החריגות', clients: 'לקוחות', client: 'תיק לקוח 360', tasks: 'משימות ואישורים', task: 'משימות ואישורים', ask: 'שאל את המערכת', opps: 'הזדמנויות צמיחה',
   profit: 'רווחיות סוכנות', team: 'צוות ועומסים', impact: 'הוכחת ערך · לפני ואחרי', reports: 'דוחות', automations: 'מרכז אוטומציות', integrations: 'חיבורים', lab: 'Demo Lab' };
 
 // ---------------------------------------------------------------- API

@@ -34,7 +34,41 @@ A.startDemo = async (b) => {
 };
 
 // ================================================================ מרכז פיקוד
-V.home = async (view, p = {}) => {
+// ================================================================ מסך הבית: לקוח אחד בכל פעם (מיקוד). הטבלה המלאה ב"כל הרשימה".
+V.home = async (view) => {
+  st.skip = st.skip || [];
+  const [b, ab] = await Promise.all([api('/api/pulse/brief'), api('/api/pulse/alerts')]);
+  const c = b.counts, w = b.week || {}, hour = new Date().getHours(), greet = hour < 12 ? 'בוקר טוב' : hour < 18 ? 'צהריים טובים' : 'ערב טוב';
+  const seen = new Set(), queue = [];
+  ab.cards.filter((x) => !x.task_id || x.task_status === 'new').sort((x, y) => (x.severity === y.severity ? 0 : x.severity === 'red' ? -1 : 1) || (y.potential_leads || 0) - (x.potential_leads || 0))
+    .forEach((x) => { if (!seen.has(x.client_id)) { seen.add(x.client_id); queue.push(x); } });
+  const q = queue.filter((x) => !st.skip.includes(x.key)).concat(queue.filter((x) => st.skip.includes(x.key)));
+  const f = q[0], nxt = q.slice(1, 4);
+  view.innerHTML = `<div class="calm focus">
+  <div class="calm-head"><h2>${greet}, ${esc(st.me.user.name)}</h2>
+    <div class="counts">${[['red', 'דחוף'], ['yellow', 'במעקב'], ['green', 'תקין']].map(([k, t]) => `<a href="#/queue?s=${k}"><i class="dot d-${k}"></i>${N(c[k])} ${t}</a>`).join('')}</div></div>
+  <div class="prog"><span><b>${N(w.handled_today || 0)}</b> טיפלת היום</span><span><b>${N(queue.length)}</b> נשארו</span>${b.potential ? `<span>~<b>${N(b.potential.leads_week)}</b> לידים בשבוע אפשר להחזיר</span>` : ''}</div>
+  ${f ? `<div class="card fcard"><div class="row" style="gap:10px"><i class="dot d-${f.severity}" style="width:12px;height:12px"></i><span class="note">${f.severity === 'red' ? 'דחוף' : 'במעקב'} · הכי חשוב עכשיו</span></div>
+    <h1>${esc(f.client)}</h1>
+    <div class="fl"><span class="hk">מה קרה</span><p>${esc(f.what)}</p></div>
+    <div class="fl"><span class="hk">מה לעשות</span><p><b>${esc(f.next)}</b></p></div>
+    ${f.potential_leads ? `<div class="fl"><span class="hk">כמה זה שווה</span><p>כ-${N(f.potential_leads)} לידים בשבוע <span class="note">(הערכה מהנתונים של הלקוח)</span></p></div>` : ''}
+    <div class="fbtn"><button class="btn pri big" data-act="handle" data-arg="${esc(f.key)}|done">טיפלתי ✓</button><button class="btn sec" data-act="handle" data-arg="${esc(f.key)}|start">אני על זה</button>
+      <button class="btn sec" data-act="skip" data-arg="${esc(f.key)}">דלג</button><a class="btn sec" href="#/client/${f.client_id}">פרטים מלאים</a></div></div>`
+  : `<div class="card fcard done"><h1>הכול מטופל ✓</h1><p class="tx2">לכל לקוח שדורש תשומת לב יש כבר טיפול. המערכת תבדוק בעצמה אם המספרים חוזרים ליעד.</p></div>`}
+  ${nxt.length ? `<div class="nextq"><span class="note">הבאים בתור:</span>${nxt.map((x) => `<a href="#/client/${x.client_id}"><i class="dot d-${x.severity}"></i>${esc(x.client)}</a>`).join('')}<a class="note" href="#/queue">כל הרשימה ←</a></div>` : '<a class="note" href="#/queue">כל הרשימה ←</a>'}
+  <footer class="proof">השבוע במשרד: ${N(w.detected || 0)} בעיות זוהו · ${N(w.handled || 0)} טופלו · ${N(w.improved || 0)} השתפרו ואומתו בנתונים · נבדקו ${N(b.clients)} חשבונות ב-${N(b.scan_ms)} מ"ש</footer>
+  </div>`;
+};
+A.handle = async (b, arg) => {
+  const [key, mode] = arg.split('|');
+  b.disabled = true;
+  try { const r = await api('/api/pulse/alerts/handle', { method: 'POST', body: { key, mode } }); toast(r.msg, r.ok ? '' : 'warn'); await refreshMe(); render(); }
+  finally { b.disabled = false; }
+};
+A.skip = (b, key) => { (st.skip = st.skip || []).push(key); render(); };
+
+V.queue = async (view, p = {}) => {
   const [b, o, ab] = await Promise.all([api('/api/pulse/brief'), api('/api/pulse/overview'), api('/api/pulse/alerts')]);
   const c = b.counts, hour = new Date().getHours(), greet = hour < 12 ? 'בוקר טוב' : hour < 18 ? 'צהריים טובים' : 'ערב טוב';
   const byClient = {};
@@ -47,7 +81,7 @@ V.home = async (view, p = {}) => {
   const cnt = { todo: attention.filter((x) => x.b === 'todo').length, doing: attention.filter((x) => x.b === 'doing').length, done: attention.filter((x) => x.b === 'done').length };
   const shown = inTab.filter((x) => hf === 'all' || x.b === hf).sort((x, y) => ({ todo: 0, doing: 1, done: 2, ok: 3 }[x.b] - { todo: 0, doing: 1, done: 2, ok: 3 }[y.b]) || (y.card?.potential_leads || 0) - (x.card?.potential_leads || 0));
   const list = more ? shown : shown.slice(0, 10);
-  const go_ = (q) => `home?s=${q.s ?? tab}&h=${q.h ?? hf}`;
+  const go_ = (q) => `queue?s=${q.s ?? tab}&h=${q.h ?? hf}`;
   const H = { todo: ['לא טופל', 'tx2'], doing: ['בטיפול', ''], done: ['טופל · ממתין לאימות', 'ok'], ok: ['', ''] };
   const actBtn = (x) => !x.card ? '' : !x.card.task_id ? `<button class="btn pri sm" data-act="createTask" data-arg="${esc(x.card.key)}">פתח טיפול</button>`
     : x.card.task_status === 'new' ? `<button class="btn sec sm" data-act="task" data-arg="${esc(x.card.task_id)}|start">התחלתי</button>`

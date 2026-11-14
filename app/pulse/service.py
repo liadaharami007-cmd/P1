@@ -447,6 +447,9 @@ def record_status(db: Database, acc: str, run: dict, ref: int, t: float) -> None
             (acc, r["id"], ref, t, r["status"], prev, reason))
         if prev:
             ev(db, acc, ref, "status", f"{r['name']}: {STATUS_HE[prev]} ← {STATUS_HE[r['status']]} ({reason})", r["id"])
+            worse = {"green": 0, "nodata": 0, "yellow": 1, "red": 2}
+            if worse[r["status"]] > worse[prev]:  # התראה רק כשהמצב משתנה לרעה — פעם אחת, לא כל יום
+                notify(db, acc, ref, f"{r['name']} עבר ל{STATUS_HE[r['status']]}: {reason}", "danger" if r["status"] == "red" else "warn", f"client/{r['id']}")
 
 
 def reconcile(db: Database, acc: str, run: dict, ref: int, t: float) -> tuple[list, list]:
@@ -1309,7 +1312,11 @@ def brief(db: Database, acc: str, since: float | None, can_approve: bool) -> dic
     items.sort(key=lambda x: -x["score"])
     ver = rows(db, "SELECT * FROM pulse_verifications WHERE account_id=? ORDER BY id DESC LIMIT 3", (acc,))
     pot = [r["recovery"] for r in run["results"] if r.get("recovery")]
-    return {"since": since, "items": items[:8], "potential": {"leads_week": sum(p["leads_week"] for p in pot), "clients": len(pot)} if pot else None, "more": max(0, len(items) - 8), "counts": run["counts"],
+    week = {"detected": one(db, "SELECT COUNT(*) n FROM pulse_alerts WHERE account_id=? AND first_day>=?", (acc, ref - 6))["n"],
+            "handled": one(db, "SELECT COUNT(*) n FROM pulse_tasks WHERE account_id=? AND done_day>=?", (acc, ref - 6))["n"],
+            "improved": one(db, "SELECT COUNT(*) n FROM pulse_verifications WHERE account_id=? AND day>=?", (acc, ref - 6))["n"],
+            "handled_today": one(db, "SELECT COUNT(*) n FROM pulse_tasks WHERE account_id=? AND done_day=?", (acc, ref))["n"]}
+    return {"since": since, "week": week, "items": items[:8], "potential": {"leads_week": sum(p["leads_week"] for p in pot), "clients": len(pot)} if pot else None, "more": max(0, len(items) - 8), "counts": run["counts"],
             "verified": [{"title": v["title"], "client_id": v["client_id"], "before": uj(v["before_json"], {}), "after": uj(v["after_json"], {})} for v in ver],
             "ref": ref, "scan_ms": run["ms"], "clients": len(run["results"])}
 
@@ -1411,3 +1418,22 @@ def benchmark(run: dict, cid: str) -> dict | None:
                 else f"ביחס ליעד שלו ({pos}), הלקוח במצב חלש מ-{round(share * 100)}% מהלקוחות שלכם" if share >= 0.5
                 else f"ביחס ליעד שלו ({pos}), הלקוח במצב טוב מ-{round((1 - share) * 100)}% מהלקוחות שלכם")
     return {"text": text + f" ({len(same)} לקוחות להשוואה, 7 ימים)", "share": share, "n": len(same)}
+
+
+def handle_alert(db: Database, acc: str, key: str, mode: str, user_name: str, can_approve: bool) -> dict:
+    """פעולה אחת מתוך מסך המיקוד: 'start' = אני על זה, 'done' = טיפלתי. פותח משימה אם צריך ומקדם אותה."""
+    run = analysis(db, acc)
+    t = open_task_for(db, acc, key)
+    if not t:
+        try:
+            t = create_task(db, acc, run, key, by="user", by_name=user_name)
+        except KeyError:
+            return {"ok": False, "msg": "החריגה כבר לא פעילה — רעננו"}
+    if t["status"] == "new":
+        task_action(db, acc, t["id"], "start", user_name=user_name, can_approve=can_approve)
+    if mode == "done":
+        t = get_task(db, acc, t["id"])
+        if t["status"] == "in_progress":
+            r = task_action(db, acc, t["id"], "submit", user_name=user_name, can_approve=can_approve)
+            return {"ok": r["ok"], "msg": "מעולה. " + r["msg"], "task_id": t["id"]}
+    return {"ok": True, "msg": "רשמתי שאתה מטפל בזה", "task_id": t["id"]}

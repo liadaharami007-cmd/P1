@@ -10,7 +10,7 @@ assert c.post("/api/auth/register", json={"email": "niv@demo-agency.co", "passwo
 c.post("/api/pulse/demo")
 P = lambda u, b=None: c.post(u, json=b or {}).json()
 tasks = [t for t in c.get("/api/pulse/tasks").json()["tasks"]]
-reds = [t for t in tasks if t["severity"] == "red"]
+reds = [t for t in tasks if t["severity"] == "red" and (t["alert_key"] or "").endswith(":cpl")] or [t for t in tasks if t["severity"] == "red"]
 # יום עבודה: אחד טופל ואומת, אחד ממתין לאישור, שניים בטיפול
 t0 = reds[0]["id"]
 for a in ("start", "submit", "approve", "simulate_fix"): P(f"/api/pulse/tasks/{t0}/{a}")
