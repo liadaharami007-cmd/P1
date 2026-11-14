@@ -33,14 +33,14 @@ const I = {
 export const ic = (n, s) => `<svg class="ic" viewBox="0 0 24 24" ${s ? `style="width:${s}px;height:${s}px"` : ''}>${I[n] || ''}</svg>`;
 
 export const NAV = [
-  ['', [['home', 'מה היום', 'home'], ['clients', 'לקוחות', 'users'], ['ads', 'ניתוח מודעות', 'spark'], ['my', 'המשימות שלי', 'check'], ['ask', 'שאל את המערכת', 'chat']]],
+  ['', [['home', 'רמזור', 'home'], ['clients', 'לקוחות', 'users'], ['ads', 'מודעות', 'spark'], ['ask', 'שאל', 'chat']]],
   ['', [['settings', 'הגדרות וכלים', 'more']]],
 ];
 // מסכים משניים: נגישים מ"הגדרות וכלים" ומתוך ההקשר — לא בתפריט הראשי (יובל: כמה שפחות עומס)
-export const MORE = [['queue', 'כל הרשימה (טבלה)', 'users'], ['alerts', 'כל החריגות', 'bell'], ['tasks', 'כל המשימות והאישורים', 'check'], ['reports', 'דוחות', 'report'], ['impact', 'הוכחת ערך', 'trophy'],
+export const MORE = [['my', 'המשימות שלי', 'check'], ['queue', 'כל הרשימה (טבלה)', 'users'], ['alerts', 'כל החריגות', 'bell'], ['tasks', 'כל המשימות והאישורים', 'check'], ['reports', 'דוחות', 'report'], ['impact', 'הוכחת ערך', 'trophy'],
   ['profit', 'רווחיות', 'coin'], ['team', 'צוות ומשתמשים', 'team'], ['opps', 'הזדמנויות', 'spark'], ['knowledge', 'ידע הסוכנות', 'report'],
   ['automations', 'אוטומציות', 'zap'], ['integrations', 'חיבורים', 'plug'], ['lab', 'Demo Lab', 'flask']];
-const TITLE = { queue: 'כל הרשימה', meet: 'מצב פגישה', home: 'מה היום', ads: 'ניתוח מודעות', my: 'המשימות שלי', settings: 'הגדרות וכלים', knowledge: 'ידע הסוכנות', alerts: 'כל החריגות', clients: 'לקוחות', client: 'תיק לקוח 360', tasks: 'משימות ואישורים', task: 'משימות ואישורים', ask: 'שאל את המערכת', opps: 'הזדמנויות צמיחה',
+const TITLE = { home: 'רמזור', queue: 'כל הרשימה', meet: 'מצב פגישה', ads: 'ניתוח מודעות', my: 'המשימות שלי', settings: 'הגדרות וכלים', knowledge: 'ידע הסוכנות', alerts: 'כל החריגות', clients: 'לקוחות', client: 'תיק לקוח 360', tasks: 'משימות ואישורים', task: 'משימות ואישורים', ask: 'שאל את המערכת', opps: 'הזדמנויות צמיחה',
   profit: 'רווחיות סוכנות', team: 'צוות ועומסים', impact: 'הוכחת ערך · לפני ואחרי', reports: 'דוחות', automations: 'מרכז אוטומציות', integrations: 'חיבורים', lab: 'Demo Lab' };
 
 // ---------------------------------------------------------------- API
@@ -117,7 +117,7 @@ function shell() {
     </header>
     <main class="view" id="view"></main></div>
   <nav class="bn" aria-label="ניווט">
-    ${[['home', 'היום', 'home'], ['clients', 'לקוחות', 'users'], ['ads', 'מודעות', 'spark'], ['my', 'שלי', 'check']].map(([r, t, i]) => `<a href="#/${r}" data-r="${r}">${ic(i)}${t}</a>`).join('')}
+    ${[['home', 'רמזור', 'home'], ['clients', 'לקוחות', 'users'], ['ads', 'מודעות', 'spark'], ['ask', 'שאל', 'chat']].map(([r, t, i]) => `<a href="#/${r}" data-r="${r}">${ic(i)}${t}</a>`).join('')}
     <button data-act="more">${ic('more')}עוד</button></nav>
   <div class="sheet" id="sheet"></div>
   <div class="ov" id="palOv"><div class="pal" role="dialog" aria-label="חיפוש"><input id="palIn" placeholder="חפש לקוח, מסך או פעולה…" autocomplete="off"><div class="res" id="palRes"></div></div></div>
@@ -191,7 +191,7 @@ async function onClick(e) {
 
 function openSheet() {
   const s = document.getElementById('sheet');
-  s.innerHTML = [['ask', 'שאל את המערכת', 'chat'], ['settings', 'הגדרות וכלים', 'more'], ...MORE]
+  s.innerHTML = [['settings', 'הגדרות וכלים', 'more'], ...MORE]
     .map(([r, t, i]) => `<a class="it" href="#/${r}" data-act="go" data-arg="${r}" style="display:flex;gap:10px;padding:12px 14px">${ic(i)}${t}</a>`).join('')
     + `<div class="row" style="padding:10px 14px"><button class="btn sec sm" data-act="theme">ערכת נושא</button><a class="btn sec sm" href="/">P1</a><button class="btn sec sm" data-act="logout">יציאה</button></div>`;
   s.classList.add('on'); st.sheet = true;

@@ -76,50 +76,31 @@ V.home = async (view, p = {}) => {
   if (p.v === 'big') return V.big(view);
   if (p.v === 'focus') return V.focus(view);
   const [b, ab] = await Promise.all([api('/api/pulse/brief'), api('/api/pulse/alerts')]);
-  const c = b.counts, w = b.week || {}, hour = new Date().getHours(), greet = hour < 12 ? 'בוקר טוב' : hour < 18 ? 'צהריים טובים' : 'ערב טוב';
+  const c = b.counts, hour = new Date().getHours(), greet = hour < 12 ? 'בוקר טוב' : hour < 18 ? 'צהריים טובים' : 'ערב טוב';
   const byClient = {};
   ab.cards.forEach((x) => { if (!byClient[x.client_id]) byClient[x.client_id] = x; });
   const rows = ab.board.map((x) => ({ ...x, card: byClient[x.id], st: x.status === 'nodata' ? 'green' : x.status }));
-  const gkey = (x) => (x.st === 'green' ? (x.status === 'nodata' ? 'data_missing' : x.suggest?.kind || 'keep') : x.card ? x.card.key.split(':')[1] : 'keep');
   const todo = (x) => x.card && (!x.card.task_id || x.card.task_status === 'new');
-  const groups = (k) => {
-    const g = {};
-    rows.filter((x) => x.st === k).forEach((x) => { (g[gkey(x)] = g[gkey(x)] || []).push(x); });
-    return Object.entries(g).map(([key, items]) => ({ key, items: items.sort((a, z) => (todo(z) - todo(a)) || (z.card?.potential_leads || 0) - (a.card?.potential_leads || 0)),
-      pot: items.reduce((t, x) => t + (x.card?.potential_leads || 0), 0) })).sort((a, z) => (z.key === 'keep' ? -1 : 0) - (a.key === 'keep' ? -1 : 0) || z.items.length - a.items.length);
-  };
-  const open = p.o || '', og = p.g || '';
-  const rowAct = (x, k) => {
-    if (k === 'green') return x.suggest?.action ? `<button class="btn sec sm" data-act="oppTask" data-arg="${x.id}|${esc(x.suggest.action)}">הצע</button>` : '';
-    if (!x.card) return '';
-    if (!x.card.task_id) return `<button class="btn sec sm" data-act="handle" data-arg="${esc(x.card.key)}|start">${k === 'red' ? 'לטיפול' : 'לבדיקה'}</button>`;
-    if (['new', 'in_progress'].includes(x.card.task_status)) return `<button class="btn sec sm" data-act="handle" data-arg="${esc(x.card.key)}|done">טיפלתי ✓</button>`;
-    return '<span class="note ok">טופל ✓</span>';
-  };
-  const groupBlock = (k, gr) => {
-    const expanded = og === gr.key, list = expanded ? gr.items : gr.items.slice(0, 3);
-    const first = gr.items[0];
-    const tip = k === 'green' ? (first.suggest?.action || '') : (k === 'red' ? first.card?.next : (first.card?.check?.[0] || first.card?.next)) || '';
-    const bulkN = k === 'green' ? gr.items.filter((x) => x.suggest?.action).length : gr.items.filter((x) => x.card && !x.card.task_id).length;
-    return `<div class="grp2"><div class="grh"><b>${esc(GROUP[gr.key] || gr.key)}</b><span class="note">${N(gr.items.length)} לקוחות${gr.pot ? ` · ~${N(gr.pot)} לידים בשבוע אפשר להחזיר` : ''}</span><span class="sp"></span>
-      ${bulkN > 1 ? `<button class="btn ${k === 'red' ? 'pri' : 'sec'} sm" data-act="bulk" data-arg="${k}|${gr.key}">${k === 'green' ? `הצע לכל ה-${N(bulkN)}` : `${k === 'red' ? 'פתח טיפול' : 'סמן לבדיקה'} לכל ה-${N(bulkN)}`}</button>` : ''}</div>
-      ${tip && gr.key !== 'keep' ? `<div class="grtip">${k === 'green' ? 'מה להציע' : k === 'red' ? 'מה עושים' : 'מה בודקים'}: ${esc(tip)}</div>` : ''}
-      ${gr.key === 'keep' && !expanded ? '' : list.map((x) => `<div class="gri"><a href="#/client/${x.id}">${esc(x.name)}</a><span class="note">${esc(k === 'green' ? (x.cpl ? `עלות לליד ${money(x.cpl)} · ${x.leads} לידים בשבוע` : 'אין מספיק נתונים') : `${x.card?.owner_name || ''}${x.card?.potential_leads ? ` · ~${x.card.potential_leads} לידים/שבוע` : ''}`)}</span><span class="sp"></span>${rowAct(x, k)}</div>`).join('')}
-      ${gr.items.length > 3 && !expanded ? `<button class="grmore" data-act="go" data-arg="home?o=${k}&g=${gr.key}">${gr.key === 'keep' ? `הצג ${N(gr.items.length)} לקוחות יציבים` : `ועוד ${N(gr.items.length - 3)}`}</button>` : ''}</div>`;
-  };
-  const light = (k) => {
-    const gs = groups(k), n = gs.reduce((t, g) => t + g.items.length, 0), isOpen = open === k;
-    const summary = gs.filter((g) => g.key !== 'keep').slice(0, 3).map((g) => `${GROUP[g.key] || g.key} · ${g.items.length}`).join('   ');
-    return `<div class="tl3 ${isOpen ? 'open' : ''}"><button class="tlh" data-act="go" data-arg="${isOpen ? 'home' : 'home?o=' + k}"><span class="bulb b-${k}"></span>
-      <span class="tlt"><b>${LIGHT[k].t}</b><span class="note">${LIGHT[k].sub}</span></span><span class="tln">${N(n)}</span><span class="tls note">${esc(summary)}</span><span class="tlc">${isOpen ? '−' : '+'}</span></button>
-      ${isOpen ? `<div class="tlb">${k === 'red' && rows.some((x) => x.st === 'red' && todo(x)) ? `<div class="row"><span class="sp"></span><a class="btn sec sm" href="#/home?v=focus">טפל אחד-אחד</a></div>` : ''}${gs.map((g) => groupBlock(k, g)).join('') || '<div class="empty">אין</div>'}</div>` : ''}</div>`;
-  };
-  view.innerHTML = `<div class="calm">
-  <div class="calm-head"><h2>${greet}, ${esc(st.me.user.name)}</h2><p class="lead">${c.red ? `${N(c.red)} צריכים טיפול, ${N(c.yellow)} במעקב, ${N(c.green + c.nodata)} בסדר.` : 'אין היום לקוחות דחופים.'}</p></div>
-  <div class="stabs"><button class="on" data-act="go" data-arg="home">רמזור</button><button data-act="go" data-arg="home?v=big">התמונה הגדולה</button></div>
-  <div class="tlwrap">${['red', 'yellow', 'green'].map(light).join('')}</div>
-  <footer class="proof">השבוע: ${N(w.detected || 0)} בעיות זוהו · ${N(w.handled || 0)} טופלו · ${N(w.improved || 0)} השתפרו ואומתו${b.potential ? ` · כ-${N(b.potential.leads_week)} לידים בשבוע אפשר להחזיר (הערכה)` : ''}</footer></div>`;
-  st._home = { rows, gkey };
+  const n = { red: c.red, yellow: c.yellow, green: c.green + c.nodata };
+  if (!p.o) {
+    view.innerHTML = `<div class="mini">
+      <h2>${greet}, ${esc(st.me.user.name)}</h2>
+      <p class="lead">${c.red ? `${N(c.red)} לקוחות צריכים אותך היום.` : 'אין היום לקוחות דחופים.'}</p>
+      <div class="lite">${['red', 'yellow', 'green'].map((k) => `<button class="lrow2" data-act="go" data-arg="home?o=${k}"><span class="bulb b-${k}"></span><span class="lt">${LIGHT[k].t}</span><span class="ln2">${N(n[k])}</span><span class="chev">‹</span></button>`).join('')}</div>
+      <a class="quiet" href="#/home?v=big">התמונה הגדולה ←</a></div>`;
+    return;
+  }
+  const k = p.o, all = p.all === '1';
+  const l = rows.filter((x) => x.st === k).sort((a, z) => (todo(z) - todo(a)) || (z.card?.potential_leads || 0) - (a.card?.potential_leads || 0));
+  const list = all ? l : l.slice(0, 15);
+  const phrase = (x) => k === 'green' ? (x.status === 'nodata' ? 'אין מספיק נתונים' : (x.suggest?.kind === 'keep' ? 'יציב' : (GROUP[x.suggest?.kind] || 'יציב').split(' — ')[0])) : (x.card ? x.card.title : x.title);
+  const mark = (x) => (k === 'green' || !x.card ? '' : x.card.task_id && !['new'].includes(x.card.task_status) ? '<span class="tick">✓</span>' : '');
+  view.innerHTML = `<div class="mini">
+    <a class="back" href="#/home">‹ רמזור</a>
+    <div class="lhead3"><span class="bulb b-${k}"></span><h2>${LIGHT[k].t}</h2><span class="ln2">${N(l.length)}</span></div>
+    <p class="note">${LIGHT[k].sub}${k === 'red' && l.some(todo) ? ` · <a href="#/home?v=focus">לטפל אחד-אחד</a>` : ''}</p>
+    <div class="nlist">${list.map((x) => `<a class="nrow" href="#/client/${x.id}"><span class="nn">${esc(x.name)}</span><span class="np">${esc(phrase(x))}</span>${mark(x)}<span class="chev">‹</span></a>`).join('') || '<p class="tx2">אין לקוחות כאן.</p>'}</div>
+    ${l.length > 15 && !all ? `<a class="quiet" href="#/home?o=${k}&all=1">עוד ${N(l.length - 15)}</a>` : ''}</div>`;
 };
 A.bulk = async (btn, arg) => {
   const [k, g] = arg.split('|');
@@ -346,20 +327,16 @@ V.client = async (view, p) => {
   const tabBtn = (k, t, n) => `<button class="${tab === k ? 'on' : ''}" data-act="go" data-arg="client/${c.id}?tab=${k}&days=${days}&m=${metric}">${t}${n ? ` <span class="note">${n}</span>` : ''}</button>`;
   view.innerHTML = `<a class="back" href="#/clients">${ic('back', 14)} כל הלקוחות</a>
   <div class="ch"><div><div class="row" style="gap:10px"><i class="dot d-${r.status}" style="width:12px;height:12px"></i><h2>${esc(c.name)}</h2></div>
-    <div class="meta2" style="margin:6px 0 0"><span>${esc(SL[r.status])}</span><span>${esc(c.industry || '')}</span><span>אחראי: ${esc(memberName(c.owner))}</span>${h.score != null ? `<span>בריאות ${N(h.score)}/100</span>` : ''}</div></div>
-    <div class="sp"></div><div class="row"><button class="btn pri sm" data-act="updDraft" data-arg="${c.id}">נסח עדכון ללקוח</button>
+    <div class="meta2" style="margin:6px 0 0"><span>${esc(SL[r.status])}</span><span>${esc(c.industry || '')}</span></div></div>
+    <div class="sp"></div><div class="row"><button class="btn sec sm" data-act="updDraft" data-arg="${c.id}">עדכון ללקוח</button>
       <details class="menu"><summary class="btn sec sm">עוד</summary><div class="menu-list"><a href="/api/pulse/reports/client/${c.id}.html?days=30" target="_blank" rel="noopener">דוח ללקוח</a><a href="/api/pulse/reports/client/${c.id}.pdf?days=30">PDF</a>
         <a href="#/meet/${c.id}">מצב פגישה עם הלקוח</a><a href="#/ask?q=${encodeURIComponent('למה ' + c.name + ' במצב הזה?')}">שאל על הלקוח</a>${c.is_demo ? `<a href="#/ads?client=${c.id}">ניתוח המודעות</a>` : ''}<button data-act="editClient" data-arg="${c.id}">הגדרות ויעדים</button></div></details></div></div>
   ${cd ? `<div class="card hero">
       <div class="hrow"><span class="hk">מה קרה</span><div class="hv big">${esc(cd.what)}</div></div>
-      <div class="hrow"><span class="hk">למה</span><div class="hv">${esc((cd.explanations[0] || '').replace(/ \([^)]*\)$/, ''))}</div></div>
-      <div class="hrow"><span class="hk">מה עושים</span><div class="hv"><b>${esc(cd.next)}</b>${cd.potential ? `<div class="note ok">${esc(cd.potential)}</div>` : ''}</div></div>
-      ${d.trend_line ? `<div class="hrow"><span class="hk">האם זה עובד?</span><div class="hv tx2">${esc(d.trend_line)}</div></div>` : ''}
-      ${d.benchmark ? `<div class="hrow"><span class="hk">השוואה</span><div class="hv tx2">${esc(d.benchmark.text)}</div></div>` : ''}
-      <div class="hrow"><span class="hk">מי ומתי</span><div class="hv tx2">${esc(cd.owner_name)} · ${esc(cd.handled)}${cd.late ? ' · <span class="bad">באיחור</span>' : ''}</div></div>
-      <div class="row" style="margin-top:14px">${top.task ? `<button class="btn pri" data-act="go" data-arg="task/${top.task.id}">למשימה</button>` : `<select class="inp sm" id="as_${esc(top.key)}" aria-label="אחראי">${memberOpts(c.owner)}</select><button class="btn pri" data-act="createTask" data-arg="${esc(top.key)}">צור משימה ושייך</button>`}
-        ${d.alerts.length > 1 ? `<span class="note">ועוד ${N(d.alerts.length - 1)} נושאים בלשונית "פרטי הבעיה"</span>` : ''}</div></div>`
-    : `<div class="card hero">${d.trend_line ? `<div class="note" style="margin-bottom:8px">${esc(d.trend_line)}</div>` : ''}<div class="hv big">${r.status === 'nodata' ? 'אין מספיק נתונים כדי לקבוע מצב. ' + esc(r.info[0] || '') : r.improved ? esc(r.improved.what) : 'הכול תקין. כל המדדים בטווח הרגיל של הלקוח' + (r.goals.targetCpl ? ' ובהתאם ליעד.' : '.')}</div></div>`}
+      <div class="hrow"><span class="hk">מה לעשות</span><div class="hv"><b>${esc(cd.next)}</b>${cd.potential_leads ? `<div class="note">כ-${N(cd.potential_leads)} לידים בשבוע אפשר להחזיר</div>` : ''}</div></div>
+      <div class="row" style="margin-top:14px">${!top.task || top.task.status === 'new' ? `<button class="btn pri" data-act="handle" data-arg="${esc(top.key)}|${top.task ? 'done' : 'start'}">${top.task ? 'טיפלתי ✓' : 'אני מטפל'}</button>` : top.task.status === 'in_progress' ? `<button class="btn pri" data-act="handle" data-arg="${esc(top.key)}|done">טיפלתי ✓</button>` : `<span class="ok">טופל ✓ · המערכת תבדוק אם זה השתפר</span>`}</div></div>`
+    : `<div class="card hero"><div class="hv big">${r.status === 'nodata' ? 'אין מספיק נתונים כדי לקבוע מצב.' : r.improved ? esc(r.improved.what) : 'הכול תקין.'}</div>${(st._sugg = (d.opportunities[0] || null)) ? `<div class="hrow" style="margin-top:8px"><span class="hk">מה אפשר להציע</span><div class="hv">${esc(d.opportunities[0].action)}</div></div><div class="row" style="margin-top:12px"><button class="btn sec" data-act="oppTask" data-arg="${c.id}|${esc(d.opportunities[0].action)}">הפוך למשימה</button></div>` : ''}</div>`}
+  <details class="moreinfo" ${p.tab ? 'open' : ''}><summary>עוד פרטים</summary>
   <div class="seg tabbar">${top ? tabBtn('issue', 'פרטי הבעיה', d.alerts.length) : ''}${tabBtn('perf', 'ביצועים')}${tabBtn('work', 'טיפול', d.tasks.filter((t) => t.status !== 'closed').length || '')}${tabBtn('about', 'הלקוח')}</div>
   <div class="tabpane">${tab === 'issue' ? d.alerts.map((a, i) => alertCard(a, d, i === 0)).join('')
     : tab === 'perf' ? `  <div class="card pad" style="margin-bottom:14px"><div class="h2">ביצועים<span class="sp"></span>
@@ -378,7 +355,7 @@ V.client = async (view, p) => {
         <form id="noteF"><div class="row"><select class="inp" id="nk"><option value="note">הערה</option><option value="call">שיחה</option><option value="meeting">פגישה</option><option value="decision">החלטה</option></select><input class="inp" id="nt" placeholder="מה סוכם / מה קרה" style="flex:1" required maxlength="4000"><button class="btn sec sm">שמור</button></div></form>
         ${d.notes.map((n) => `<div class="fi"><span class="pill p-gray">${{ note: 'הערה', call: 'שיחה', meeting: 'פגישה', decision: 'החלטה' }[n.kind]}</span><div>${esc(n.text)}<div class="note">${esc(n.user_name || '')}</div></div></div>`).join('')}</div>      <div class="card pad"><div class="h2">${ic('chart')} היסטוריית הרמזור</div>${d.status_history.map((x) => `<div class="fi"><span class="tm">${N(dayLabel(x.day))}</span>${pill(x.status)}<div class="small">${esc(x.reason || '')}</div></div>`).join('') || '<p class="small tx2">אין עדיין שינויים</p>'}</div></div><div class="stack">      ${d.opportunities.length ? `<div class="card pad"><div class="h2"><i class="dot d-imp"></i> הזדמנויות</div>${d.opportunities.map((o) => oppCard(o, c.id)).join('')}</div>` : ''}      <div class="card pad"><div class="h2">${ic('trophy')} ציון בריאות: ${N(h.score ?? 'אין מספיק מידע')}<span class="sp"></span><span class="note">ביטחון ${esc(h.confidence)}</span></div>
         ${h.parts.length ? `<table class="ft">${h.parts.map((x) => `<tr><td>${esc(x.label)}</td><td class="bad">${N(x.points)}</td></tr>`).join('')}</table>` : '<p class="small tx2">אין קנסות — 100.</p>'}<p class="note">${esc(h.formula)}</p></div>      <div class="card pad"><div class="h2">סיכון נטישה<span class="sp"></span>${d.risk.level === 'unknown' ? '<span class="pill p-gray">אין מספיק נתונים</span>' : `<span class="pill p-${d.risk.level === 'high' ? 'red' : d.risk.level === 'medium' ? 'yellow' : 'green'}">${{ high: 'גבוה', medium: 'בינוני', low: 'נמוך' }[d.risk.level]}</span>`}</div><ul class="ul">${d.risk.reasons.map((x) => `<li>${esc(x)}</li>`).join('')}</ul>${d.risk.note ? `<p class="note">${esc(d.risk.note)}</p>` : ''}</div>      <div class="card pad"><div class="h2">${ic('coin')} רווחיות לסוכנות</div>${d.profit ? `<div class="kv"><span>הכנסה חודשית</span><b>${N(money(d.profit.fee))}</b><span>עלות עבודה</span><span>${N(money(d.profit.labor))} (${N(d.profit.hours)} ש')</span><span>עלויות נוספות</span><span>${N(money(d.profit.other))}</span><span>רווח גולמי</span><b class="${d.profit.profit < 0 ? 'bad' : 'ok'}">${N(money(d.profit.profit))} · ${N(pctf(d.profit.margin))}</b><span>תקציב פרסום 30 יום</span><span class="muted">${N(money(d.profit.ad_spend_30))} (של הלקוח)</span></div>${d.profit.complete ? '' : '<p class="note">חסרות שעות או עלות שעה — הרווחיות חלקית.</p>'}` : '<p class="small tx2">לא הוזנה הכנסה חודשית. הוסיפו בהגדרות כדי לראות רווחיות.</p>'}</div>      ${!c.is_demo ? `<div class="card pad"><div class="h2">${ic('plug')} ייבוא נתונים (CSV)</div><p class="small tx2">ייצוא יומי מ-Meta Ads Manager / Google Ads. עמודות: date, spend, impressions, clicks, leads · אופציונלי: sales, revenue. כותרות בעברית נתמכות.</p>
-        <input type="file" accept=".csv,text/csv" id="csvF" class="inp" style="width:100%"><button class="btn sec sm" style="margin-top:8px" data-act="importCsv" data-arg="${c.id}">ייבוא</button><div id="csvR" class="note"></div></div>` : ''}</div></div>`}</div>`;
+        <input type="file" accept=".csv,text/csv" id="csvF" class="inp" style="width:100%"><button class="btn sec sm" style="margin-top:8px" data-act="importCsv" data-arg="${c.id}">ייבוא</button><div id="csvR" class="note"></div></div>` : ''}</div></div>`}</div></details>`;
   // גרף
   const s = d.series, roll = d.rolling;
   if ($('#chartBox')) {
