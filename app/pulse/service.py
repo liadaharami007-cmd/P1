@@ -96,7 +96,7 @@ def get_client(db: Database, acc: str, cid: str) -> dict | None:
 
 
 CLIENT_FIELDS = ("name", "industry", "owner", "target_cpl", "monthly_budget", "fee_monthly", "hours_monthly", "hourly_cost",
-                 "other_costs_monthly", "website")
+                 "other_costs_monthly", "website", "contact_every_days")
 
 
 def upsert_client(db: Database, acc: str, data: dict, cid: str | None = None) -> dict:
@@ -125,7 +125,8 @@ def upsert_client(db: Database, acc: str, data: dict, cid: str | None = None) ->
 
 
 def delete_client(db: Database, acc: str, cid: str) -> None:
-    for t in ("pulse_days", "pulse_alerts", "pulse_tasks", "pulse_notes", "pulse_drafts"):
+    for t in ("pulse_days", "pulse_alerts", "pulse_tasks", "pulse_notes", "pulse_drafts", "pulse_contacts", "pulse_commitments",
+              "pulse_status_history", "pulse_decisions"):
         exe(db, f"DELETE FROM {t} WHERE account_id=? AND client_id=?", (acc, cid))
     exe(db, "DELETE FROM pulse_clients WHERE account_id=? AND id=?", (acc, cid))
     bump(db, acc)
@@ -220,8 +221,36 @@ def seed_demo(db: Database, acc: str) -> dict:
             (acc, "d" + c["id"], c["name"], c["industry"], c["owner"], c["target_cpl"], c["monthly_budget"], c["fee_monthly"],
              c["hours_monthly"], c["hourly_cost"], c["other_costs_monthly"], j(c["platforms"]), j({}), j(p), now()))
     sync_demo(db, acc)
+    _seed_demo_ops(db, acc, T0)
     ev(db, acc, T0, "lab", "סביבת דמו נוצרה: 50 לקוחות מדומים עם 90 ימי היסטוריה")
     return run_check(db, acc, manual=True)
+
+
+FIRST = ["אורית", "משה", "שירן", "אבי", "מיכל", "רונן", "נועה", "דוד", "הילה", "יוסי", "ליאת", "עמית"]
+DEMO_COMMIT = ["לשלוח דוח ביצועים חודשי", "להעלות קריאייטיב חדש לקמפיין", "לבדוק את טופס הלידים באתר", "להציע תקציב לרבעון הבא",
+               "להקים קמפיין רימרקטינג", "לתאם פגישת סטטוס"]
+
+
+def _seed_demo_ops(db: Database, acc: str, T0: int) -> None:
+    """נתוני תפעול מדומים (מסומנים דמו דרך הלקוח): אנשי קשר, התחייבויות, שיחות מתועדות, שביעות רצון."""
+    cl = rows(db, "SELECT id, owner, name FROM pulse_clients WHERE account_id=? AND is_demo=1 ORDER BY rowid", (acc,))
+    for i, c in enumerate(cl):
+        exe(db, "INSERT INTO pulse_contacts (account_id, client_id, name, role, phone, email, created_at) VALUES (?,?,?,?,?,?,?)",
+            (acc, c["id"], f"{FIRST[i % len(FIRST)]} {c['name'].split()[-1]}", "בעלים" if i % 3 else "מנהלת שיווק",
+             f"05{(i * 37) % 10}-{1000000 + i * 7919 % 9000000}", f"contact{i + 1}@example.com", now()))
+        exe(db, "UPDATE pulse_clients SET contact_every_days=? WHERE account_id=? AND id=?", (14 if i % 4 == 0 else None, acc, c["id"]))
+        if i % 4 != 1:  # שיחה מתועדת אחרונה
+            day = T0 - (3 + (i * 5) % 20)
+            exe(db, "INSERT INTO pulse_events (account_id, day, t, type, text, client_id, user, ref) VALUES (?,?,?,?,?,?,?,?)",
+                (acc, day, now() - (T0 - day) * 86400, "note", "תיעוד שיחה: עדכון שוטף על הקמפיינים", c["id"], "דמו", "call"))
+        if i % 3 == 0:
+            due = T0 + [5, 2, 1, 0, -2, 9, 4, -5, 3, 12, 6, 1, 8, 15, -1, 7, 10][(i // 3) % 17]
+            exe(db, "INSERT INTO pulse_commitments (account_id, client_id, text, owner, due_day, source, created_by, created_at) VALUES (?,?,?,?,?,?,?,?)",
+                (acc, c["id"], DEMO_COMMIT[i % len(DEMO_COMMIT)], c["owner"], due, "demo", "דמו", now()))
+        sat = (2 if i == 8 else 1 if i == 30 else [4, 5, 3, 4, 5][i % 5]) if i % 2 == 0 else None
+        if sat:
+            exe(db, "UPDATE pulse_clients SET satisfaction=?, satisfaction_day=? WHERE account_id=? AND id=?", (sat, T0 - i % 9, acc, c["id"]))
+    bump(db, acc)
 
 
 def reset_demo_data(db: Database, acc: str) -> None:
@@ -229,7 +258,7 @@ def reset_demo_data(db: Database, acc: str) -> None:
     for cid in ids:
         delete_client(db, acc, cid)
     exe(db, "DELETE FROM pulse_team WHERE account_id=? AND is_demo=1", (acc,))
-    for t in ("pulse_events", "pulse_notifications", "pulse_automation_runs", "pulse_verifications"):
+    for t in ("pulse_events", "pulse_notifications", "pulse_automation_runs", "pulse_verifications", "pulse_seen"):
         exe(db, f"DELETE FROM {t} WHERE account_id=?", (acc,))
     exe(db, "DELETE FROM pulse_tasks WHERE account_id=? AND client_id NOT IN (SELECT id FROM pulse_clients WHERE account_id=?)", (acc, acc))
 
@@ -272,12 +301,91 @@ def analysis(db: Database, acc: str) -> dict:
                   (acc, frm, engine.iso_of(ref))):
         if d["client_id"] in by:
             by[d["client_id"]].append(d)
+    agency_th = w["settings"].get("thresholds", {})
+    for c in clients:  # ספי הסוכנות כברירת מחדל, ספי הלקוח גוברים
+        c["thresholds"] = {**agency_th, **(c.get("thresholds") or {})}
     run = engine.analyze_portfolio([(c, by[c["id"]]) for c in clients], ref)
     run["clients"] = {c["id"]: c for c in clients}
+    ops_overlay(db, acc, run, ref)
     if len(_cache) > 64:
         _cache.clear()
     _cache[key] = run
     return run
+
+
+# ================================================================ אותות תפעוליים (שיטת יובל: לא רק ביצועי קמפיין)
+OPS_TYPES = ("commitment", "contact", "satisfaction")
+
+
+def _ops_alert(cid: str, type_: str, sev: str, title: str, what: str, numbers: list, why: str, hyp: str, checks: list,
+               plan: list, success: str, days: int, period: str, priority_extra: float = 0) -> dict:
+    return {"type": type_, "severity": sev, "durationDays": days, "confidence": "גבוהה", "period": period, "title": title, "what": what,
+            "numbers": numbers, "why": why, "immediate": sev == "red", "key": f"{cid}:{type_}", "source": "ops",
+            "priority": (1000 if sev == "red" else 100) + min(days, 14) * 5 + priority_extra,
+            "inv": {"facts": [{"label": n[0], "before": n[1], "after": n[2], "change": None} for n in numbers], "drivers": [],
+                    "hypotheses": [{"text": hyp, "evidence": what, "support": "נתמך בנתוני המערכת", "share": 1}], "checks": checks,
+                    "plan": plan, "unknown": [], "success": {"text": success, "days": 1}, "engine": "rules"}}
+
+
+def ops_overlay(db: Database, acc: str, run: dict, ref: int) -> None:
+    """מוסיף לכל לקוח אותות שאינם ביצועי פרסום: התחייבויות באיחור, קשר עם הלקוח, שביעות רצון, בעיות חוזרות.
+    רק ממידע שקיים במערכת. אין מידע — אין אות (ולא 'ירוק' מומצא)."""
+    commits = rows(db, "SELECT * FROM pulse_commitments WHERE account_id=? AND status='open'", (acc,))
+    contacts = {r["client_id"]: r["d"] for r in rows(db, "SELECT client_id, MAX(day) d FROM pulse_events WHERE account_id=? AND type='note' AND ref IN ('call','meeting') GROUP BY client_id", (acc,))}
+    hist = rows(db, "SELECT key, history_json FROM pulse_alerts WHERE account_id=?", (acc,))
+    opened = {}
+    for h in hist:
+        opened[h["key"]] = sum(1 for e in uj(h["history_json"], []) if e["a"].startswith("זוהתה") and ref - e["day"] <= 60)
+    tm = team_map(db, acc)
+    for r in run["results"]:
+        c = run["clients"][r["id"]]
+        add = []
+        late = [x for x in commits if x["client_id"] == r["id"] and x["due_day"] < ref]
+        if late:
+            worst = max(ref - x["due_day"] for x in late)
+            first = min(late, key=lambda x: x["due_day"])
+            add.append(_ops_alert(r["id"], "commitment", "red" if worst >= 7 else "yellow", "התחייבות ללקוח באיחור",
+                                  f"{len(late)} התחייבויות שניתנו ללקוח לא בוצעו בזמן. הוותיקה: \"{first['text']}\" (יעד {fmt_day(first['due_day'])}).",
+                                  [["התחייבויות באיחור", "0", str(len(late))], ["ימי איחור מקסימליים", "", str(worst)]],
+                                  "הבטחה שלא קוימה פוגעת באמון הלקוח מהר יותר מכל מדד קמפיין.",
+                                  "ההתחייבות לא שויכה, נשכחה, או חסום משהו בצד שלנו", ["מי אחראי על ההתחייבות ומה חוסם אותה"],
+                                  [{"text": f"להשלים: {first['text']} (אחראי: {(tm.get(first['owner']) or {}).get('name', 'לא שויך')})", "actionType": "check"},
+                                   {"text": "לעדכן את הלקוח על מועד חדש", "actionType": "client_message"}],
+                                  "כל ההתחייבויות שבאיחור סומנו כבוצעו", worst, "התחייבויות פתוחות"))
+        every = c.get("contact_every_days")
+        if every:
+            last = contacts.get(r["id"])
+            gap = ref - last if last is not None else None
+            if gap is None or gap > every:
+                add.append(_ops_alert(r["id"], "contact", "yellow", "אין קשר עם הלקוח לפי התדירות שנקבעה",
+                                      (f"השיחה או הפגישה האחרונה שתועדה היא מלפני {gap} ימים" if gap is not None else "לא תועדה אף שיחה או פגישה") + f", והיעד הוא קשר כל {every} ימים.",
+                                      [["ימים מהקשר האחרון", f"עד {every}", str(gap) if gap is not None else "—"]],
+                                      "לקוח שלא שומע מאיתנו מרגיש שלא מטפלים בו, גם כשהקמפיינים בסדר.",
+                                      "אין שגרת עדכון קבועה ללקוח", ["מתי דיברנו לאחרונה ומה סוכם"],
+                                      [{"text": "לקבוע שיחת עדכון עם הלקוח ולתעד אותה בתיק", "actionType": "client_message"}],
+                                      "תועדה שיחה או פגישה עם הלקוח", min(gap or 30, 30), f"תדירות קשר: כל {every} ימים"))
+        sat = c.get("satisfaction")
+        if sat and sat <= 2:
+            add.append(_ops_alert(r["id"], "satisfaction", "red" if sat == 1 else "yellow", "שביעות רצון נמוכה",
+                                  f"שביעות הרצון שתועדה היא {sat} מתוך 5" + (f" (עודכן {fmt_day(c['satisfaction_day'])})" if c.get("satisfaction_day") else "") + ".",
+                                  [["שביעות רצון", "3–5", f"{sat}/5"]], "לקוח לא מרוצה הוא סיכון נטישה, גם כשהמספרים טובים.",
+                                  "פער ציפיות, תקשורת או תוצאות", ["מה גרם לחוסר שביעות הרצון לפי השיחה האחרונה"],
+                                  [{"text": "שיחת בירור של מנהל הסוכנות עם הלקוח", "actionType": "client_message"}],
+                                  "שביעות הרצון עודכנה ל-3 ומעלה", 7, "שביעות רצון מתועדת", 50))
+        r["alerts"].extend(add)
+        for a in r["alerts"]:
+            a["recurring"] = opened.get(a["key"], 0)
+        r["alerts"].sort(key=lambda a: -a["priority"])
+        if add:
+            r["status"] = engine.status_of(r["alerts"], r["lowData"], bool(r["days"]))
+            r["health"] = engine.health_score(r)
+            r["priority"] = r["alerts"][0]["priority"] + 10 * (len(r["alerts"]) - 1)
+    counts = {"green": 0, "yellow": 0, "red": 0, "nodata": 0, "improved": 0}
+    for r in run["results"]:
+        counts[r["status"]] += 1
+        counts["improved"] += 1 if r["improved"] else 0
+    run["counts"] = counts
+    run["results"].sort(key=lambda r: -r["priority"])
 
 
 def find_alert(run: dict, key: str) -> dict | None:
@@ -310,6 +418,7 @@ def run_check(db: Database, acc: str, manual: bool = False, user: str | None = N
     for k, title in cleared:
         ev(db, acc, ref, "cleared", "החריגה נעלמה, המדדים חזרו לטווח התקין: " + title, k.split(":")[0], ref=k)
     reopen_tasks(db, acc, fresh, ref)
+    record_status(db, acc, run, ref, t)
     log = automations(db, acc, run, w, ref, fresh, tm)
     verify_tasks(db, acc, run, ref)
     summary = {"t": t, "day": ref, "ms": run["ms"], "n": len(run["results"]), "new": len(fresh), "cleared": len(cleared),
@@ -318,6 +427,24 @@ def run_check(db: Database, acc: str, manual: bool = False, user: str | None = N
     if manual:
         ev(db, acc, ref, "check", f"בדיקה ידנית: {summary['n']} לקוחות נותחו ב-{summary['ms']} מ\"ש, {summary['new']} חריגות חדשות", user=user)
     return summary
+
+
+STATUS_HE = {"green": "תקין", "yellow": "במעקב", "red": "דחוף", "nodata": "אין מספיק מידע"}
+
+
+def record_status(db: Database, acc: str, run: dict, ref: int, t: float) -> None:
+    last = {r["client_id"]: r["status"] for r in rows(db, """SELECT client_id, status FROM pulse_status_history WHERE id IN
+              (SELECT MAX(id) FROM pulse_status_history WHERE account_id=? GROUP BY client_id)""", (acc,))}
+    for r in run["results"]:
+        prev = last.get(r["id"])
+        if prev == r["status"]:
+            continue
+        reason = (r["alerts"][0]["title"] if r["alerts"] else "אין מספיק נתונים לקביעת מצב" if r["status"] == "nodata"
+                  else "כל המדדים בטווח התקין")
+        exe(db, "INSERT INTO pulse_status_history (account_id, client_id, day, t, status, prev, reason) VALUES (?,?,?,?,?,?,?)",
+            (acc, r["id"], ref, t, r["status"], prev, reason))
+        if prev:
+            ev(db, acc, ref, "status", f"{r['name']}: {STATUS_HE[prev]} ← {STATUS_HE[r['status']]} ({reason})", r["id"])
 
 
 def reconcile(db: Database, acc: str, run: dict, ref: int, t: float) -> tuple[list, list]:
@@ -529,6 +656,7 @@ def open_task_for(db: Database, acc: str, key: str) -> dict | None:
 
 
 def _save_task(db: Database, t: dict) -> None:
+    exe(db, "UPDATE pulse_workspaces SET data_version=data_version+1 WHERE account_id=(SELECT account_id FROM pulse_tasks WHERE id=?)", (t["id"],))
     exe(db, """UPDATE pulse_tasks SET status=?, assignee=?, approved_by=?, due_day=?, done_day=?, recheck_day=?, closed_day=?,
                verification_json=?, history_json=?, minutes_spent=?, requires_approval=? WHERE id=?""",
         (t["status"], t["assignee"], t["approved_by"], t["due_day"], t["done_day"], t["recheck_day"], t["closed_day"],
@@ -630,11 +758,13 @@ def task_action(db: Database, acc: str, tid: str, action: str, *, user_name: str
         if not can_approve:
             return {"ok": False, "msg": "רק בעלים או מנהל בחשבון יכולים לאשר פעולה שמשנה קמפיין, תקציב או שולחת הודעה ללקוח"}
         t["approved_by"] = user_name
+        _decision(db, acc, t, "approve", user_name, ref, "; ".join(p["text"] for p in t["plan"] if p["actionType"] in SENSITIVE))
         _th(t, ref, user_name, "אישר/ה את הפעולה. הביצוע בחשבון המודעות ידני — Meta / Google לא מחוברים")
         return _mark_done(db, acc, t, user_name, ref, w)
     if action == "reject" and st == "awaiting_approval":
         if not can_approve:
             return {"ok": False, "msg": "אין הרשאה לדחות"}
+        _decision(db, acc, t, "reject", user_name, ref, str(extra) if extra else None)
         return go("in_progress", "הוחזר לטיפול ללא אישור" + (f": {extra}" if extra else ""))
     if action == "reassign" and st != "closed":
         if extra not in tm:
@@ -657,6 +787,11 @@ def task_action(db: Database, acc: str, tid: str, action: str, *, user_name: str
         t2 = get_task(db, acc, tid)
         return {"ok": True, "msg": "הבדיקה החוזרת בוצעה: " + ("הבעיה נפתרה ואומתה" if t2["status"] == "closed" else "המדד עדיין לא חזר ליעד")}
     return {"ok": False, "msg": f"הפעולה לא זמינה בסטטוס \"{STATUS.get(st, st)}\""}
+
+
+def _decision(db: Database, acc: str, t: dict, decision: str, by: str, ref: int, rationale: str | None) -> None:
+    exe(db, "INSERT INTO pulse_decisions (account_id, client_id, task_id, title, decision, by_name, rationale, day, t) VALUES (?,?,?,?,?,?,?,?,?)",
+        (acc, t["client_id"], t["id"], t["title"], decision, by, rationale, ref, now()))
 
 
 def _mark_done(db: Database, acc: str, t: dict, user_name: str, ref: int, w: dict) -> dict:
@@ -688,7 +823,12 @@ def verify_tasks(db: Database, acc: str, run: dict, ref: int, only: str | None =
         if not r:
             continue
         kind = t["alert_key"].split(":")[1]
-        res = engine.eval_success(r, kind, t["success"], t["done_day"], ref)
+        if kind in OPS_TYPES:  # אות תפעולי: הצליח אם האות כבר לא קיים
+            res = {"ok": not any(a["type"] == kind for a in r["alerts"]), "cpl": None, "leads": r["rec"]["leads"], "days": ref - t["done_day"]}
+        else:
+            res = engine.eval_success(r, kind, t["success"], t["done_day"], ref)
+        exe(db, "UPDATE pulse_decisions SET outcome=? WHERE account_id=? AND task_id=? AND decision='approve'",
+            ("אומת בנתונים" if res["ok"] else "הבדיקה החוזרת נכשלה", acc, t["id"]))
         t["verification"] = {"day": ref, "ok": res["ok"], "before": t["before"], "after": res}
         if res["ok"]:
             t["status"], t["closed_day"] = "closed", ref
@@ -1028,3 +1168,159 @@ def rolling_cpl(r: dict, days_n: int = 60, w: int = 7) -> list[dict]:
         out.append({"date": ds[i]["date"], "cpl": round(sp / ld, 1) if ld else None})
     return out
 
+
+
+# ================================================================ התחייבויות · אנשי קשר · שביעות רצון
+def add_commitment(db: Database, acc: str, cid: str, text: str, owner: str | None, due_in: int, by: str, source: str = "manual") -> dict:
+    ref = ref_day(ws(db, acc))
+    i = exe(db, "INSERT INTO pulse_commitments (account_id, client_id, text, owner, due_day, source, created_by, created_at) VALUES (?,?,?,?,?,?,?,?)",
+            (acc, cid, text, owner, ref + due_in, source, by, now()))
+    ev(db, acc, ref, "commitment", f"התחייבות ללקוח: {text} (יעד {fmt_day(ref + due_in)})", cid, by)
+    bump(db, acc)
+    return one(db, "SELECT * FROM pulse_commitments WHERE id=?", (i,))  # type: ignore[return-value]
+
+
+def set_commitment(db: Database, acc: str, cmid: int, status: str, by: str) -> bool:
+    r = one(db, "SELECT * FROM pulse_commitments WHERE account_id=? AND id=?", (acc, cmid))
+    if not r or status not in ("open", "done", "cancelled"):
+        return False
+    ref = ref_day(ws(db, acc))
+    exe(db, "UPDATE pulse_commitments SET status=?, done_day=? WHERE id=?", (status, ref if status == "done" else None, cmid))
+    ev(db, acc, ref, "commitment", ("בוצעה התחייבות: " if status == "done" else "בוטלה התחייבות: " if status == "cancelled" else "נפתחה מחדש: ") + r["text"], r["client_id"], by)
+    bump(db, acc)
+    return True
+
+
+def set_satisfaction(db: Database, acc: str, cid: str, score: int, by: str) -> None:
+    ref = ref_day(ws(db, acc))
+    exe(db, "UPDATE pulse_clients SET satisfaction=?, satisfaction_day=? WHERE account_id=? AND id=?", (score, ref, acc, cid))
+    ev(db, acc, ref, "note", f"עודכנה שביעות רצון: {score}/5", cid, by, "satisfaction")
+    bump(db, acc)
+
+
+# ================================================================ סקירת בוקר: מה השתנה מאז הכניסה הקודמת
+def touch_seen(db: Database, acc: str, user_id: str) -> float | None:
+    """מחזיר את זמן הכניסה הקודמת ומעדכן. כניסה תוך 20 דק' לא נחשבת כניסה חדשה (רענון)."""
+    r = one(db, "SELECT * FROM pulse_seen WHERE account_id=? AND user_id=?", (acc, user_id))
+    t = now()
+    if not r:
+        exe(db, "INSERT INTO pulse_seen (account_id, user_id, last_t, prev_t) VALUES (?,?,?,NULL)", (acc, user_id, t))
+        return None
+    if t - (r["last_t"] or 0) > 1200:
+        exe(db, "UPDATE pulse_seen SET prev_t=last_t, last_t=? WHERE account_id=? AND user_id=?", (t, acc, user_id))
+        return r["last_t"]
+    exe(db, "UPDATE pulse_seen SET last_t=? WHERE account_id=? AND user_id=?", (t, acc, user_id))
+    return r["prev_t"]
+
+
+def brief(db: Database, acc: str, since: float | None, can_approve: bool) -> dict:
+    run = analysis(db, acc)
+    ref = run["ref"]
+    tm = team_map(db, acc)
+    states = alert_rows(db, acc)
+    tasks = open_tasks(db, acc)
+    by_key = {t["alert_key"]: t for t in tasks}
+    since_t = since or 0
+    items: list[dict] = []
+
+    def add(score, kind, sev, title, detail, label, route=None, act=None, arg=None):
+        items.append({"score": score, "kind": kind, "severity": sev, "title": title, "detail": detail,
+                      "action": {"label": label, "route": route, "act": act, "arg": arg}})
+    changes = rows(db, "SELECT * FROM pulse_status_history WHERE account_id=? AND prev IS NOT NULL AND t>? ORDER BY id DESC", (acc, since_t)) if since else \
+        rows(db, "SELECT * FROM pulse_status_history WHERE account_id=? AND prev IS NOT NULL AND day>=? ORDER BY id DESC", (acc, ref - 1))
+    names = {r["id"]: r["name"] for r in run["results"]}
+    seen_c = set()
+    worse, better = [], []
+    rank = {"green": 0, "nodata": 0, "yellow": 1, "red": 2}
+    for ch in changes:
+        if ch["client_id"] in seen_c or ch["client_id"] not in names:
+            continue
+        seen_c.add(ch["client_id"])
+        (worse if rank[ch["status"]] > rank[ch["prev"] or "green"] else better).append(ch)
+    for ch in worse:
+        r = run["byId"][ch["client_id"]]
+        a = r["alerts"][0] if r["alerts"] else None
+        t = by_key.get(a["key"]) if a else None
+        add(900 if ch["status"] == "red" else 500, "worse", ch["status"], f"{names[ch['client_id']]} עבר ל{STATUS_HE[ch['status']]}",
+            ch["reason"] + (f" · {a['what']}" if a else ""), "פתח הסבר" if not t else "למשימה", route=f"client/{ch['client_id']}" if not t else f"task/{t['id']}")
+    for r in run["results"]:
+        for a in r["alerts"]:
+            if a["severity"] != "red" or r["id"] in seen_c:
+                continue
+            st = states.get(a["key"], {})
+            if st.get("status") in ("resolved", "dismissed"):
+                continue
+            t = by_key.get(a["key"])
+            if not t and not one(db, "SELECT 1 FROM pulse_tasks WHERE account_id=? AND client_id=? AND status!='closed'", (acc, r["id"])):
+                add(800 + a["priority"] / 100, "nohandler", "red", f"{r['name']}: {a['title']}", a["what"] + " אין עדיין מטפל.",
+                    "צור משימה", act="createTask", arg=a["key"])
+            elif t and t["due_day"] is not None and t["due_day"] < ref and t["status"] in ("new", "in_progress"):
+                add(700, "late", "red", f"משימה דחופה באיחור: {r['name']}", f"{a['title']} · אחראי: {(tm.get(t['assignee']) or {}).get('name', '—')} · {ref - t['due_day']} ימי איחור",
+                    "למשימה", route=f"task/{t['id']}")
+            elif t and t["status"] == "new":
+                add(600 + a["priority"] / 100, "notstarted", "red", f"{r['name']}: {a['title']}",
+                    f"{a['what']} המשימה אצל {(tm.get(t['assignee']) or {}).get('name', '—')} — הטיפול עוד לא התחיל.", "פתח הסבר", route=f"client/{r['id']}")
+            elif ref - st.get("first_day", ref) >= 3 and t and t["status"] != "awaiting_verification":
+                add(450, "stuck", "yellow", f"בעיה פתוחה {ref - st['first_day']} ימים: {r['name']}", a["title"], "למשימה", route=f"task/{t['id']}")
+            seen_c.add(r["id"])
+    for t in tasks:
+        if t["status"] == "awaiting_approval":
+            add(850 if can_approve else 300, "approval", "yellow", f"ממתין לאישור: {t['title']}",
+                "; ".join(p["text"] for p in t["plan"] if p["actionType"] in SENSITIVE), "בדוק ואשר" if can_approve else "צפה", route=f"task/{t['id']}")
+    for cm in rows(db, "SELECT * FROM pulse_commitments WHERE account_id=? AND status='open' AND due_day<=? ORDER BY due_day", (acc, ref + 1)):
+        if cm["client_id"] not in names:
+            continue
+        late = ref - cm["due_day"]
+        add(min(640, 500 + late * 20) if late > 0 else 400, "commitment", "red" if late >= 7 else "yellow",
+            f"התחייבות ל{names[cm['client_id']]}" + (f" באיחור {late} ימים" if late > 0 else " — היעד היום" if late == 0 else " — היעד מחר"),
+            f"{cm['text']} · אחראי: {(tm.get(cm['owner']) or {}).get('name', 'לא שויך')}", "סמן כבוצע", act="commitDone", arg=str(cm["id"]))
+    for t in [t for t in tasks if t["status"] == "awaiting_verification" and t["recheck_day"] is not None and t["recheck_day"] <= ref]:
+        add(380, "verify", "imp", f"בדיקה חוזרת מוכנה: {t['title']}", t["success"]["text"] if t.get("success") else "", "הרץ בדיקה חוזרת", act="task", arg=f"{t['id']}|recheck_now")
+    for ch in better[:3]:
+        add(200, "better", "green", f"{names[ch['client_id']]} השתפר ל{STATUS_HE[ch['status']]}", ch["reason"], "לתיק הלקוח", route=f"client/{ch['client_id']}")
+    for r in [r for r in run["results"] if r["improved"]][:2]:
+        add(150, "opportunity", "imp", f"הזדמנות: {r['name']}", r["improved"]["what"], "לבחון הרחבה", route=f"client/{r['id']}")
+    items.sort(key=lambda x: -x["score"])
+    ver = rows(db, "SELECT * FROM pulse_verifications WHERE account_id=? ORDER BY id DESC LIMIT 3", (acc,))
+    return {"since": since, "items": items[:8], "more": max(0, len(items) - 8), "counts": run["counts"],
+            "verified": [{"title": v["title"], "client_id": v["client_id"], "before": uj(v["before_json"], {}), "after": uj(v["after_json"], {})} for v in ver],
+            "ref": ref, "scan_ms": run["ms"], "clients": len(run["results"])}
+
+
+# ================================================================ ידע הסוכנות · היסטוריית החלטות
+ALERT_NAMES = {"cpl": "זינוק בעלות לליד", "no_leads": "אין לידים", "spend_up": "הוצאה בלי לידים", "ctr": "ירידת CTR", "cvr": "ירידה בהמרה",
+               "trend": "הידרדרות הדרגתית", "goal": "חריגה מיעד", "data": "חוסר נתונים", "no_sales": "לידים בלי מכירות",
+               "commitment": "התחייבות באיחור", "contact": "חוסר קשר עם לקוח", "satisfaction": "שביעות רצון נמוכה"}
+
+
+def knowledge(db: Database, acc: str) -> dict:
+    """מה עבד בעבר: טיפולים שאומתו בנתונים, לפי סוג בעיה + לקחים שתועדו ידנית."""
+    done = [task_obj(r) for r in rows(db, "SELECT * FROM pulse_tasks WHERE account_id=? AND status='closed' AND alert_key IS NOT NULL", (acc,))]
+    by: dict[str, dict] = {}
+    for t in done:
+        v = t.get("verification") or {}
+        kind = t["alert_key"].split(":")[1]
+        g = by.setdefault(kind, {"type": kind, "name": ALERT_NAMES.get(kind, kind), "fixed": 0, "failed_first": 0, "days": [], "actions": {}})
+        if v.get("ok"):
+            g["fixed"] += 1
+            g["days"].append((t.get("closed_day") or 0) - (t.get("created_day") or 0))
+            for p in t["plan"]:
+                g["actions"][p["text"]] = g["actions"].get(p["text"], 0) + 1
+        if any("נכשלה" in h["a"] or "עדיין לא חזר" in h["a"] for h in t["history"]):
+            g["failed_first"] += 1
+    out = []
+    for g in by.values():
+        out.append({"type": g["type"], "name": g["name"], "fixed": g["fixed"], "failed_first": g["failed_first"],
+                    "avg_days": round(sum(g["days"]) / len(g["days"]), 1) if g["days"] else None,
+                    "actions": sorted(g["actions"].items(), key=lambda x: -x[1])[:4]})
+    out.sort(key=lambda g: -g["fixed"])
+    lessons = rows(db, "SELECT * FROM pulse_notes WHERE account_id=? AND kind='lesson' ORDER BY id DESC LIMIT 50", (acc,))
+    return {"patterns": out, "lessons": lessons}
+
+
+def decisions(db: Database, acc: str, client_id: str | None = None) -> list[dict]:
+    q, a = "SELECT * FROM pulse_decisions WHERE account_id=?", [acc]
+    if client_id:
+        q += " AND client_id=?"
+        a.append(client_id)
+    return rows(db, q + " ORDER BY id DESC LIMIT 100", tuple(a))

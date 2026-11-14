@@ -13,8 +13,8 @@ from ..db import Database
 from . import engine, service as S
 from .engine import money, pct, sgn
 
-SUGGESTIONS = ["מה קורה היום במשרד?", "אילו לקוחות צריכים אותי?", "מה השתנה בשבוע האחרון?", "אילו עובדים עמוסים?",
-               "איפה אנחנו מפסידים כסף?", "אילו לקוחות כדאי לפתח?", "מי הידרדר הכי הרבה?"]
+SUGGESTIONS = ["מה קורה היום במשרד?", "אילו שלושה לקוחות הכי חשוב שאטפל בהם היום?", "מה השתנה בשבוע האחרון?", "איפה אנחנו מבזבזים הכי הרבה זמן?",
+               "אילו עובדים עמוסים?", "איפה אנחנו מפסידים כסף?", "אילו לקוחות כדאי לפתח?", "מי הידרדר הכי הרבה?"]
 
 
 def _match_client(q: str, run: dict) -> dict | None:
@@ -38,7 +38,7 @@ def rules_answer(db: Database, acc: str, q: str) -> dict:
     run = S.analysis(db, acc)
     tm = S.team_map(db, acc)
     q = (q or "").strip()
-    out: dict = {"text": "", "evidence": [], "links": [], "intent": "unknown", "follow": []}
+    out: dict = {"text": "", "evidence": [], "links": [], "intent": "unknown", "follow": [], "recommendations": [], "missing": []}
     cl = _match_client(q, run)
 
     def link(label: str, route: str):
@@ -66,10 +66,46 @@ def rules_answer(db: Database, acc: str, q: str) -> dict:
             out["text"] = f"{cl['name']}: {a['what']} ההסבר שהנתונים תומכים בו ביותר: {h['text']} ({h['support']})."
             out["evidence"] = [f"עובדה · {f['label']}: {f['before']} ← {f['after']} ({sgn(f['change'])})" for f in inv["facts"]
                                if f["change"] is not None and abs(f["change"]) >= 0.1]
-            out["evidence"] += [f"המלצה · {p['text']}" for p in inv["plan"][:2]]
-            out["evidence"].append("לא נבדק · " + inv["unknown"][0])
+            out["recommendations"] = [p["text"] for p in inv["plan"][:3]]
+            out["missing"] = inv["unknown"]
         link("פתח את תיק הלקוח", f"client/{cl['id']}")
         out["follow"] = [f"תכין לי סיכום לפגישה עם {cl['name']}"]
+        return out
+    if cl and re.search(r"חוזר|שוב ושוב|חוזרות", q):
+        out["intent"] = "recurring"
+        hist = S.rows(db, "SELECT type, history_json, status FROM pulse_alerts WHERE account_id=? AND client_id=?", (acc, cl["id"]))
+        rec = []
+        for h in hist:
+            n = sum(1 for e in S.uj(h["history_json"], []) if e["a"].startswith("זוהתה"))
+            rec.append((S.ALERT_NAMES.get(h["type"], h["type"]), n, h["status"]))
+        rec.sort(key=lambda x: -x[1])
+        rep = [x for x in rec if x[1] >= 2]
+        out["text"] = (f"אצל {cl['name']} יש {len(rep)} בעיות שחזרו יותר מפעם אחת." if rep else f"אצל {cl['name']} לא זוהתה בעיה שחזרה יותר מפעם אחת בהיסטוריה שבמערכת.")
+        out["evidence"] = [f"{n}: זוהתה {k} פעמים (מצב נוכחי: {S.STATUS_HE.get(st, st) if st in S.STATUS_HE else {'open': 'פתוחה', 'cleared': 'חזרה לתקין', 'resolved': 'נפתרה', 'in_progress': 'בטיפול', 'dismissed': 'שווא'}.get(st, st)})" for n, k, st in rec]
+        if rep:
+            out["recommendations"] = ["בעיה שחוזרת היא סימן שהטיפול הקודם טיפל בסימפטום. כדאי לבדוק את הסיבה בתיק הלקוח ובמאגר הידע"]
+        out["missing"] = ["ההיסטוריה מתחילה מהיום שבו הלקוח נכנס למערכת"]
+        link("פתח את תיק הלקוח", f"client/{cl['id']}")
+        return out
+    if re.search(r"זמן|מבזבז|שעות|עומס", q) and not re.search(r"עובד", q):
+        out["intent"] = "time"
+        tasks = S.all_tasks(db, acc)
+        mins: dict = {}
+        for t in tasks:
+            mins[t["client_id"]] = mins.get(t["client_id"], 0) + (t["minutes_spent"] or 0)
+        rows_ = []
+        for r in run["results"]:
+            c = run["clients"][r["id"]]
+            f = engine.profitability(c, r)
+            rows_.append((r, mins.get(r["id"], 0), f))
+        logged = sorted([x for x in rows_ if x[1]], key=lambda x: -x[1])[:4]
+        heavy = sorted([x for x in rows_ if x[2] and x[2]["hours"] and x[2]["fee"]], key=lambda x: -(x[2]["hours"] / x[2]["fee"]))[:4]
+        out["text"] = "איפה הולך הזמן: לפי שעות העבודה שהוגדרו לכל לקוח מול ההכנסה ממנו, ולפי זמן שתועד במשימות."
+        out["evidence"] = [f"{r['name']}: {round(f['hours'])} שעות בחודש מול הכנסה של {money(f['fee'])} (רווחיות {round((f['margin'] or 0) * 100)}%)" for r, _, f in heavy]
+        out["evidence"] += [f"{r['name']}: {m} דקות שתועדו במשימות" for r, m, _ in logged]
+        out["recommendations"] = ["ללקוחות עם הרבה שעות ורווחיות נמוכה: לבדוק היקף עבודה או תמחור"] if heavy else []
+        out["missing"] = ["זמן עבודה מדויק נמדד רק ממשימות שבהן תועד זמן; אין חיבור לשעון נוכחות"]
+        link("רווחיות", "profit")
         return out
     if re.search(r"היום במשרד|מה קורה|תמונת מצב|בוקר", q):
         out["intent"] = "today"
@@ -81,9 +117,9 @@ def rules_answer(db: Database, acc: str, q: str) -> dict:
             link(x["text"][:40] + "…", x["route"])
         out["follow"] = ["מה השתנה בשבוע האחרון?", "אילו עובדים עמוסים?"]
         return out
-    if re.search(r"דחו|צריכים אותי|הכי חשוב|בעיות|עדיפות|מה כדאי לעשות", q):
+    if re.search(r"דחו|צריכים אותי|הכי חשוב|בעיות|עדיפות|מה כדאי לעשות|לטפל|עכשיו", q):
         out["intent"] = "urgent"
-        top = S.top_actions(db, acc, run, 5)
+        top = S.top_actions(db, acc, run, 3 if re.search(r"שלוש|3", q) else 5)
         out["text"] = "הפעולות החשובות כרגע, לפי חומרה, תקציב, משך ומצב טיפול:" if top else "אין כרגע בעיות פתוחות."
         for i, x in enumerate(top):
             r = run["byId"][x["clientId"]]
@@ -190,16 +226,47 @@ def report_brief(db: Database, acc: str, r: dict) -> list[str]:
     return lines
 
 
-SCHEMA = {"type": "object", "properties": {"text": {"type": "string"}}, "required": ["text"], "additionalProperties": False}
-SYSTEM = ("אתה Ask ClientPulse, עוזר למנהל משרד פרסום. ענה בעברית פשוטה ותמציתית (עד 4 משפטים). "
-          "מותר להשתמש רק בעובדות שמופיעות ב-FACTS. אסור להמציא מספרים, שמות, סיבות או נתונים שלא מופיעים שם. "
-          "אם חסר מידע — אמור מה חסר. הפרד בין עובדה, השערה והמלצה.")
+SCHEMA = {"type": "object", "properties": {
+    "answer": {"type": "string"},
+    "facts": {"type": "array", "items": {"type": "string"}},
+    "estimates": {"type": "array", "items": {"type": "string"}},
+    "recommendations": {"type": "array", "items": {"type": "string"}},
+    "missing": {"type": "array", "items": {"type": "string"}}},
+    "required": ["answer", "facts", "estimates", "recommendations", "missing"], "additionalProperties": False}
+SYSTEM = ("אתה Ask ClientPulse, אנליסט עסקי של משרד פרסום. ענה בעברית פשוטה וקצרה. "
+          "מותר להשתמש רק במידע שב-CONTEXT. אסור להמציא מספרים, שמות, סיבות או נתונים. "
+          "facts = עובדות מתוך CONTEXT עם המספר והמקור (שם הלקוח / המדד). estimates = הערכות או השערות, מסומנות ככאלה. "
+          "recommendations = מה כדאי לעשות. missing = מידע שחסר כדי לענות טוב יותר. אם אין מספיק מידע — אמור זאת ב-answer.")
+
+
+def context_for(db: Database, acc: str, q: str) -> dict:
+    """תמצית נתוני המערכת שנשלחת למודל — רק מה שקיים, בלי פרטים אישיים מעבר לשמות לקוחות ועובדים."""
+    run = S.analysis(db, acc)
+    board = S.alert_board(db, acc)
+    tm = S.team_map(db, acc)
+    cl = _match_client(q, run)
+    ctx = {"date": engine.fmt_day(run["ref"]), "counts": run["counts"], "is_demo_data": any(r["is_demo"] for r in run["results"]),
+           "top_issues": [{k: c[k] for k in ("client", "title", "what", "started_label", "severity", "owner_name", "handled", "improved", "next")}
+                          for c in board["cards"][:12]],
+           "missing_now": [m["text"] for m in board["missing"][:10]],
+           "improved": [{"client": r["name"], "what": r["improved"]["what"]} for r in run["results"] if r["improved"]],
+           "team": [{k: m[k] for k in ("name", "open", "late", "not_started", "clients")} for m in S.workload(db, acc)],
+           "connected_sources": ["נתוני פרסום יומיים (דמו / CSV)"], "not_connected": ["Meta Ads API", "Google Ads API", "CRM", "יומן שינויים בחשבון המודעות"]}
+    if cl:
+        cards = [c for c in board["cards"] if c["client_id"] == cl["id"]]
+        ctx["client"] = {"name": cl["name"], "status": S.STATUS_HE[cl["status"]], "health": cl["health"]["score"],
+                         "cpl_7d": cl["rec"]["cpl"], "cpl_before": cl["base"]["cpl"], "leads_7d": cl["rec"]["leads"], "spend_7d": cl["rec"]["spend"],
+                         "target_cpl": cl["goals"].get("targetCpl"), "owner": (tm.get(cl["owner"]) or {}).get("name"), "issues": cards[:4],
+                         "status_history": [{k: h[k] for k in ("day", "status", "prev", "reason")} for h in
+                                            S.rows(db, "SELECT * FROM pulse_status_history WHERE account_id=? AND client_id=? ORDER BY id DESC LIMIT 8", (acc, cl["id"]))]}
+    return ctx
 
 
 async def ask(db: Database, acc: str, q: str, use_ai: bool = True) -> dict:
     base = rules_answer(db, acc, q)
     base["engine"] = "rules"
-    if not use_ai or base["intent"] == "unknown":
+    base.setdefault("facts", list(base.get("evidence", [])))
+    if not use_ai:
         return base
     try:
         from ..intelligence import engines
@@ -207,15 +274,19 @@ async def ask(db: Database, acc: str, q: str, use_ai: bool = True) -> dict:
     except Exception:  # noqa: BLE001
         eng = None
     if not eng:
+        if base["intent"] == "unknown":
+            base["missing"] = ["אין מודל AI מחובר: אפשר לשאול רק שאלות שמנוע הכללים מכיר. חיבור Gemini (חינמי) יאפשר כל שאלה"]
         return base
-    facts = {"question": q, "answer_from_rules": base["text"], "evidence": base["evidence"]}
+    payload = {"question": q, "CONTEXT": context_for(db, acc, q), "rules_engine_answer": {"text": base["text"], "evidence": base["evidence"]}}
     try:
-        data, _usage = await eng.structured(system=SYSTEM, content=[{"type": "text", "text": "FACTS:\n" + json.dumps(facts, ensure_ascii=False)}],
-                                            schema=SCHEMA, effort="low", max_tokens=1200)
-        txt = (data or {}).get("text", "").strip()
-        if txt:
-            base["text"] = txt
-            base["engine"] = f"{eng.id} ({eng.model})"
+        data, _usage = await eng.structured(system=SYSTEM, content=[{"type": "text", "text": json.dumps(payload, ensure_ascii=False, default=str)}],
+                                            schema=SCHEMA, effort="low", max_tokens=1800)
+        if data and data.get("answer"):
+            base.update({"text": data["answer"], "facts": data.get("facts") or base["evidence"], "estimates": data.get("estimates") or [],
+                         "recommendations": data.get("recommendations") or base.get("recommendations", []),
+                         "missing": data.get("missing") or base.get("missing", []), "engine": f"{eng.id} ({eng.model})"})
+            if base["intent"] == "unknown":
+                base["intent"] = "ai"
     except Exception as e:  # noqa: BLE001
         base["engine_error"] = f"המודל לא זמין ({type(e).__name__}) — הוצגה תשובת מנוע הכללים"
     return base

@@ -272,11 +272,7 @@ def analyze_client(c: dict, days: list[dict], ref: int) -> dict:
     if low_data:
         info.append(f"מעט נתונים: {base['leads']} לידים ב-3 השבועות שלפני. הספים הורחבו כדי לא להתריע על רעש.")
 
-    rank = {"red": 2, "yellow": 1}
-    status = "green"
-    for a in alerts:
-        if rank[a["severity"]] > rank.get(status, 0):
-            status = a["severity"]
+    status = status_of(alerts, low_data, bool(days))
     for a in alerts:
         a["key"] = f"{c['id']}:{a['type']}"
         a["priority"] = round((1000 if a["severity"] == "red" else 100) + math.log10(1 + rec["spend"]) * 20
@@ -291,6 +287,18 @@ def analyze_client(c: dict, days: list[dict], ref: int) -> dict:
            "sales28": b_s if b_s["has_sales"] else None}
     res["health"] = health_score(res, T)
     return res
+
+
+def status_of(alerts: list[dict], low_data: bool, has_days: bool) -> str:
+    """ירוק רק כשיש מספיק נתונים כדי לקבוע שהכול תקין. אחרת: 'אין מספיק מידע' — לא ירוק אוטומטי."""
+    rank = {"red": 2, "yellow": 1}
+    status = "green"
+    for a in alerts:
+        if rank[a["severity"]] > rank.get(status, 0):
+            status = a["severity"]
+    if status == "green" and (low_data or not has_days):
+        return "nodata"
+    return status
 
 
 def health_score(r: dict, T: dict | None = None) -> dict:
@@ -309,6 +317,8 @@ def health_score(r: dict, T: dict | None = None) -> dict:
     if r.get("improved"):
         parts.append({"label": "שיפור מובהק בעלות לליד", "points": 0})
     score = max(0, min(100, 100 + sum(p["points"] for p in parts)))
+    if r["status"] == "nodata":
+        return {"score": None, "parts": [], "formula": "אין מספיק נתונים לחישוב ציון בריאות", "confidence": "אין"}
     return {"score": score, "parts": [p for p in parts if p["points"]],
             "formula": "100 פחות קנס לכל התראה פתוחה (אדום 40, צהוב 15, חוסר נתונים 10–25) × רמת הביטחון (גבוהה 1, בינונית 0.8, נמוכה 0.6), ועוד קנס על חריגה מהיעד (עד 15).",
             "confidence": "נמוכה" if r["lowData"] else "גבוהה" if r["rec"]["n"] >= 7 else "בינונית"}
@@ -318,7 +328,7 @@ def analyze_portfolio(items: list[tuple[dict, list[dict]]], ref: int) -> dict:
     t0 = datetime.now().timestamp()
     results = [analyze_client(c, d, ref) for c, d in items]
     results.sort(key=lambda r: -r["priority"])
-    counts = {"green": 0, "yellow": 0, "red": 0, "improved": 0}
+    counts = {"green": 0, "yellow": 0, "red": 0, "nodata": 0, "improved": 0}
     excess = spend30 = 0.0
     for r in results:
         counts[r["status"]] += 1
@@ -332,6 +342,8 @@ def analyze_portfolio(items: list[tuple[dict, list[dict]]], ref: int) -> dict:
 
 # ---------------------------------------------------------------- חקירה: עובדות / השערות / בדיקות / תוכנית / מדד הצלחה
 def investigate(r: dict, a: dict) -> dict:
+    if a.get("inv"):  # אותות תפעוליים (התחייבויות, קשר, שביעות רצון) — החקירה נבנתה יחד עם האות
+        return a["inv"]
     w = a.get("window") or 7
     ref = r["lastIdx"] if r["lastIdx"] is not None else 0
     cur = stats([d for d in r["days"] if 0 <= ref - d["_i"] < w])

@@ -26,6 +26,7 @@ class ClientIn(BaseModel):
     hourly_cost: float | None = Field(None, ge=0, le=10000)
     other_costs_monthly: float | None = Field(None, ge=0, le=1e7)
     website: str | None = Field(None, max_length=300)
+    contact_every_days: int | None = Field(None, ge=1, le=180)
     platforms: list[str] | None = None
     thresholds: dict[str, float] | None = None
 
@@ -88,6 +89,42 @@ class MemberIn(BaseModel):
     name: str = Field(..., min_length=1, max_length=60)
     role: str = Field("עובד", max_length=40)
     approver: bool = False
+
+
+class CommitIn(BaseModel):
+    text: str = Field(..., min_length=2, max_length=300)
+    owner: str | None = Field(None, max_length=40)
+    due_in: int = Field(3, ge=0, le=180)
+
+
+class CommitPatch(BaseModel):
+    status: str = Field(..., pattern="^(open|done|cancelled)$")
+
+
+class ContactIn(BaseModel):
+    name: str = Field(..., min_length=1, max_length=80)
+    role: str | None = Field(None, max_length=60)
+    phone: str | None = Field(None, max_length=40)
+    email: str | None = Field(None, max_length=120)
+
+
+class SatIn(BaseModel):
+    score: int = Field(..., ge=1, le=5)
+
+
+class LessonIn(BaseModel):
+    text: str = Field(..., min_length=3, max_length=2000)
+
+
+class LoginIn(BaseModel):
+    name: str = Field(..., min_length=1, max_length=60)
+    email: str = Field(..., min_length=5, max_length=160)
+    password: str = Field(..., min_length=10, max_length=200)
+    role: str = Field("member", pattern="^(member|admin)$")
+
+
+class AgencyThIn(BaseModel):
+    thresholds: dict[str, float]
 
 
 class AssumptionsIn(BaseModel):
@@ -207,7 +244,8 @@ def register(app: FastAPI, db: Database) -> None:
                         "is_demo": r["is_demo"], "health": r["health"]["score"], "improved": bool(r["improved"]), "lowData": r["lowData"],
                         "alerts": [{"title": a["title"], "severity": a["severity"], "type": a["type"], "handling": (states.get(a["key"]) or {}).get("status")} for a in r["alerts"]],
                         "cpl": r["rec"]["cpl"], "base_cpl": r["base"]["cpl"], "leads": r["rec"]["leads"], "spend": r["rec"]["spend"],
-                        "target": r["goals"].get("targetCpl"), "lag": r["lag"], "source": c["source"], "priority": r["priority"]})
+                        "target": r["goals"].get("targetCpl"), "lag": r["lag"], "source": c["source"], "priority": r["priority"],
+                        "satisfaction": c.get("satisfaction")})
         return {"clients": out, "ref": run["ref"]}
 
     @app.post("/api/pulse/clients", status_code=201)
@@ -220,6 +258,8 @@ def register(app: FastAPI, db: Database) -> None:
     @app.patch("/api/pulse/clients/{cid}")
     def edit_client(cid: str, body: ClientIn, ctx: Ctx = Depends(current)):
         W(ctx)
+        if body.thresholds is not None and not can_approve(ctx):
+            raise HTTPException(403, "שינוי ספי הרמזור מותר לבעלים / מנהל")
         try:
             return S.upsert_client(db, ctx.account_id, body.model_dump(exclude_unset=True), cid)
         except KeyError:
@@ -277,6 +317,10 @@ def register(app: FastAPI, db: Database) -> None:
                 "drafts": store.rows(db, "SELECT * FROM pulse_drafts WHERE account_id=? AND client_id=? ORDER BY id DESC", (acc, cid)),
                 "opportunities": engine.opportunities(r, c), "profit": engine.profitability(c, r),
                 "risk": engine.churn_risk(r, list(states.values()), [t for t in tasks if t["status"] != "closed"], run["ref"]),
+                "contacts": store.rows(db, "SELECT * FROM pulse_contacts WHERE account_id=? AND client_id=? ORDER BY id", (acc, cid)),
+                "commitments": store.rows(db, "SELECT * FROM pulse_commitments WHERE account_id=? AND client_id=? ORDER BY status='open' DESC, due_day", (acc, cid)),
+                "status_history": store.rows(db, "SELECT * FROM pulse_status_history WHERE account_id=? AND client_id=? ORDER BY id DESC LIMIT 30", (acc, cid)),
+                "decisions": S.decisions(db, acc, cid),
                 "thresholds": {k: {"label": v[0], "min": v[1], "max": v[2], "default": engine.THRESHOLDS[k], "value": c["thresholds"].get(k)}
                                for k, v in engine.EDITABLE.items()},
                 "ref": run["ref"]}
@@ -289,8 +333,121 @@ def register(app: FastAPI, db: Database) -> None:
         store.exe(db, "INSERT INTO pulse_notes (account_id, client_id, kind, text, user_name, created_at) VALUES (?,?,?,?,?,?)",
                   (ctx.account_id, cid, body.kind, body.text, uname(ctx), store.now()))
         S.ev(db, ctx.account_id, S.ref_day(S.ws(db, ctx.account_id)), "note",
-             {"note": "הערה", "call": "תיעוד שיחה", "meeting": "סיכום פגישה", "decision": "החלטה"}[body.kind] + ": " + body.text[:80], cid, uname(ctx))
+             {"note": "הערה", "call": "תיעוד שיחה", "meeting": "סיכום פגישה", "decision": "החלטה"}[body.kind] + ": " + body.text[:80], cid, uname(ctx), body.kind)
+        S.bump(db, ctx.account_id)
         return {"ok": True}
+
+    # ---------------------------------------------------------------- סקירת בוקר · התחייבויות · אנשי קשר · שביעות רצון
+    @app.get("/api/pulse/brief")
+    def brief(ctx: Ctx = Depends(current)):
+        W(ctx)
+        since = S.touch_seen(db, ctx.account_id, ctx.user_id)
+        return S.brief(db, ctx.account_id, since, can_approve(ctx))
+
+    @app.get("/api/pulse/commitments")
+    def commitments(ctx: Ctx = Depends(current)):
+        W(ctx)
+        names = {c["id"]: c["name"] for c in S.list_clients(db, ctx.account_id)}
+        out = store.rows(db, "SELECT * FROM pulse_commitments WHERE account_id=? ORDER BY status='open' DESC, due_day", (ctx.account_id,))
+        for x in out:
+            x["client_name"] = names.get(x["client_id"], "—")
+        return {"commitments": out, "ref": S.ref_day(S.ws(db, ctx.account_id))}
+
+    @app.post("/api/pulse/clients/{cid}/commitments", status_code=201)
+    def add_commit(cid: str, body: CommitIn, ctx: Ctx = Depends(current)):
+        W(ctx)
+        if not S.get_client(db, ctx.account_id, cid):
+            raise HTTPException(404, "לקוח לא נמצא")
+        return S.add_commitment(db, ctx.account_id, cid, body.text, body.owner, body.due_in, uname(ctx))
+
+    @app.patch("/api/pulse/commitments/{cmid}")
+    def patch_commit(cmid: int, body: CommitPatch, ctx: Ctx = Depends(current)):
+        W(ctx)
+        if not S.set_commitment(db, ctx.account_id, cmid, body.status, uname(ctx)):
+            raise HTTPException(404, "התחייבות לא נמצאה")
+        return {"ok": True, "msg": {"done": "ההתחייבות סומנה כבוצעה", "cancelled": "ההתחייבות בוטלה", "open": "נפתחה מחדש"}[body.status]}
+
+    @app.post("/api/pulse/clients/{cid}/contacts", status_code=201)
+    def add_contact(cid: str, body: ContactIn, ctx: Ctx = Depends(current)):
+        W(ctx)
+        if not S.get_client(db, ctx.account_id, cid):
+            raise HTTPException(404, "לקוח לא נמצא")
+        store.exe(db, "INSERT INTO pulse_contacts (account_id, client_id, name, role, phone, email, created_at) VALUES (?,?,?,?,?,?,?)",
+                  (ctx.account_id, cid, body.name, body.role, body.phone, body.email, store.now()))
+        return {"ok": True}
+
+    @app.delete("/api/pulse/contacts/{coid}")
+    def del_contact(coid: int, ctx: Ctx = Depends(current)):
+        W(ctx)
+        if not store.exe(db, "DELETE FROM pulse_contacts WHERE account_id=? AND id=?", (ctx.account_id, coid)):
+            raise HTTPException(404, "איש קשר לא נמצא")
+        return {"ok": True}
+
+    @app.put("/api/pulse/clients/{cid}/satisfaction")
+    def satisfaction(cid: str, body: SatIn, ctx: Ctx = Depends(current)):
+        W(ctx)
+        if not S.get_client(db, ctx.account_id, cid):
+            raise HTTPException(404, "לקוח לא נמצא")
+        S.set_satisfaction(db, ctx.account_id, cid, body.score, uname(ctx))
+        return {"ok": True}
+
+    @app.get("/api/pulse/knowledge")
+    def knowledge(ctx: Ctx = Depends(current)):
+        W(ctx)
+        return S.knowledge(db, ctx.account_id)
+
+    @app.post("/api/pulse/knowledge", status_code=201)
+    def add_lesson(body: LessonIn, ctx: Ctx = Depends(current)):
+        W(ctx)
+        store.exe(db, "INSERT INTO pulse_notes (account_id, client_id, kind, text, user_name, created_at) VALUES (?,'','lesson',?,?,?)",
+                  (ctx.account_id, body.text, uname(ctx), store.now()))
+        return {"ok": True}
+
+    @app.get("/api/pulse/decisions")
+    def decisions(ctx: Ctx = Depends(current)):
+        W(ctx)
+        return S.decisions(db, ctx.account_id)
+
+    @app.put("/api/pulse/settings/thresholds")
+    def agency_thresholds(body: AgencyThIn, ctx: Ctx = Depends(current)):
+        w = W(ctx)
+        if not can_approve(ctx):
+            raise HTTPException(403, "שינוי ספי הרמזור מותר לבעלים / מנהל")
+        w["settings"]["thresholds"] = {k: v for k, v in body.thresholds.items() if k in engine.EDITABLE}
+        S.save_settings(db, ctx.account_id, w["settings"])
+        S.bump(db, ctx.account_id)
+        S.ev(db, ctx.account_id, S.ref_day(w), "automation", "עודכנו ספי הרמזור של הסוכנות", user=uname(ctx))
+        return {"ok": True}
+
+    @app.get("/api/pulse/settings/thresholds")
+    def get_agency_thresholds(ctx: Ctx = Depends(current)):
+        w = W(ctx)
+        cur = w["settings"].get("thresholds", {})
+        return {k: {"label": v[0], "min": v[1], "max": v[2], "default": engine.THRESHOLDS[k], "value": cur.get(k)} for k, v in engine.EDITABLE.items()}
+
+    @app.post("/api/pulse/team/login", status_code=201)
+    def team_login(body: LoginIn, ctx: Ctx = Depends(current)):
+        """יצירת כניסה לעובד בחשבון הסוכנות (בעלים / מנהל בלבד). התפקיד נאכף בשרת: member לא מאשר ולא משנה הגדרות."""
+        W(ctx)
+        if not can_approve(ctx):
+            raise HTTPException(403, "רק בעלים / מנהל יכולים להוסיף משתמשים")
+        from ..saas.auth import hash_password
+        email = body.email.strip().lower()
+        if "@" not in email:
+            raise HTTPException(422, "אימייל לא תקין")
+        if db.get_user_by_email(email):
+            raise HTTPException(409, "כבר קיים משתמש עם האימייל הזה")
+        uid = uuid.uuid4().hex
+        ts = store.now()
+        from datetime import datetime, timezone
+        iso = datetime.now(timezone.utc).isoformat()
+        store.exe(db, "INSERT INTO users (id, email, password_hash, name, created_at) VALUES (?,?,?,?,?)", (uid, email, hash_password(body.password), body.name, iso))
+        store.exe(db, "INSERT INTO memberships (user_id, account_id, role, created_at) VALUES (?,?,?,?)", (uid, ctx.account_id, body.role, iso))
+        store.exe(db, "INSERT INTO pulse_team (account_id, id, name, role, approver, user_id) VALUES (?,?,?,?,?,?)",
+                  (ctx.account_id, "u_" + uid[:8], body.name, "מנהל" if body.role == "admin" else "עובד", 1 if body.role == "admin" else 0, uid))
+        S.ev(db, ctx.account_id, S.ref_day(S.ws(db, ctx.account_id)), "automation", f"נוסף משתמש: {body.name} ({'מנהל' if body.role == 'admin' else 'עובד'})", user=uname(ctx))
+        _ = ts
+        return {"ok": True, "msg": f"נוצרה כניסה ל{body.name}. מסרו לו את האימייל והסיסמה."}
 
     # ---------------------------------------------------------------- התראות (משוב) · משימות
     @app.post("/api/pulse/alerts/feedback")

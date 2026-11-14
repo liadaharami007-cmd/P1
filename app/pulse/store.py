@@ -51,6 +51,20 @@ CREATE TABLE IF NOT EXISTS pulse_automation_runs (
 CREATE TABLE IF NOT EXISTS pulse_verifications (
     id INTEGER PRIMARY KEY AUTOINCREMENT, account_id TEXT NOT NULL, task_id TEXT, title TEXT, client_id TEXT, day INTEGER,
     ok INTEGER, before_json TEXT, after_json TEXT, detected_day INTEGER);
+CREATE TABLE IF NOT EXISTS pulse_contacts (
+    id INTEGER PRIMARY KEY AUTOINCREMENT, account_id TEXT NOT NULL, client_id TEXT NOT NULL, name TEXT NOT NULL, role TEXT,
+    phone TEXT, email TEXT, created_at REAL NOT NULL);
+CREATE TABLE IF NOT EXISTS pulse_commitments (
+    id INTEGER PRIMARY KEY AUTOINCREMENT, account_id TEXT NOT NULL, client_id TEXT NOT NULL, text TEXT NOT NULL, owner TEXT,
+    due_day INTEGER NOT NULL, status TEXT NOT NULL DEFAULT 'open', source TEXT, created_by TEXT, created_at REAL NOT NULL, done_day INTEGER);
+CREATE TABLE IF NOT EXISTS pulse_status_history (
+    id INTEGER PRIMARY KEY AUTOINCREMENT, account_id TEXT NOT NULL, client_id TEXT NOT NULL, day INTEGER NOT NULL, t REAL NOT NULL,
+    status TEXT NOT NULL, prev TEXT, reason TEXT);
+CREATE INDEX IF NOT EXISTS pulse_sh_acc ON pulse_status_history(account_id, client_id, id);
+CREATE TABLE IF NOT EXISTS pulse_decisions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT, account_id TEXT NOT NULL, client_id TEXT, task_id TEXT, title TEXT, decision TEXT NOT NULL,
+    by_name TEXT, rationale TEXT, day INTEGER, t REAL NOT NULL, outcome TEXT);
+CREATE TABLE IF NOT EXISTS pulse_seen (account_id TEXT NOT NULL, user_id TEXT NOT NULL, last_t REAL, prev_t REAL, PRIMARY KEY (account_id, user_id));
 CREATE TABLE IF NOT EXISTS pulse_notes (
     id INTEGER PRIMARY KEY AUTOINCREMENT, account_id TEXT NOT NULL, client_id TEXT NOT NULL, kind TEXT NOT NULL, text TEXT NOT NULL,
     user_name TEXT, created_at REAL NOT NULL);
@@ -59,11 +73,19 @@ CREATE TABLE IF NOT EXISTS pulse_notes (
 _ensured: set[str] = set()
 
 
+ADDED = {"pulse_clients": {"satisfaction": "INTEGER", "satisfaction_day": "INTEGER", "contact_every_days": "INTEGER", "notes_text": "TEXT"}}
+
+
 def ensure(db: Database) -> None:
     if db.path in _ensured and db.path != ":memory:":
         return
     with db._conn() as c:
         c.executescript(SCHEMA)
+        for table, cols in ADDED.items():
+            have = {r[1] for r in c.execute(f"PRAGMA table_info({table})")}
+            for col, typ in cols.items():
+                if col not in have:
+                    c.execute(f"ALTER TABLE {table} ADD COLUMN {col} {typ}")
     _ensured.add(db.path)
 
 
@@ -102,7 +124,8 @@ def client_obj(r: dict) -> dict:
             "goals": {"targetCpl": r["target_cpl"], "monthlyBudget": r["monthly_budget"]},
             "fee_monthly": r["fee_monthly"], "hours_monthly": r["hours_monthly"], "hourly_cost": r["hourly_cost"],
             "other_costs_monthly": r["other_costs_monthly"], "platforms": uj(r["platforms_json"], []), "website": r["website"],
-            "thresholds": uj(r["thresholds_json"], {}), "source": r["source"], "params": uj(r["params_json"])}
+            "thresholds": uj(r["thresholds_json"], {}), "source": r["source"], "params": uj(r["params_json"]),
+            "satisfaction": r.get("satisfaction"), "satisfaction_day": r.get("satisfaction_day"), "contact_every_days": r.get("contact_every_days")}
 
 
 def task_obj(r: dict) -> dict:
