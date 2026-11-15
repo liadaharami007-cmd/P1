@@ -440,3 +440,17 @@ details.more{margin-top:8px}details.more>summary{font-size:12.5px;color:var(--ac
 .says li::before{content:"";position:absolute;inset-inline-start:0;top:9px;width:7px;height:7px;border-radius:50%}.s-up::before{background:var(--g)}.s-down::before{background:var(--r)}
 .why .sv3{margin:10px 0}
 @media (max-width:900px){.two{grid-template-columns:1fr}.hello2{margin-top:4vh}.hello2 h1{font-size:26px}.tod{grid-template-columns:1fr}.sto{display:none}}
+/* ---- רמזור: שלוש עמודות, מקובץ לפי סיבה ---- */
+.board{max-width:1280px;margin:0 auto;display:flex;flex-direction:column;gap:18px}
+.bhead h2{font-size:28px;margin:0;letter-spacing:-.4px}.bhead .lead{font-size:16px;color:var(--tx2);margin:6px 0 0}
+.cols{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;align-items:start}
+.colm{display:flex;flex-direction:column;gap:8px;background:var(--card2);border:1px solid var(--line);border-radius:18px;padding:12px}
+.colh{display:flex;align-items:center;gap:12px;padding:6px 6px 10px}.colh>div{display:flex;flex-direction:column;flex:1}.colh b{font-size:17px}.coln{font-size:28px;font-weight:700}
+.colh .bulb{width:24px;height:24px}
+.cg{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:12px 14px}
+.cgh{display:flex;align-items:center;gap:10px;width:100%;text-align:start}.cgh b{flex:1;font-size:14.5px}.cgn{font-weight:700;font-size:16px}
+.cgm{font-size:12.5px;color:var(--tx2);margin-top:3px}
+.cgb{margin-top:10px;border-top:1px solid var(--line);padding-top:8px}.cgdo{font-size:13px;margin-bottom:6px;color:var(--tx2)}
+.cgi{display:flex;align-items:center;gap:8px;padding:6px 0;font-size:14px}.cgi a{color:var(--tx);font-weight:600}
+.proof2{font-size:13px;color:var(--tx2);border-top:1px solid var(--line);padding-top:14px;line-height:1.8}.proof2 a{margin-inline-start:8px}
+@media (max-width:1000px){.cols{grid-template-columns:1fr}}

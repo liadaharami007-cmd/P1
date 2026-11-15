@@ -78,15 +78,50 @@ V.home = async (view, p = {}) => {
   if (p.v === 'big' || p.v === 'today') return V.today(view);
   if (p.v === 'plan') return V.plan(view, p);
   if (p.v === 'focus') return V.focus(view);
-  const o = await api('/api/pulse/overview');
-  const sc = o.score || {}, hour = new Date().getHours(), greet = hour < 12 ? 'בוקר טוב' : hour < 18 ? 'צהריים טובים' : 'ערב טוב';
-  const ch = sc.prev != null ? sc.score - sc.prev : null;
-  view.innerHTML = `<div class="hello2">
-    <h1>${greet} ${esc(st.me.user.name)}, מה שלומך?</h1>
-    <p>עברתי על כל ${N(o.counts.red + o.counts.yellow + o.counts.green + o.counts.nodata)} הלקוחות שלך והכנתי לך את היום.</p>
-    <div class="two"><button class="big2" data-act="go" data-arg="home?v=today"><b>מה קורה היום</b><span>איך המשרד עומד, מה עלה, מה ירד</span></button>
-      <button class="big2 pri2" data-act="go" data-arg="home?v=plan"><b>מה עושים עכשיו</b><span>סדר עבודה מוכן — מה לפתור ראשון ולמה</span></button></div>
-    <div class="quiet2">ציון המשרד ${N(sc.score ?? '—')}${ch != null ? ` · ${ch >= 0 ? '▲' : '▼'} ${Math.abs(ch)} משבוע שעבר` : ''}</div></div>`;
+  const [ab, o, t] = await Promise.all([api('/api/pulse/alerts'), api('/api/pulse/overview'), api('/api/pulse/trend')]);
+  const hour = new Date().getHours(), greet = hour < 12 ? 'בוקר טוב' : hour < 18 ? 'צהריים טובים' : 'ערב טוב';
+  const byClient = {};
+  ab.cards.forEach((x) => { if (!byClient[x.client_id]) byClient[x.client_id] = x; });
+  const rows = ab.board.map((x) => ({ ...x, card: byClient[x.id], st: x.status === 'nodata' ? 'green' : x.status }));
+  const keyOf = (x) => (x.st === 'green' ? (x.status === 'nodata' ? 'data_missing' : x.suggest?.kind || 'keep') : x.card ? x.card.key.split(':')[1] : 'keep');
+  const col = (k) => {
+    const g = {};
+    rows.filter((x) => x.st === k).forEach((x) => { (g[keyOf(x)] = g[keyOf(x)] || []).push(x); });
+    return Object.entries(g).map(([gk, items]) => ({ gk, items, waste: items.reduce((s_, x) => s_ + (x.excess || 0), 0), pot: items.reduce((s_, x) => s_ + (x.card?.potential_leads || 0), 0),
+      open: items.filter((x) => x.card && (!x.card.task_id || x.card.task_status === 'new')).length }))
+      .sort((a1, z) => (a1.gk === 'keep') - (z.gk === 'keep') || (z.waste - a1.waste) || (z.items.length - a1.items.length));
+  };
+  const og = p.g || '';
+  const n = { red: o.counts.red, yellow: o.counts.yellow, green: o.counts.green + o.counts.nodata };
+  const meta = (k, g) => k === 'green' ? (g.gk === 'keep' ? 'אין צורך בפעולה' : g.items[0].suggest?.action || '')
+    : `${g.waste ? kfmt(g.waste) + ' התבזבזו השבוע · ' : g.pot ? '~' + g.pot + ' לידים בשבוע אפשר להחזיר · ' : ''}${g.open ? g.open + ' עוד לא בטיפול' : 'הכול בטיפול ✓'}`;
+  const doTxt = (k, g) => k === 'green' ? '' : k === 'red' ? g.items[0].card?.next : (g.items[0].card?.check?.[0] || g.items[0].card?.next);
+  const grp = (k, g) => {
+    const id = k + ':' + g.gk, open = og === id;
+    const bulk = k === 'green' ? g.items.filter((x) => x.suggest?.action).length : 0;
+    return `<div class="cg ${open ? 'open' : ''}"><button class="cgh" data-act="go" data-arg="home?g=${open ? '' : encodeURIComponent(id)}"><b>${esc(GROUP[g.gk] || g.gk)}</b><span class="cgn">${N(g.items.length)}</span></button>
+      <div class="cgm">${esc(meta(k, g))}</div>
+      ${open ? `<div class="cgb">${doTxt(k, g) ? `<div class="cgdo">מה עושים: <b>${esc(doTxt(k, g))}</b></div>` : ''}
+        ${g.items.map((x) => `<div class="cgi"><a href="#/client/${x.id}">${esc(x.name)}</a><span class="sp"></span>${k === 'green' ? '' : !x.card ? '' : x.card.task_id && !['new', 'in_progress'].includes(x.card.task_status) ? '<span class="note ok">✓</span>' : `<button class="btn sec sm" data-act="handle" data-arg="${esc(x.card.key)}|done">טיפלתי</button>`}</div>`).join('')}
+        ${bulk > 1 ? `<button class="btn sec sm" style="margin-top:8px" data-act="offerGroup" data-arg="${esc(g.gk)}">הכן הצעה לכל ה-${N(bulk)}</button>` : ''}</div>` : ''}</div>`;
+  };
+  const cols = ['red', 'yellow', 'green'];
+  const tm = o.time || {};
+  view.innerHTML = `<div class="board">
+  <div class="bhead"><h2>${greet} ${esc(st.me.user.name)}</h2>
+    <p class="lead">בדקתי הבוקר את כל ${N(n.red + n.yellow + n.green)} הלקוחות. ${n.red ? `${N(n.red)} צריכים אותך היום${o.excess > 0 ? `, ובגללם ${kfmt(o.excess)} התבזבזו השבוע` : ''}.` : 'אין היום שום דבר דחוף.'}</p></div>
+  <div class="cols">${cols.map((k) => `<div class="colm c-${k}"><div class="colh"><span class="bulb b-${k}"></span><div><b>${LIGHT[k].t}</b><span class="note">${LIGHT[k].sub}</span></div><span class="coln">${N(n[k])}</span></div>
+    ${col(k).map((g) => grp(k, g)).join('') || '<div class="note" style="padding:12px">אין</div>'}</div>`).join('')}</div>
+  <div class="proof2"><b>מה המערכת עשתה בשבילך השבוע:</b> בדקה ${N(n.red + n.yellow + n.green)} חשבונות ב-${N(o.ms)} מ"ש · תפסה ${N(t.since.detected)} בעיות לפני שהלקוח התקשר${o.excess > 0 ? ` · זיהתה ${kfmt(o.excess)} בזבוז` : ''} · חסכה כ-${N(Math.round((tm.saved_min || 0) / 6) / 10)} שעות בדיקה ידנית (הערכה)
+    <a href="#/home?v=today">גרף ופירוט ←</a></div></div>`;
+  st._rows = rows; st._keyOf = keyOf;
+};
+A.offerGroup = async (btn, gk) => {
+  const items = (st._rows || []).filter((x) => x.st === 'green' && st._keyOf(x) === gk && x.suggest?.action);
+  btn.disabled = true; btn.textContent = 'מכין…';
+  let k = 0;
+  for (const x of items) { try { await api('/api/pulse/tasks/manual', { method: 'POST', body: { client_id: x.id, title: x.suggest.action, source: 'opportunity', due_days: 7 } }); k++; } catch { /* */ } }
+  toast(`נוצרו ${k} משימות הצעה`); btn.outerHTML = '<span class="note ok">נוצרו ✓</span>';
 };
 
 // ================================================================ מה עושים עכשיו: תוכנית מסודרת לפי סיבה — לא רשימה של 200 אדומים
@@ -139,7 +174,7 @@ V.today = async (view) => {
     o.opps && ['up', `יש ${o.opps} הזדמנויות להרחבה אצל לקוחות תקינים.`],
   ].filter(Boolean);
   view.innerHTML = `<div class="mini wide">
-    <a class="back" href="#/home">‹ חזרה</a>
+    <a class="back" href="#/home">‹ לרמזור</a>
     <h2>מה קורה היום</h2>
     <div class="tod"><div class="score2"><span class="note">ציון המשרד</span><b>${N(sc.score ?? '—')}</b>${sc.prev != null ? `<span class="${sc.score >= sc.prev ? 'ok' : 'bad'}">${sc.score >= sc.prev ? '▲' : '▼'} ${Math.abs(sc.score - sc.prev)} משבוע שעבר</span>` : ''}
       <div class="mini3">${[['red', c.red], ['yellow', c.yellow], ['green', c.green + c.nodata]].map(([k, v]) => `<span><i class="dot d-${k}"></i>${N(v)}</span>`).join('')}</div></div>
