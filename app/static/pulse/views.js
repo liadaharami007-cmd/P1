@@ -75,32 +75,61 @@ const GROUP = { cpl: 'עלות לליד זינקה', no_leads: 'אין לידי�
 V.home = async (view, p = {}) => {
   if (p.v === 'big') return V.big(view);
   if (p.v === 'focus') return V.focus(view);
-  const [b, ab] = await Promise.all([api('/api/pulse/brief'), api('/api/pulse/alerts')]);
-  const c = b.counts, hour = new Date().getHours(), greet = hour < 12 ? 'בוקר טוב' : hour < 18 ? 'צהריים טובים' : 'ערב טוב';
+  const [b, ab, o] = await Promise.all([api('/api/pulse/brief'), api('/api/pulse/alerts'), api('/api/pulse/overview')]);
+  const c = b.counts, w = b.week || {}, wk = o.week, sc = o.score || {};
   const byClient = {};
   ab.cards.forEach((x) => { if (!byClient[x.client_id]) byClient[x.client_id] = x; });
   const rows = ab.board.map((x) => ({ ...x, card: byClient[x.id], st: x.status === 'nodata' ? 'green' : x.status }));
   const todo = (x) => x.card && (!x.card.task_id || x.card.task_status === 'new');
-  const n = { red: c.red, yellow: c.yellow, green: c.green + c.nodata };
-  if (!p.o) {
-    view.innerHTML = `<div class="mini">
-      <h2>${greet}, ${esc(st.me.user.name)}</h2>
-      <p class="lead">${c.red ? `${N(c.red)} לקוחות צריכים אותך היום.` : 'אין היום לקוחות דחופים.'}</p>
-      <div class="lite">${['red', 'yellow', 'green'].map((k) => `<button class="lrow2" data-act="go" data-arg="home?o=${k}"><span class="bulb b-${k}"></span><span class="lt">${LIGHT[k].t}</span><span class="ln2">${N(n[k])}</span><span class="chev">‹</span></button>`).join('')}</div>
-      <a class="quiet" href="#/home?v=big">התמונה הגדולה ←</a></div>`;
-    return;
-  }
-  const k = p.o, all = p.all === '1';
-  const l = rows.filter((x) => x.st === k).sort((a, z) => (todo(z) - todo(a)) || (z.card?.potential_leads || 0) - (a.card?.potential_leads || 0));
-  const list = all ? l : l.slice(0, 15);
-  const phrase = (x) => k === 'green' ? (x.status === 'nodata' ? 'אין מספיק נתונים' : (x.suggest?.kind === 'keep' ? 'יציב' : (GROUP[x.suggest?.kind] || 'יציב').split(' — ')[0])) : (x.card ? x.card.title : x.title);
-  const mark = (x) => (k === 'green' || !x.card ? '' : x.card.task_id && !['new'].includes(x.card.task_status) ? '<span class="tick">✓</span>' : '');
-  view.innerHTML = `<div class="mini">
-    <a class="back" href="#/home">‹ רמזור</a>
-    <div class="lhead3"><span class="bulb b-${k}"></span><h2>${LIGHT[k].t}</h2><span class="ln2">${N(l.length)}</span></div>
-    <p class="note">${LIGHT[k].sub}${k === 'red' && l.some(todo) ? ` · <a href="#/home?v=focus">לטפל אחד-אחד</a>` : ''}</p>
-    <div class="nlist">${list.map((x) => `<a class="nrow" href="#/client/${x.id}"><span class="nn">${esc(x.name)}</span><span class="np">${esc(phrase(x))}</span>${mark(x)}<span class="chev">‹</span></a>`).join('') || '<p class="tx2">אין לקוחות כאן.</p>'}</div>
-    ${l.length > 15 && !all ? `<a class="quiet" href="#/home?o=${k}&all=1">עוד ${N(l.length - 15)}</a>` : ''}</div>`;
+  const f = p.f || 'need', all = p.all === '1';
+  const pool = f === 'need' ? rows.filter((x) => x.st !== 'green') : rows.filter((x) => x.st === f);
+  pool.sort((a, z) => ({ red: 0, yellow: 1, green: 2 }[a.st] - { red: 0, yellow: 1, green: 2 }[z.st]) || (todo(z) - todo(a)) || (z.card?.potential_leads || 0) - (a.card?.potential_leads || 0));
+  const list = all ? pool : pool.slice(0, 8);
+  const pctOf = (t) => (t || '').match(/\(([+\-−]?\d+%)\)\s*$/)?.[1] || '';
+  const arrow = (cur, prev, goodUp) => {
+    if (cur == null || !prev) return '<span class="note">—</span>';
+    const x = Math.round((cur / prev - 1) * 100), up = x > 0, good = goodUp ? up : !up;
+    return x === 0 ? '<span class="note">ללא שינוי</span>' : `<span class="${good ? 'ok' : 'bad'}">${up ? '▲' : '▼'} ${Math.abs(x)}%</span>`;
+  };
+  const kpi = (l, v, ch) => `<div class="k4"><span class="note">${l}</span><b>${N(v)}</b>${ch}</div>`;
+  const action = (x) => {
+    if (x.st === 'green') return x.suggest?.action ? `<button class="btn sec sm" data-act="oppTask" data-arg="${x.id}|${esc(x.suggest.action)}">הצע</button>` : '';
+    if (!x.card) return '';
+    if (!x.card.task_id || x.card.task_status === 'new' || x.card.task_status === 'in_progress') return `<button class="btn ${x.st === 'red' ? 'pri' : 'sec'} sm" data-act="handle" data-arg="${esc(x.card.key)}|done">טיפלתי</button>`;
+    return '<span class="note ok">טופל ✓</span>';
+  };
+  const offers = rows.filter((x) => x.st === 'green' && x.suggest?.action);
+  const scoreCh = sc.prev != null ? sc.score - sc.prev : null;
+  view.innerHTML = `<div class="dash">
+  <div class="dhead">
+    <div class="score"><span class="note">ציון המשרד</span><b>${N(sc.score ?? '—')}<small>/100</small></b><span class="${scoreCh == null ? 'note' : scoreCh >= 0 ? 'ok' : 'bad'}">${scoreCh == null ? 'יתעדכן אחרי שבוע ראשון' : `${scoreCh >= 0 ? '▲ +' : '▼ '}${scoreCh} מהשבוע שעבר`}</span></div>
+    <div class="k4s">${kpi('לידים השבוע', (wk.leads || 0).toLocaleString(), arrow(wk.leads, wk.prev_leads, true))}${kpi('עלות לליד', money(wk.cpl), arrow(wk.cpl, wk.prev_cpl, false))}${kpi('הוצאה השבוע', money(wk.spend), arrow(wk.spend, wk.prev_spend, true).replace(/ok|bad/, 'note'))}${kpi('לקוחות בסיכון', o.risk.length + c.red, '<span class="note">דחוף + מגמת סיכון</span>')}</div>
+  </div>
+  <div class="tl3row">${[['red', 'דחוף', c.red], ['yellow', 'במעקב', c.yellow], ['green', 'תקין', c.green + c.nodata]].map(([k, t, n]) => `<button class="tlb2 ${f === k ? 'on' : ''}" data-act="go" data-arg="home?f=${f === k ? 'need' : k}"><span class="bulb b-${k}"></span><b>${N(n)}</b><span>${t}</span></button>`).join('')}</div>
+  <div class="dgrid">
+    <div class="card ttable">
+      <div class="tcap"><b>${f === 'need' ? 'מה לטפל היום' : f === 'green' ? 'תקינים — מה אפשר להציע' : f === 'red' ? 'דחוף' : 'במעקב'}</b><span class="note">${N(pool.length)} לקוחות${f === 'need' ? ' · הכי חשובים קודם' : ''}</span>${f !== 'need' ? '<a class="note" href="#/home">הצג הכול</a>' : ''}</div>
+      <div class="tr th t4"><span>לקוח</span><span>מה השתנה</span><span>${f === 'green' ? 'מה אפשר להציע' : 'מה לעשות'}</span><span></span></div>
+      ${list.map((x) => `<div class="tr t4"><a class="tn" href="#/client/${x.id}"><i class="dot d-${x.status}"></i> ${esc(x.name)}</a>
+        <span class="tx2">${x.st === 'green' ? (x.cpl ? `עלות לליד ${money(x.cpl)} ${arrow(x.cpl, x.base_cpl, false)}` : 'אין מספיק נתונים') : `${esc(x.card?.title || x.title)} <b class="bad">${esc(pctOf((x.card?.changed || [])[0]))}</b>`}</span>
+        <span>${esc(x.st === 'green' ? (x.suggest?.action || 'לשמור — אין צורך בפעולה') : x.card?.next || '')}</span><span class="ta">${action(x)}</span></div>`).join('') || '<div class="empty">אין כאן לקוחות</div>'}
+      ${pool.length > 8 && !all ? `<button class="tmore" data-act="go" data-arg="home?f=${f}&all=1">הצג עוד ${N(pool.length - 8)}</button>` : ''}
+    </div>
+    <div class="side">
+      <div class="card pad"><div class="note">השבוע</div><div class="sv3"><div><b>${N(w.detected || 0)}</b><span>בעיות זוהו</span></div><div><b>${N(w.handled || 0)}</b><span>טופלו</span></div><div><b>${N(w.improved || 0)}</b><span>השתפרו</span></div></div></div>
+      ${offers.length ? `<div class="card pad"><div class="note">הזדמנויות</div><p style="margin:6px 0 10px"><b>${N(offers.length)}</b> לקוחות תקינים שאפשר להציע להם הרחבה</p><button class="btn sec sm" data-act="offerAll">הכן הצעה לכולם</button></div>` : ''}
+      ${b.potential ? `<div class="card pad"><div class="note">פוטנציאל</div><p style="margin:6px 0 0">כ-<b>${N(b.potential.leads_week)}</b> לידים בשבוע אפשר להחזיר אצל ${N(b.potential.clients)} לקוחות <span class="note">(הערכה)</span></p></div>` : ''}
+      <a class="quiet" href="#/home?v=big">גרף 12 שבועות ←</a>
+    </div>
+  </div></div>`;
+  st._offers = offers;
+};
+A.offerAll = async (btn) => {
+  const items = st._offers || [];
+  btn.disabled = true; btn.textContent = 'מכין…';
+  let n = 0;
+  for (const x of items) { try { await api('/api/pulse/tasks/manual', { method: 'POST', body: { client_id: x.id, title: x.suggest.action, source: 'opportunity', due_days: 7 } }); n++; } catch { /* */ } }
+  toast(`נוצרו ${n} משימות הצעה — אחת לכל לקוח`); btn.outerHTML = '<span class="note ok">נוצרו ✓</span>';
 };
 A.bulk = async (btn, arg) => {
   const [k, g] = arg.split('|');
@@ -331,11 +360,15 @@ V.client = async (view, p) => {
     <div class="sp"></div><div class="row"><button class="btn sec sm" data-act="updDraft" data-arg="${c.id}">עדכון ללקוח</button>
       <details class="menu"><summary class="btn sec sm">עוד</summary><div class="menu-list"><a href="/api/pulse/reports/client/${c.id}.html?days=30" target="_blank" rel="noopener">דוח ללקוח</a><a href="/api/pulse/reports/client/${c.id}.pdf?days=30">PDF</a>
         <a href="#/meet/${c.id}">מצב פגישה עם הלקוח</a><a href="#/ask?q=${encodeURIComponent('למה ' + c.name + ' במצב הזה?')}">שאל על הלקוח</a>${c.is_demo ? `<a href="#/ads?client=${c.id}">ניתוח המודעות</a>` : ''}<button data-act="editClient" data-arg="${c.id}">הגדרות ויעדים</button></div></details></div></div>
+  <div class="k4s cl">${[['לידים 7 ימים', r.rec.leads, r.base.leads / 3, true, (v) => Math.round(v)], ['עלות לליד', r.rec.cpl, r.base.cpl, false, money], ['הוצאה 7 ימים', r.rec.spend, r.base.spend / 3, null, money]].map(([l, v, pv, gu, fm]) => {
+    const x = v != null && pv ? Math.round((v / pv - 1) * 100) : null;
+    return `<div class="k4"><span class="note">${l}</span><b>${N(v == null ? '—' : fm(v))}</b>${x == null ? '' : `<span class="${gu == null ? 'note' : (x > 0) === gu ? 'ok' : 'bad'}">${x > 0 ? '▲' : '▼'} ${Math.abs(x)}% <span class="note">מהרגיל</span></span>`}</div>`; }).join('')}</div>
   ${cd ? `<div class="card hero">
       <div class="hrow"><span class="hk">מה קרה</span><div class="hv big">${esc(cd.what)}</div></div>
       <div class="hrow"><span class="hk">מה לעשות</span><div class="hv"><b>${esc(cd.next)}</b>${cd.potential_leads ? `<div class="note">כ-${N(cd.potential_leads)} לידים בשבוע אפשר להחזיר</div>` : ''}</div></div>
       <div class="row" style="margin-top:14px">${!top.task || top.task.status === 'new' ? `<button class="btn pri" data-act="handle" data-arg="${esc(top.key)}|${top.task ? 'done' : 'start'}">${top.task ? 'טיפלתי ✓' : 'אני מטפל'}</button>` : top.task.status === 'in_progress' ? `<button class="btn pri" data-act="handle" data-arg="${esc(top.key)}|done">טיפלתי ✓</button>` : `<span class="ok">טופל ✓ · המערכת תבדוק אם זה השתפר</span>`}</div></div>`
     : `<div class="card hero"><div class="hv big">${r.status === 'nodata' ? 'אין מספיק נתונים כדי לקבוע מצב.' : r.improved ? esc(r.improved.what) : 'הכול תקין.'}</div>${(st._sugg = (d.opportunities[0] || null)) ? `<div class="hrow" style="margin-top:8px"><span class="hk">מה אפשר להציע</span><div class="hv">${esc(d.opportunities[0].action)}</div></div><div class="row" style="margin-top:12px"><button class="btn sec" data-act="oppTask" data-arg="${c.id}|${esc(d.opportunities[0].action)}">הפוך למשימה</button></div>` : ''}</div>`}
+  <div class="card pad" style="margin-bottom:14px"><div class="note">עלות לליד · 30 יום (ממוצע נע)${r.goals.targetCpl ? ' · קו ירוק = יעד' : ''}</div><div id="cl30"></div></div>
   <details class="moreinfo" ${p.tab ? 'open' : ''}><summary>עוד פרטים</summary>
   <div class="seg tabbar">${top ? tabBtn('issue', 'פרטי הבעיה', d.alerts.length) : ''}${tabBtn('perf', 'ביצועים')}${tabBtn('work', 'טיפול', d.tasks.filter((t) => t.status !== 'closed').length || '')}${tabBtn('about', 'הלקוח')}</div>
   <div class="tabpane">${tab === 'issue' ? d.alerts.map((a, i) => alertCard(a, d, i === 0)).join('')
@@ -358,6 +391,7 @@ V.client = async (view, p) => {
         <input type="file" accept=".csv,text/csv" id="csvF" class="inp" style="width:100%"><button class="btn sec sm" style="margin-top:8px" data-act="importCsv" data-arg="${c.id}">ייבוא</button><div id="csvR" class="note"></div></div>` : ''}</div></div>`}</div></details>`;
   // גרף
   const s = d.series, roll = d.rolling;
+  if ($('#cl30')) chart($('#cl30'), { labels: roll.map((x) => x.date.slice(8, 10) + '.' + Number(x.date.slice(5, 7))), target: r.goals.targetCpl, fmt: (v) => money(v), h: 170, series: [{ name: 'עלות לליד', color: 'var(--acc)', w: 2.4, vals: roll.map((x) => x.cpl) }] });
   if ($('#chartBox')) {
   const labels = s.map((x) => x.date.slice(8, 10) + '.' + Number(x.date.slice(5, 7)));
   if (metric === 'cpl') {

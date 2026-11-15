@@ -1489,3 +1489,16 @@ def client_trend_line(r: dict) -> str | None:
     ch = last / first - 1
     verdict = "משתפר" if ch <= -0.08 else "מידרדר" if ch >= 0.08 else "יציב"
     return f"עלות לליד ב-4 השבועות האחרונים: {' ← '.join(money(x) for x in ws)} · {verdict}"
+
+
+def office_score(db: Database, acc: str, run: dict) -> dict:
+    """ציון המשרד 0–100: ירוק = 100, צהוב = 50, אדום = 0 (בלי לקוחות שאין עליהם מספיק מידע). + הציון לפני שבוע מהיסטוריית הרמזור."""
+    def score(statuses: list[str]) -> int | None:
+        v = [{"green": 100, "yellow": 50, "red": 0}[x] for x in statuses if x in ("green", "yellow", "red")]
+        return round(sum(v) / len(v)) if v else None
+    now_ = score([r["status"] for r in run["results"]])
+    ref = run["ref"]
+    hist = rows(db, """SELECT client_id, status FROM pulse_status_history WHERE id IN (SELECT MAX(id) FROM pulse_status_history
+                       WHERE account_id=? AND day<=? GROUP BY client_id)""", (acc, ref - 7))
+    prev = score([h["status"] for h in hist]) if len(hist) >= max(3, len(run["results"]) // 2) else None
+    return {"score": now_, "prev": prev, "formula": "תקין = 100, במעקב = 50, דחוף = 0; ממוצע על כל הלקוחות שיש עליהם מספיק נתונים"}

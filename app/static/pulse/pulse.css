@@ -401,3 +401,20 @@ details.more{margin-top:8px}details.more>summary{font-size:12.5px;color:var(--ac
 .tick{color:var(--g);font-weight:700}
 .moreinfo>summary{cursor:pointer;color:var(--tx2);font-size:14px;margin:6px 0 12px}
 @media (max-width:900px){.mini{margin-top:8px}.lrow2{padding:18px}.nn{max-width:50%}}
+/* ---- Dashboard מקצועי במסך אחד ---- */
+.dash{display:flex;flex-direction:column;gap:16px;max-width:1240px;margin:0 auto}
+.dhead{display:grid;grid-template-columns:240px 1fr;gap:14px}
+.score{display:flex;flex-direction:column;gap:2px;padding:18px 20px;border:1px solid var(--line);border-radius:16px;background:var(--card)}
+.score b{font-size:44px;letter-spacing:-1px;line-height:1.1}.score small{font-size:16px;color:var(--mute);font-weight:500}
+.k4s{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}.k4s.cl{grid-template-columns:repeat(3,1fr);margin-bottom:14px}
+.k4{display:flex;flex-direction:column;gap:2px;padding:14px 16px;border:1px solid var(--line);border-radius:14px;background:var(--card);font-size:13px}.k4 b{font-size:24px;letter-spacing:-.4px}
+.tl3row{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+.tlb2{display:flex;align-items:center;gap:12px;padding:14px 18px;border:1px solid var(--line);border-radius:14px;background:var(--card);text-align:start}
+.tlb2 .bulb{width:22px;height:22px}.tlb2 b{font-size:24px}.tlb2 span:last-child{color:var(--tx2)}.tlb2.on{border-color:var(--tx);box-shadow:inset 0 0 0 1px var(--tx)}
+.dgrid{display:grid;grid-template-columns:1fr 280px;gap:16px;align-items:start}
+.tcap{display:flex;gap:12px;align-items:baseline;padding:14px 18px}.tcap b{font-size:16px}.tcap a{margin-inline-start:auto}
+.tr.t4{grid-template-columns:minmax(150px,1.1fr) 1.5fr 1.8fr 96px}.tr .tn .dot{width:8px;height:8px}
+.side{display:flex;flex-direction:column;gap:12px}.sv3{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:6px}.sv3 div{display:flex;flex-direction:column}.sv3 b{font-size:22px}.sv3 span{font-size:12px;color:var(--tx2)}
+@media (max-width:1100px){.dgrid{grid-template-columns:1fr}.dhead{grid-template-columns:1fr}}
+@media (max-width:900px){.k4s{grid-template-columns:repeat(2,1fr)}.k4s.cl{grid-template-columns:repeat(3,1fr)}.k4 b{font-size:19px}.tl3row{gap:6px}.tlb2{padding:10px;gap:8px;flex-wrap:wrap}.tlb2 b{font-size:20px}
+  .tr.t4{grid-template-columns:1fr auto}.tr.t4>span:nth-child(2),.tr.t4>span:nth-child(3){grid-column:1/-1}.tr.t4 .ta{grid-row:1;grid-column:2}}

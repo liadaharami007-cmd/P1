@@ -336,3 +336,13 @@ def test_office_trend_and_client_trend_line(make_client):
     cl = next(x for x in c.get("/api/pulse/clients").json()["clients"] if x["status"] == "green")
     line = c.get(f"/api/pulse/clients/{cl['id']}").json()["trend_line"]
     assert line is None or any(v in line for v in ("משתפר", "יציב", "מידרדר"))
+
+
+def test_office_score(make_client):
+    c = _login(make_client)
+    c.post("/api/pulse/demo")
+    s = c.get("/api/pulse/overview").json()["score"]
+    assert 0 <= s["score"] <= 100 and s["prev"] is None  # אין עדיין היסטוריה של שבוע
+    c.post("/api/pulse/lab/advance", json={"days": 7})
+    s2 = c.get("/api/pulse/overview").json()["score"]
+    assert s2["prev"] is not None

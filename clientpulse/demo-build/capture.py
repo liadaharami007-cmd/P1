@@ -14,7 +14,7 @@ reds = [t for t in tasks if t["severity"] == "red" and (t["alert_key"] or "").en
 # יום עבודה: אחד טופל ואומת, אחד ממתין לאישור, שניים בטיפול
 t0 = reds[0]["id"]
 for a in ("start", "submit", "approve", "simulate_fix"): P(f"/api/pulse/tasks/{t0}/{a}")
-P("/api/pulse/lab/advance", {"days": 4})
+P("/api/pulse/lab/advance", {"days": 8})
 tasks = c.get("/api/pulse/tasks").json()["tasks"]
 open_reds = [t for t in tasks if t["status"] == "new" and t["severity"] == "red"]
 if open_reds:

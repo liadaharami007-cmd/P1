@@ -235,7 +235,8 @@ def register(app: FastAPI, db: Database) -> None:
                 "week": {"spend": tw["spend"], "leads": tw["leads"], "cpl": tw["cpl"], "prev_spend": lw["spend"], "prev_leads": lw["leads"], "prev_cpl": lw["cpl"],
                          "sales": tw["sales"] if tw["has_sales"] else None, "prev_sales": lw["sales"] if lw["has_sales"] else None},
                 "changes": changes, "feed": feed, "last_run": w["last_run"], "demo": w["settings"].get("demo", False),
-                "time": _time_saved(w, len(res), run["counts"]["red"] + run["counts"]["yellow"], run["ms"])}
+                "time": _time_saved(w, len(res), run["counts"]["red"] + run["counts"]["yellow"], run["ms"]),
+                "score": S.office_score(db, acc, run)}
 
     # ---------------------------------------------------------------- לקוחות
     @app.get("/api/pulse/clients")
