@@ -78,7 +78,7 @@ V.home = async (view, p = {}) => {
   if (p.v === 'big' || p.v === 'today') return V.today(view);
   if (p.v === 'plan') return V.plan(view, p);
   if (p.v === 'focus') return V.focus(view);
-  const [ab, o, t] = await Promise.all([api('/api/pulse/alerts'), api('/api/pulse/overview'), api('/api/pulse/trend')]);
+  const [ab, o, t, im] = await Promise.all([api('/api/pulse/alerts'), api('/api/pulse/overview'), api('/api/pulse/trend'), api('/api/pulse/impact')]);
   const hour = new Date().getHours(), greet = hour < 12 ? 'בוקר טוב' : hour < 18 ? 'צהריים טובים' : 'ערב טוב';
   const byClient = {};
   ab.cards.forEach((x) => { if (!byClient[x.client_id]) byClient[x.client_id] = x; });
@@ -92,6 +92,8 @@ V.home = async (view, p = {}) => {
       .sort((a1, z) => (a1.gk === 'keep') - (z.gk === 'keep') || (z.waste - a1.waste) || (z.items.length - a1.items.length));
   };
   const og = p.g || '';
+  const scoreOf = (fix) => { const v = rows.filter((x) => x.status !== 'nodata').map((x) => (fix.has(x.id) ? 100 : { green: 100, yellow: 50, red: 0 }[x.status])); return v.length ? Math.round(v.reduce((a1, z) => a1 + z, 0) / v.length) : 0; };
+  const nowScore = scoreOf(new Set());
   const n = { red: o.counts.red, yellow: o.counts.yellow, green: o.counts.green + o.counts.nodata };
   const meta = (k, g) => k === 'green' ? (g.gk === 'keep' ? 'אין צורך בפעולה' : g.items[0].suggest?.action || '')
     : `${g.waste ? kfmt(g.waste) + ' התבזבזו השבוע · ' : g.pot ? '~' + g.pot + ' לידים בשבוע אפשר להחזיר · ' : ''}${g.open ? g.open + ' עוד לא בטיפול' : 'הכול בטיפול ✓'}`;
@@ -102,20 +104,49 @@ V.home = async (view, p = {}) => {
     return `<div class="cg ${open ? 'open' : ''}"><button class="cgh" data-act="go" data-arg="home?g=${open ? '' : encodeURIComponent(id)}"><b>${esc(GROUP[g.gk] || g.gk)}</b><span class="cgn">${N(g.items.length)}</span></button>
       <div class="cgm">${esc(meta(k, g))}</div>
       ${open ? `<div class="cgb">${doTxt(k, g) ? `<div class="cgdo">מה עושים: <b>${esc(doTxt(k, g))}</b></div>` : ''}
+        ${k !== 'green' ? `<div class="whatif">אם תטפל בקבוצה הזו: ציון המשרד <b>${N(nowScore)} ← ${N(scoreOf(new Set(g.items.map((x) => x.id))))}</b>${g.pot ? ` · כ-<b>${N(g.pot)}</b> לידים בשבוע חוזרים` : ''}${g.waste ? ` · נעצר בזבוז של ${kfmt(g.waste)} בשבוע` : ''} <span class="note">(הערכה)</span></div>` : ''}
         ${g.items.map((x) => `<div class="cgi"><a href="#/client/${x.id}">${esc(x.name)}</a><span class="sp"></span>${k === 'green' ? '' : !x.card ? '' : x.card.task_id && !['new', 'in_progress'].includes(x.card.task_status) ? '<span class="note ok">✓</span>' : `<button class="btn sec sm" data-act="handle" data-arg="${esc(x.card.key)}|done">טיפלתי</button>`}</div>`).join('')}
         ${bulk > 1 ? `<button class="btn sec sm" style="margin-top:8px" data-act="offerGroup" data-arg="${esc(g.gk)}">הכן הצעה לכל ה-${N(bulk)}</button>` : ''}</div>` : ''}</div>`;
   };
   const cols = ['red', 'yellow', 'green'];
   const tm = o.time || {};
+  const redIds = new Set(rows.filter((x) => x.st === 'red').map((x) => x.id)), allPot = rows.filter((x) => x.st === 'red').reduce((a1, x) => a1 + (x.card?.potential_leads || 0), 0);
+  const topRed = col('red')[0];
+  st._brief = [`${greet} ${st.me.user.name}.`, n.red ? `${n.red} לקוחות צריכים אותך היום${o.excess > 0 ? `, ובגללם התבזבזו השבוע ${kfmt(o.excess)}` : ''}.` : 'אין היום שום דבר דחוף.',
+    topRed ? `הכי חשוב: ${GROUP[topRed.gk] || topRed.gk} אצל ${topRed.items.length} לקוחות. מה לעשות: ${topRed.items[0].card?.next || ''}.` : '',
+    n.red ? `אם תטפל בכל הדחופים, ציון המשרד יעלה מ-${nowScore} ל-${scoreOf(redIds)}${allPot ? `, ויחזרו כ-${allPot} לידים בשבוע` : ''}.` : '',
+    o.opps ? `ויש ${o.opps} הזדמנויות להרחבה אצל לקוחות תקינים.` : ''].filter(Boolean);
   view.innerHTML = `<div class="board">
-  <div class="bhead"><h2>${greet} ${esc(st.me.user.name)}</h2>
+  <div class="hero3"><div class="h3l"><h2>${greet} ${esc(st.me.user.name)}</h2>
+    <button class="brief-btn" data-act="playBrief"><span class="pl">▶</span> תדריך בוקר · 30 שניות</button></div>
+    <div class="money"><span class="note">המערכת בשבילך עד עכשיו</span><b class="cnt" data-to="${Math.round(o.excess || 0)}">₪0</b><span>בזבוז שזוהה השבוע</span>
+      <div class="note">${N(im.verified)} תיקונים אומתו בנתונים${im.avoidedWeekly ? ` · חיסכון משוער ${kfmt(im.avoidedWeekly)} בשבוע` : ''} · ${N(t.since.detected)} בעיות נתפסו מוקדם</div></div></div>
+  ${n.red ? `<div class="whatif big">אם תטפל היום בכל ${N(n.red)} הדחופים: ציון המשרד <b>${N(nowScore)} ← ${N(scoreOf(redIds))}</b>${allPot ? ` · כ-<b>${N(allPot)}</b> לידים בשבוע חוזרים` : ''} <span class="note">(הערכה מהנתונים)</span></div>` : ''}
+  <div class="bhead" style="display:none"><h2>${greet} ${esc(st.me.user.name)}</h2>
     <p class="lead">בדקתי הבוקר את כל ${N(n.red + n.yellow + n.green)} הלקוחות. ${n.red ? `${N(n.red)} צריכים אותך היום${o.excess > 0 ? `, ובגללם ${kfmt(o.excess)} התבזבזו השבוע` : ''}.` : 'אין היום שום דבר דחוף.'}</p></div>
   <div class="cols">${cols.map((k) => `<div class="colm c-${k}"><div class="colh"><span class="bulb b-${k}"></span><div><b>${LIGHT[k].t}</b><span class="note">${LIGHT[k].sub}</span></div><span class="coln">${N(n[k])}</span></div>
     ${col(k).map((g) => grp(k, g)).join('') || '<div class="note" style="padding:12px">אין</div>'}</div>`).join('')}</div>
   <div class="proof2"><b>מה המערכת עשתה בשבילך השבוע:</b> בדקה ${N(n.red + n.yellow + n.green)} חשבונות ב-${N(o.ms)} מ"ש · תפסה ${N(t.since.detected)} בעיות לפני שהלקוח התקשר${o.excess > 0 ? ` · זיהתה ${kfmt(o.excess)} בזבוז` : ''} · חסכה כ-${N(Math.round((tm.saved_min || 0) / 6) / 10)} שעות בדיקה ידנית (הערכה)
     <a href="#/home?v=today">גרף ופירוט ←</a></div></div>`;
   st._rows = rows; st._keyOf = keyOf;
+  document.querySelectorAll('.cnt').forEach((el) => { const to = +el.dataset.to, t0 = performance.now(); const tick = (now) => { const k2 = Math.min(1, (now - t0) / 1200); el.textContent = '₪' + Math.round(to * (1 - Math.pow(1 - k2, 3))).toLocaleString(); if (k2 < 1) requestAnimationFrame(tick); }; requestAnimationFrame(tick); });
 };
+A.playBrief = () => {
+  const lines = st._brief || [];
+  modal(`<div class="briefm"><div class="bm-wave"><i></i><i></i><i></i><i></i><i></i></div><div id="bmText"></div><div class="row" style="margin-top:18px;justify-content:center"><button class="btn sec sm" data-act="stopBrief">סגור</button></div></div>`);
+  const box = document.getElementById('bmText');
+  let i = 0;
+  const show = () => { if (i >= lines.length) { document.querySelector('.bm-wave')?.classList.add('done'); return; } const p_ = document.createElement('p'); p_.textContent = lines[i]; p_.className = 'bm-line'; box.appendChild(p_); i++; };
+  try {
+    const sy = window.speechSynthesis;
+    if (!sy) throw new Error('no speech');
+    sy.cancel();
+    const voice = sy.getVoices().find((v) => v.lang && v.lang.startsWith('he'));
+    lines.forEach((l) => { const u = new SpeechSynthesisUtterance(l); u.lang = 'he-IL'; if (voice) u.voice = voice; u.rate = 1.02; u.onstart = show; sy.speak(u); });
+    setTimeout(() => { if (!box.children.length) { const iv = setInterval(() => { show(); if (i >= lines.length) clearInterval(iv); }, 1600); show(); } }, 900);
+  } catch { const iv = setInterval(() => { show(); if (i >= lines.length) clearInterval(iv); }, 1600); show(); }
+};
+A.stopBrief = () => { try { window.speechSynthesis?.cancel(); } catch { /* */ } closeModal(); };
 A.offerGroup = async (btn, gk) => {
   const items = (st._rows || []).filter((x) => x.st === 'green' && st._keyOf(x) === gk && x.suggest?.action);
   btn.disabled = true; btn.textContent = 'מכין…';
