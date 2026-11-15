@@ -47,7 +47,7 @@ V.focus = async (view) => {
   view.innerHTML = `<div class="calm focus">
   <div class="calm-head"><h2>${greet}, ${esc(st.me.user.name)}</h2>
     <div class="counts">${[['red', 'דחוף'], ['yellow', 'במעקב'], ['green', 'תקין']].map(([k, t]) => `<a href="#/queue?s=${k}"><i class="dot d-${k}"></i>${N(c[k])} ${t}</a>`).join('')}</div></div>
-  <a class="back" href="#/home?c=red">${ic('back', 14)} חזרה לרמזור</a>
+  <a class="back" href="#/home?v=plan">‹ חזרה לתוכנית</a>
   <div class="prog"><span><b>${N(w.handled_today || 0)}</b> טיפלת היום</span><span><b>${N(queue.length)}</b> נשארו</span>${b.potential ? `<span>~<b>${N(b.potential.leads_week)}</b> לידים בשבוע אפשר להחזיר</span>` : ''}</div>
   ${f ? `<div class="card fcard"><div class="row" style="gap:10px"><i class="dot d-${f.severity}" style="width:12px;height:12px"></i><span class="note">${f.severity === 'red' ? 'דחוף' : 'במעקב'} · הכי חשוב עכשיו</span></div>
     <h1>${esc(f.client)}</h1>
@@ -72,57 +72,86 @@ const GROUP = { cpl: 'עלות לליד זינקה', no_leads: 'אין לידי�
   contact: 'אין קשר עם הלקוח', satisfaction: 'שביעות רצון נמוכה', budget_headroom: 'תקציב לא מנוצל — אפשר להציע הגדלה',
   scale: 'מתחת ליעד — אפשר לגדול', lead_handling: 'הרבה לידים, מעט מכירות', pricing: 'רווחיות נמוכה', site_check: 'כדאי לבדוק את האתר',
   keep: 'יציבים — לשמור', data_missing: 'חסרים נתונים' };
+// ================================================================ פתיחה רגועה: שלום, ושני כפתורים
+const kfmt = (x) => (x >= 1000 ? `כ-₪${Math.round(x / 1000).toLocaleString()} אלף` : `₪${Math.round(x)}`);
 V.home = async (view, p = {}) => {
-  if (p.v === 'big') return V.big(view);
+  if (p.v === 'big' || p.v === 'today') return V.today(view);
+  if (p.v === 'plan') return V.plan(view, p);
   if (p.v === 'focus') return V.focus(view);
-  const [b, ab, o] = await Promise.all([api('/api/pulse/brief'), api('/api/pulse/alerts'), api('/api/pulse/overview')]);
-  const c = b.counts, w = b.week || {}, wk = o.week, sc = o.score || {};
+  const o = await api('/api/pulse/overview');
+  const sc = o.score || {}, hour = new Date().getHours(), greet = hour < 12 ? 'בוקר טוב' : hour < 18 ? 'צהריים טובים' : 'ערב טוב';
+  const ch = sc.prev != null ? sc.score - sc.prev : null;
+  view.innerHTML = `<div class="hello2">
+    <h1>${greet} ${esc(st.me.user.name)}, מה שלומך?</h1>
+    <p>עברתי על כל ${N(o.counts.red + o.counts.yellow + o.counts.green + o.counts.nodata)} הלקוחות שלך והכנתי לך את היום.</p>
+    <div class="two"><button class="big2" data-act="go" data-arg="home?v=today"><b>מה קורה היום</b><span>איך המשרד עומד, מה עלה, מה ירד</span></button>
+      <button class="big2 pri2" data-act="go" data-arg="home?v=plan"><b>מה עושים עכשיו</b><span>סדר עבודה מוכן — מה לפתור ראשון ולמה</span></button></div>
+    <div class="quiet2">ציון המשרד ${N(sc.score ?? '—')}${ch != null ? ` · ${ch >= 0 ? '▲' : '▼'} ${Math.abs(ch)} משבוע שעבר` : ''}</div></div>`;
+};
+
+// ================================================================ מה עושים עכשיו: תוכנית מסודרת לפי סיבה — לא רשימה של 200 אדומים
+V.plan = async (view, p = {}) => {
+  const ab = await api('/api/pulse/alerts');
   const byClient = {};
   ab.cards.forEach((x) => { if (!byClient[x.client_id]) byClient[x.client_id] = x; });
-  const rows = ab.board.map((x) => ({ ...x, card: byClient[x.id], st: x.status === 'nodata' ? 'green' : x.status }));
-  const todo = (x) => x.card && (!x.card.task_id || x.card.task_status === 'new');
-  const f = p.f || 'need', all = p.all === '1';
-  const pool = f === 'need' ? rows.filter((x) => x.st !== 'green') : rows.filter((x) => x.st === f);
-  pool.sort((a, z) => ({ red: 0, yellow: 1, green: 2 }[a.st] - { red: 0, yellow: 1, green: 2 }[z.st]) || (todo(z) - todo(a)) || (z.card?.potential_leads || 0) - (a.card?.potential_leads || 0));
-  const list = all ? pool : pool.slice(0, 8);
-  const pctOf = (t) => (t || '').match(/\(([+\-−]?\d+%)\)\s*$/)?.[1] || '';
-  const arrow = (cur, prev, goodUp) => {
-    if (cur == null || !prev) return '<span class="note">—</span>';
-    const x = Math.round((cur / prev - 1) * 100), up = x > 0, good = goodUp ? up : !up;
-    return x === 0 ? '<span class="note">ללא שינוי</span>' : `<span class="${good ? 'ok' : 'bad'}">${up ? '▲' : '▼'} ${Math.abs(x)}%</span>`;
+  const board = Object.fromEntries(ab.board.map((x) => [x.id, x]));
+  const g = {};
+  Object.values(byClient).forEach((cd) => { const k = cd.key.split(':')[1]; (g[k] = g[k] || []).push({ ...cd, b: board[cd.client_id] || {} }); });
+  const steps = Object.entries(g).map(([k, items]) => ({ k, items, red: items.some((x) => x.severity === 'red'),
+    waste: items.reduce((t, x) => t + (x.b.excess || 0), 0), pot: items.reduce((t, x) => t + (x.potential_leads || 0), 0),
+    open: items.filter((x) => !x.task_id || x.task_status === 'new').length }))
+    .sort((a, z) => (z.red - a.red) || (z.waste - a.waste) || (z.pot - a.pot) || (z.items.length - a.items.length));
+  const offers = ab.board.filter((x) => (x.status === 'green') && x.suggest?.action);
+  const openK = p.s || '', showAll = p.all === '1';
+  const why = (st_) => st_.waste > 0 ? `${kfmt(st_.waste)} התבזבזו השבוע — כסף יוצא ולא חוזר` : st_.pot ? `כ-${st_.pot} לידים בשבוע אפשר להחזיר` : (st_.items[0].evidence || []).slice(-1)[0] || '';
+  const step = (st_, i) => {
+    const isOpen = openK === st_.k, f = st_.items[0];
+    return `<div class="step ${isOpen ? 'open' : ''}"><button class="sth" data-act="go" data-arg="home?v=plan${isOpen ? '' : '&s=' + st_.k}">
+      <span class="sn">${i + 1}</span><span class="stt"><b>${esc(GROUP[st_.k] || f.title)} · ${N(st_.items.length)} לקוחות</b><span class="note">${esc(why(st_))}</span></span>
+      <span class="sto">${st_.open ? `${N(st_.open)} פתוחים` : '<span class="ok">הכול בטיפול ✓</span>'}</span><span class="chev">${isOpen ? '−' : '+'}</span></button>
+      ${isOpen ? `<div class="stb"><div class="stdo"><span class="note">מה עושים:</span> <b>${esc(f.next)}</b></div>
+        ${st_.items.map((x) => `<div class="gri"><i class="dot d-${x.severity}"></i><a href="#/client/${x.client_id}">${esc(x.client)}</a><span class="note">${x.b.excess ? kfmt(x.b.excess) + ' התבזבזו' : x.potential_leads ? '~' + x.potential_leads + ' לידים/שבוע' : ''}</span><span class="sp"></span>
+          ${!x.task_id || ['new', 'in_progress'].includes(x.task_status) ? `<button class="btn sec sm" data-act="handle" data-arg="${esc(x.key)}|done">טיפלתי</button>` : '<span class="note ok">טופל ✓</span>'}</div>`).join('')}</div>` : ''}</div>`;
   };
-  const kpi = (l, v, ch) => `<div class="k4"><span class="note">${l}</span><b>${N(v)}</b>${ch}</div>`;
-  const action = (x) => {
-    if (x.st === 'green') return x.suggest?.action ? `<button class="btn sec sm" data-act="oppTask" data-arg="${x.id}|${esc(x.suggest.action)}">הצע</button>` : '';
-    if (!x.card) return '';
-    if (!x.card.task_id || x.card.task_status === 'new' || x.card.task_status === 'in_progress') return `<button class="btn ${x.st === 'red' ? 'pri' : 'sec'} sm" data-act="handle" data-arg="${esc(x.card.key)}|done">טיפלתי</button>`;
-    return '<span class="note ok">טופל ✓</span>';
-  };
-  const offers = rows.filter((x) => x.st === 'green' && x.suggest?.action);
-  const scoreCh = sc.prev != null ? sc.score - sc.prev : null;
-  view.innerHTML = `<div class="dash">
-  <div class="dhead">
-    <div class="score"><span class="note">ציון המשרד</span><b>${N(sc.score ?? '—')}<small>/100</small></b><span class="${scoreCh == null ? 'note' : scoreCh >= 0 ? 'ok' : 'bad'}">${scoreCh == null ? 'יתעדכן אחרי שבוע ראשון' : `${scoreCh >= 0 ? '▲ +' : '▼ '}${scoreCh} מהשבוע שעבר`}</span></div>
-    <div class="k4s">${kpi('לידים השבוע', (wk.leads || 0).toLocaleString(), arrow(wk.leads, wk.prev_leads, true))}${kpi('עלות לליד', money(wk.cpl), arrow(wk.cpl, wk.prev_cpl, false))}${kpi('הוצאה השבוע', money(wk.spend), arrow(wk.spend, wk.prev_spend, true).replace(/ok|bad/, 'note'))}${kpi('לקוחות בסיכון', o.risk.length + c.red, '<span class="note">דחוף + מגמת סיכון</span>')}</div>
-  </div>
-  <div class="tl3row">${[['red', 'דחוף', c.red], ['yellow', 'במעקב', c.yellow], ['green', 'תקין', c.green + c.nodata]].map(([k, t, n]) => `<button class="tlb2 ${f === k ? 'on' : ''}" data-act="go" data-arg="home?f=${f === k ? 'need' : k}"><span class="bulb b-${k}"></span><b>${N(n)}</b><span>${t}</span></button>`).join('')}</div>
-  <div class="dgrid">
-    <div class="card ttable">
-      <div class="tcap"><b>${f === 'need' ? 'מה לטפל היום' : f === 'green' ? 'תקינים — מה אפשר להציע' : f === 'red' ? 'דחוף' : 'במעקב'}</b><span class="note">${N(pool.length)} לקוחות${f === 'need' ? ' · הכי חשובים קודם' : ''}</span>${f !== 'need' ? '<a class="note" href="#/home">הצג הכול</a>' : ''}</div>
-      <div class="tr th t4"><span>לקוח</span><span>מה השתנה</span><span>${f === 'green' ? 'מה אפשר להציע' : 'מה לעשות'}</span><span></span></div>
-      ${list.map((x) => `<div class="tr t4"><a class="tn" href="#/client/${x.id}"><i class="dot d-${x.status}"></i> ${esc(x.name)}</a>
-        <span class="tx2">${x.st === 'green' ? (x.cpl ? `עלות לליד ${money(x.cpl)} ${arrow(x.cpl, x.base_cpl, false)}` : 'אין מספיק נתונים') : `${esc(x.card?.title || x.title)} <b class="bad">${esc(pctOf((x.card?.changed || [])[0]))}</b>`}</span>
-        <span>${esc(x.st === 'green' ? (x.suggest?.action || 'לשמור — אין צורך בפעולה') : x.card?.next || '')}</span><span class="ta">${action(x)}</span></div>`).join('') || '<div class="empty">אין כאן לקוחות</div>'}
-      ${pool.length > 8 && !all ? `<button class="tmore" data-act="go" data-arg="home?f=${f}&all=1">הצג עוד ${N(pool.length - 8)}</button>` : ''}
-    </div>
-    <div class="side">
-      <div class="card pad"><div class="note">השבוע</div><div class="sv3"><div><b>${N(w.detected || 0)}</b><span>בעיות זוהו</span></div><div><b>${N(w.handled || 0)}</b><span>טופלו</span></div><div><b>${N(w.improved || 0)}</b><span>השתפרו</span></div></div></div>
-      ${offers.length ? `<div class="card pad"><div class="note">הזדמנויות</div><p style="margin:6px 0 10px"><b>${N(offers.length)}</b> לקוחות תקינים שאפשר להציע להם הרחבה</p><button class="btn sec sm" data-act="offerAll">הכן הצעה לכולם</button></div>` : ''}
-      ${b.potential ? `<div class="card pad"><div class="note">פוטנציאל</div><p style="margin:6px 0 0">כ-<b>${N(b.potential.leads_week)}</b> לידים בשבוע אפשר להחזיר אצל ${N(b.potential.clients)} לקוחות <span class="note">(הערכה)</span></p></div>` : ''}
-      <a class="quiet" href="#/home?v=big">גרף 12 שבועות ←</a>
-    </div>
-  </div></div>`;
-  st._offers = offers;
+  const shown = showAll ? steps : steps.slice(0, 5);
+  view.innerHTML = `<div class="mini wide">
+    <a class="back" href="#/home">‹ חזרה</a>
+    <h2>מה עושים עכשיו</h2><p class="lead">סידרתי את הכול לפי סיבה, ולפי כמה זה עולה לך. מתחילים מלמעלה.</p>
+    <div class="plansteps">${shown.map(step).join('') || '<p class="tx2">אין מה לטפל — הכול תקין.</p>'}
+    ${offers.length ? `<div class="step"><div class="sth static"><span class="sn ok">+</span><span class="stt"><b>הזדמנויות · ${N(offers.length)} לקוחות תקינים</b><span class="note">אפשר להציע להם הרחבה — זה כסף נוסף למשרד</span></span><button class="btn sec sm" data-act="offerAll">הכן הצעה לכולם</button></div></div>` : ''}</div>
+    ${steps.length > 5 && !showAll ? `<a class="quiet" href="#/home?v=plan&all=1">עוד ${N(steps.length - 5)} נושאים קטנים</a>` : ''}
+    <a class="quiet" href="#/home?v=focus">או: לטפל לקוח אחד בכל פעם ←</a></div>`;
+  st._offers = offers.map((x) => ({ id: x.id, suggest: x.suggest }));
+};
+
+// ================================================================ מה קורה היום: תמונת מצב שמוכיחה — במילים פשוטות + גרף
+V.today = async (view) => {
+  const [o, t, b] = await Promise.all([api('/api/pulse/overview'), api('/api/pulse/trend'), api('/api/pulse/brief')]);
+  const c = o.counts, wk = o.week, sc = o.score || {}, w = b.week || {}, n = c.red + c.yellow + c.green + c.nodata;
+  const pct = (a, z) => (a != null && z ? Math.round((a / z - 1) * 100) : null);
+  const lp = pct(wk.leads, wk.prev_leads), cp = pct(wk.cpl, wk.prev_cpl);
+  const lines = [
+    lp != null && [lp >= 0 ? 'up' : 'down', `לידים: ${wk.leads.toLocaleString()} השבוע, ${lp >= 0 ? 'עלייה' : 'ירידה'} של ${Math.abs(lp)}% משבוע שעבר.`],
+    cp != null && [cp <= 0 ? 'up' : 'down', `עלות לליד: ${money(wk.cpl)}, ${cp <= 0 ? 'זול יותר' : 'יקר יותר'} ב-${Math.abs(cp)}% משבוע שעבר.`],
+    o.excess > 0 && ['down', `בזבוז: ${kfmt(o.excess)} הלכו השבוע על קמפיינים עם בעיה.`],
+    c.red && ['down', `${c.red} לקוחות צריכים טיפול עכשיו, ${c.yellow} במעקב.`],
+    w.handled && ['up', `טופלו השבוע ${w.handled} בעיות${w.improved ? `, ${w.improved} מהן כבר השתפרו בפועל` : ''}.`],
+    o.opps && ['up', `יש ${o.opps} הזדמנויות להרחבה אצל לקוחות תקינים.`],
+  ].filter(Boolean);
+  view.innerHTML = `<div class="mini wide">
+    <a class="back" href="#/home">‹ חזרה</a>
+    <h2>מה קורה היום</h2>
+    <div class="tod"><div class="score2"><span class="note">ציון המשרד</span><b>${N(sc.score ?? '—')}</b>${sc.prev != null ? `<span class="${sc.score >= sc.prev ? 'ok' : 'bad'}">${sc.score >= sc.prev ? '▲' : '▼'} ${Math.abs(sc.score - sc.prev)} משבוע שעבר</span>` : ''}
+      <div class="mini3">${[['red', c.red], ['yellow', c.yellow], ['green', c.green + c.nodata]].map(([k, v]) => `<span><i class="dot d-${k}"></i>${N(v)}</span>`).join('')}</div></div>
+      <ul class="says">${lines.map(([k, txt]) => `<li class="s-${k}">${esc(txt)}</li>`).join('')}</ul></div>
+    <div class="card pad"><div class="note">לידים בשבוע · כל המשרד · 12 שבועות</div><div id="tdChart"></div></div>
+    <div class="card pad why"><b>מה המערכת עשתה בשבילך</b><div class="sv3">
+      <div><b>${N(n)}</b><span>חשבונות נבדקו אוטומטית, ב-${N(o.ms)} מ"ש</span></div>
+      <div><b>${N(t.since.detected)}</b><span>בעיות נתפסו לפני שהלקוח התקשר</span></div>
+      <div><b>~${N(Math.round((o.time?.saved_min || 0) / 6) / 10)} ש'</b><span>בדיקה ידנית נחסכה היום (הערכה)</span></div></div>
+      <p class="note">בלי המערכת: לפתוח ${N(n)} חשבונות מודעות, להשוות ידנית לשבועות קודמים, ולגלות בעיה רק כשהלקוח מתקשר.</p></div>
+    <a class="btn pri" style="align-self:flex-start" href="#/home?v=plan">למה שצריך לעשות עכשיו ←</a></div>`;
+  chart($('#tdChart'), { labels: t.weeks.map((x) => x.label), h: 190, fmt: (v) => Math.round(v).toLocaleString(), series: [{ name: 'לידים', color: 'var(--acc)', w: 2.6, vals: t.weeks.map((x) => x.leads) }] });
 };
 A.offerAll = async (btn) => {
   const items = st._offers || [];
