@@ -78,75 +78,46 @@ V.home = async (view, p = {}) => {
   if (p.v === 'big' || p.v === 'today') return V.today(view);
   if (p.v === 'plan') return V.plan(view, p);
   if (p.v === 'focus') return V.focus(view);
-  const [ab, o, t, im] = await Promise.all([api('/api/pulse/alerts'), api('/api/pulse/overview'), api('/api/pulse/trend'), api('/api/pulse/impact')]);
+  const [ab, o, t] = await Promise.all([api('/api/pulse/alerts'), api('/api/pulse/overview'), api('/api/pulse/trend')]);
   const hour = new Date().getHours(), greet = hour < 12 ? 'בוקר טוב' : hour < 18 ? 'צהריים טובים' : 'ערב טוב';
   const byClient = {};
   ab.cards.forEach((x) => { if (!byClient[x.client_id]) byClient[x.client_id] = x; });
   const rows = ab.board.map((x) => ({ ...x, card: byClient[x.id], st: x.status === 'nodata' ? 'green' : x.status }));
   const keyOf = (x) => (x.st === 'green' ? (x.status === 'nodata' ? 'data_missing' : x.suggest?.kind || 'keep') : x.card ? x.card.key.split(':')[1] : 'keep');
-  const col = (k) => {
+  const groupsOf = (k) => {
     const g = {};
     rows.filter((x) => x.st === k).forEach((x) => { (g[keyOf(x)] = g[keyOf(x)] || []).push(x); });
-    return Object.entries(g).map(([gk, items]) => ({ gk, items, waste: items.reduce((s_, x) => s_ + (x.excess || 0), 0), pot: items.reduce((s_, x) => s_ + (x.card?.potential_leads || 0), 0),
+    return Object.entries(g).map(([gk, items]) => ({ gk, items, pot: items.reduce((s_, x) => s_ + (x.card?.potential_leads || 0), 0),
       open: items.filter((x) => x.card && (!x.card.task_id || x.card.task_status === 'new')).length }))
-      .sort((a1, z) => (a1.gk === 'keep') - (z.gk === 'keep') || (z.waste - a1.waste) || (z.items.length - a1.items.length));
+      .sort((a1, z) => (a1.gk === 'keep') - (z.gk === 'keep') || (z.pot - a1.pot) || (z.items.length - a1.items.length));
   };
-  const og = p.g || '';
-  const scoreOf = (fix) => { const v = rows.filter((x) => x.status !== 'nodata').map((x) => (fix.has(x.id) ? 100 : { green: 100, yellow: 50, red: 0 }[x.status])); return v.length ? Math.round(v.reduce((a1, z) => a1 + z, 0) / v.length) : 0; };
-  const nowScore = scoreOf(new Set());
   const n = { red: o.counts.red, yellow: o.counts.yellow, green: o.counts.green + o.counts.nodata };
-  const meta = (k, g) => k === 'green' ? (g.gk === 'keep' ? 'אין צורך בפעולה' : g.items[0].suggest?.action || '')
-    : `${g.waste ? kfmt(g.waste) + ' התבזבזו השבוע · ' : g.pot ? '~' + g.pot + ' לידים בשבוע אפשר להחזיר · ' : ''}${g.open ? g.open + ' עוד לא בטיפול' : 'הכול בטיפול ✓'}`;
-  const doTxt = (k, g) => k === 'green' ? '' : k === 'red' ? g.items[0].card?.next : (g.items[0].card?.check?.[0] || g.items[0].card?.next);
-  const grp = (k, g) => {
-    const id = k + ':' + g.gk, open = og === id;
-    const bulk = k === 'green' ? g.items.filter((x) => x.suggest?.action).length : 0;
-    return `<div class="cg ${open ? 'open' : ''}"><button class="cgh" data-act="go" data-arg="home?g=${open ? '' : encodeURIComponent(id)}"><b>${esc(GROUP[g.gk] || g.gk)}</b><span class="cgn">${N(g.items.length)}</span></button>
-      <div class="cgm">${esc(meta(k, g))}</div>
-      ${open ? `<div class="cgb">${doTxt(k, g) ? `<div class="cgdo">מה עושים: <b>${esc(doTxt(k, g))}</b></div>` : ''}
-        ${k !== 'green' ? `<div class="whatif">אם תטפל בקבוצה הזו: ציון המשרד <b>${N(nowScore)} ← ${N(scoreOf(new Set(g.items.map((x) => x.id))))}</b>${g.pot ? ` · כ-<b>${N(g.pot)}</b> לידים בשבוע חוזרים` : ''}${g.waste ? ` · נעצר בזבוז של ${kfmt(g.waste)} בשבוע` : ''} <span class="note">(הערכה)</span></div>` : ''}
-        ${g.items.map((x) => `<div class="cgi"><a href="#/client/${x.id}">${esc(x.name)}</a><span class="sp"></span>${k === 'green' ? '' : !x.card ? '' : x.card.task_id && !['new', 'in_progress'].includes(x.card.task_status) ? '<span class="note ok">✓</span>' : `<button class="btn sec sm" data-act="handle" data-arg="${esc(x.card.key)}|done">טיפלתי</button>`}</div>`).join('')}
-        ${bulk > 1 ? `<button class="btn sec sm" style="margin-top:8px" data-act="offerGroup" data-arg="${esc(g.gk)}">הכן הצעה לכל ה-${N(bulk)}</button>` : ''}</div>` : ''}</div>`;
-  };
-  const cols = ['red', 'yellow', 'green'];
-  const tm = o.time || {};
-  const redIds = new Set(rows.filter((x) => x.st === 'red').map((x) => x.id)), allPot = rows.filter((x) => x.st === 'red').reduce((a1, x) => a1 + (x.card?.potential_leads || 0), 0);
-  const topRed = col('red')[0];
-  st._brief = [`${greet} ${st.me.user.name}.`, n.red ? `${n.red} לקוחות צריכים אותך היום${o.excess > 0 ? `, ובגללם התבזבזו השבוע ${kfmt(o.excess)}` : ''}.` : 'אין היום שום דבר דחוף.',
-    topRed ? `הכי חשוב: ${GROUP[topRed.gk] || topRed.gk} אצל ${topRed.items.length} לקוחות. מה לעשות: ${topRed.items[0].card?.next || ''}.` : '',
-    n.red ? `אם תטפל בכל הדחופים, ציון המשרד יעלה מ-${nowScore} ל-${scoreOf(redIds)}${allPot ? `, ויחזרו כ-${allPot} לידים בשבוע` : ''}.` : '',
-    o.opps ? `ויש ${o.opps} הזדמנויות להרחבה אצל לקוחות תקינים.` : ''].filter(Boolean);
-  view.innerHTML = `<div class="board">
-  <div class="hero3"><div class="h3l"><h2>${greet} ${esc(st.me.user.name)}</h2>
-    <button class="brief-btn" data-act="playBrief"><span class="pl">▶</span> תדריך בוקר · 30 שניות</button></div>
-    <div class="money"><span class="note">המערכת בשבילך עד עכשיו</span><b class="cnt" data-to="${Math.round(o.excess || 0)}">₪0</b><span>בזבוז שזוהה השבוע</span>
-      <div class="note">${N(im.verified)} תיקונים אומתו בנתונים${im.avoidedWeekly ? ` · חיסכון משוער ${kfmt(im.avoidedWeekly)} בשבוע` : ''} · ${N(t.since.detected)} בעיות נתפסו מוקדם</div></div></div>
-  ${n.red ? `<div class="whatif big">אם תטפל היום בכל ${N(n.red)} הדחופים: ציון המשרד <b>${N(nowScore)} ← ${N(scoreOf(redIds))}</b>${allPot ? ` · כ-<b>${N(allPot)}</b> לידים בשבוע חוזרים` : ''} <span class="note">(הערכה מהנתונים)</span></div>` : ''}
-  <div class="bhead" style="display:none"><h2>${greet} ${esc(st.me.user.name)}</h2>
-    <p class="lead">בדקתי הבוקר את כל ${N(n.red + n.yellow + n.green)} הלקוחות. ${n.red ? `${N(n.red)} צריכים אותך היום${o.excess > 0 ? `, ובגללם ${kfmt(o.excess)} התבזבזו השבוע` : ''}.` : 'אין היום שום דבר דחוף.'}</p></div>
-  <div class="cols">${cols.map((k) => `<div class="colm c-${k}"><div class="colh"><span class="bulb b-${k}"></span><div><b>${LIGHT[k].t}</b><span class="note">${LIGHT[k].sub}</span></div><span class="coln">${N(n[k])}</span></div>
-    ${col(k).map((g) => grp(k, g)).join('') || '<div class="note" style="padding:12px">אין</div>'}</div>`).join('')}</div>
-  <div class="proof2"><b>מה המערכת עשתה בשבילך השבוע:</b> בדקה ${N(n.red + n.yellow + n.green)} חשבונות ב-${N(o.ms)} מ"ש · תפסה ${N(t.since.detected)} בעיות לפני שהלקוח התקשר${o.excess > 0 ? ` · זיהתה ${kfmt(o.excess)} בזבוז` : ''} · חסכה כ-${N(Math.round((tm.saved_min || 0) / 6) / 10)} שעות בדיקה ידנית (הערכה)
-    <a href="#/home?v=today">גרף ופירוט ←</a></div></div>`;
+  const sel = p.c || 'red', og = p.g || '';
+  const how = (k, g) => k === 'green' ? (g.gk === 'keep' ? 'לשמור על הקיים' : g.items[0].suggest?.action || '') : k === 'red' ? g.items[0].card?.next : (g.items[0].card?.check?.[0] || g.items[0].card?.next);
+  const best = groupsOf('red')[0];
+  const w = t.weeks, last = w[w.length - 1], prev = w[w.length - 2];
+  const lchg = last && prev && prev.leads ? Math.round((last.leads / prev.leads - 1) * 100) : null;
+  const ROLE = { red: 'לטפל עכשיו — איך משפרים', yellow: 'לבדוק לפני שזה מחמיר', green: 'הכול טוב — איך עוזרים להם לגדול' };
+  const gs = groupsOf(sel);
+  view.innerHTML = `<div class="pro">
+  <div class="phead"><h2>${greet} ${esc(st.me.user.name)}</h2>
+    <p>${n.red ? `יש היום <b>${N(n.red)}</b> לקוחות שאפשר לשפר, <b>${N(n.yellow)}</b> לבדוק, ו-<b>${N(n.green)}</b> שאפשר לעזור להם לגדול.` : 'כל הלקוחות במצב טוב היום.'}</p></div>
+  <div class="card pchart"><div class="pc-l"><div class="note">לידים בשבוע · כל המשרד</div><div id="pChart"></div></div>
+    <div class="pc-r"><div class="note">מה רואים</div><p>${lchg == null ? 'אין עדיין מספיק שבועות.' : lchg < 0 ? `השבוע נכנסו ${N(last.leads.toLocaleString())} לידים, ${Math.abs(lchg)}% פחות משבוע שעבר.` : `השבוע נכנסו ${N(last.leads.toLocaleString())} לידים, ${lchg}% יותר משבוע שעבר.`}</p>
+      ${best ? `<div class="note">מה הכי ישפר</div><p><b>${esc(GROUP[best.gk] || best.gk)}</b> אצל ${N(best.items.length)} לקוחות${best.pot ? ` — כ-<b>${N(best.pot)}</b> לידים נוספים בשבוע` : ''}.</p>
+      <button class="btn pri sm" data-act="go" data-arg="home?c=red&g=${encodeURIComponent(best.gk)}">לשיפור ←</button>` : '<p>אין כרגע משהו דחוף לשפר.</p>'}</div></div>
+  <div class="lights4">${['red', 'yellow', 'green'].map((k) => `<button class="lc lc-${k} ${sel === k ? 'on' : ''}" data-act="go" data-arg="home?c=${k}"><span class="bulb b-${k}"></span><span class="lcn">${N(n[k])}</span><span class="lct"><b>${LIGHT[k].t}</b><span>${ROLE[k]}</span></span></button>`).join('')}</div>
+  <div class="card gtable"><div class="gt-h"><span class="bulb b-${sel}"></span><b>${LIGHT[sel].t}</b><span class="note">${ROLE[sel]}</span></div>
+    <div class="gtr gth"><span>${sel === 'green' ? 'הזדמנות' : 'נושא'}</span><span>לקוחות</span><span>${sel === 'green' ? 'איך עוזרים' : sel === 'red' ? 'איך משפרים' : 'מה בודקים'}</span><span>${sel === 'green' ? '' : 'פוטנציאל'}</span><span></span></div>
+    ${gs.map((g) => { const id = g.gk, open = og === id, bulk = sel === 'green' ? g.items.filter((x) => x.suggest?.action).length : 0;
+      return `<button class="gtr ${open ? 'on' : ''}" data-act="go" data-arg="home?c=${sel}${open ? '' : '&g=' + encodeURIComponent(id)}"><span><b>${esc(GROUP[g.gk] || g.gk)}</b></span><span>${N(g.items.length)}</span><span class="tx2">${esc(how(sel, g) || '—')}</span><span class="ok">${g.pot ? `+${N(g.pot)} לידים/שבוע` : ''}</span><span class="chev">${open ? '−' : '‹'}</span></button>
+      ${open ? `<div class="gtc">${g.items.map((x) => `<div class="cgi"><i class="dot d-${x.status}"></i><a href="#/client/${x.id}">${esc(x.name)}</a><span class="note">${x.card?.potential_leads ? `+${x.card.potential_leads} לידים/שבוע` : sel === 'green' && x.cpl ? `${x.leads} לידים · עלות לליד ${money(x.cpl)}` : ''}</span><span class="sp"></span>
+        ${sel === 'green' ? '' : !x.card ? '' : x.card.task_id && !['new', 'in_progress'].includes(x.card.task_status) ? '<span class="note ok">טופל ✓</span>' : `<button class="btn sec sm" data-act="handle" data-arg="${esc(x.card.key)}|done">טיפלתי</button>`}</div>`).join('')}
+        ${bulk > 1 ? `<button class="btn sec sm" style="margin-top:8px" data-act="offerGroup" data-arg="${esc(g.gk)}">הכן הצעה לכל ה-${N(bulk)}</button>` : ''}</div>` : ''}`; }).join('') || '<div class="empty">אין לקוחות כאן</div>'}</div>
+  <p class="note" style="text-align:center">נבדקו ${N(n.red + n.yellow + n.green)} לקוחות אוטומטית · <a href="#/home?v=today">פירוט מלא</a></p></div>`;
+  chart($('#pChart'), { labels: w.map((x) => x.label), h: 170, fmt: (v) => Math.round(v).toLocaleString(), series: [{ name: 'לידים', color: 'var(--acc)', w: 2.6, vals: w.map((x) => x.leads) }] });
   st._rows = rows; st._keyOf = keyOf;
-  document.querySelectorAll('.cnt').forEach((el) => { const to = +el.dataset.to, t0 = performance.now(); const tick = (now) => { const k2 = Math.min(1, (now - t0) / 1200); el.textContent = '₪' + Math.round(to * (1 - Math.pow(1 - k2, 3))).toLocaleString(); if (k2 < 1) requestAnimationFrame(tick); }; requestAnimationFrame(tick); });
 };
-A.playBrief = () => {
-  const lines = st._brief || [];
-  modal(`<div class="briefm"><div class="bm-wave"><i></i><i></i><i></i><i></i><i></i></div><div id="bmText"></div><div class="row" style="margin-top:18px;justify-content:center"><button class="btn sec sm" data-act="stopBrief">סגור</button></div></div>`);
-  const box = document.getElementById('bmText');
-  let i = 0;
-  const show = () => { if (i >= lines.length) { document.querySelector('.bm-wave')?.classList.add('done'); return; } const p_ = document.createElement('p'); p_.textContent = lines[i]; p_.className = 'bm-line'; box.appendChild(p_); i++; };
-  try {
-    const sy = window.speechSynthesis;
-    if (!sy) throw new Error('no speech');
-    sy.cancel();
-    const voice = sy.getVoices().find((v) => v.lang && v.lang.startsWith('he'));
-    lines.forEach((l) => { const u = new SpeechSynthesisUtterance(l); u.lang = 'he-IL'; if (voice) u.voice = voice; u.rate = 1.02; u.onstart = show; sy.speak(u); });
-    setTimeout(() => { if (!box.children.length) { const iv = setInterval(() => { show(); if (i >= lines.length) clearInterval(iv); }, 1600); show(); } }, 900);
-  } catch { const iv = setInterval(() => { show(); if (i >= lines.length) clearInterval(iv); }, 1600); show(); }
-};
-A.stopBrief = () => { try { window.speechSynthesis?.cancel(); } catch { /* */ } closeModal(); };
 A.offerGroup = async (btn, gk) => {
   const items = (st._rows || []).filter((x) => x.st === 'green' && st._keyOf(x) === gk && x.suggest?.action);
   btn.disabled = true; btn.textContent = 'מכין…';
@@ -169,7 +140,7 @@ V.plan = async (view, p = {}) => {
     .sort((a, z) => (z.red - a.red) || (z.waste - a.waste) || (z.pot - a.pot) || (z.items.length - a.items.length));
   const offers = ab.board.filter((x) => (x.status === 'green') && x.suggest?.action);
   const openK = p.s || '', showAll = p.all === '1';
-  const why = (st_) => st_.waste > 0 ? `${kfmt(st_.waste)} התבזבזו השבוע — כסף יוצא ולא חוזר` : st_.pot ? `כ-${st_.pot} לידים בשבוע אפשר להחזיר` : (st_.items[0].evidence || []).slice(-1)[0] || '';
+  const why = (st_) => st_.waste > 0 ? `כ-${st_.pot || 0} לידים בשבוע אפשר להחזיר` : st_.pot ? `כ-${st_.pot} לידים בשבוע אפשר להחזיר` : (st_.items[0].evidence || []).slice(-1)[0] || '';
   const step = (st_, i) => {
     const isOpen = openK === st_.k, f = st_.items[0];
     return `<div class="step ${isOpen ? 'open' : ''}"><button class="sth" data-act="go" data-arg="home?v=plan${isOpen ? '' : '&s=' + st_.k}">
@@ -199,7 +170,7 @@ V.today = async (view) => {
   const lines = [
     lp != null && [lp >= 0 ? 'up' : 'down', `לידים: ${wk.leads.toLocaleString()} השבוע, ${lp >= 0 ? 'עלייה' : 'ירידה'} של ${Math.abs(lp)}% משבוע שעבר.`],
     cp != null && [cp <= 0 ? 'up' : 'down', `עלות לליד: ${money(wk.cpl)}, ${cp <= 0 ? 'זול יותר' : 'יקר יותר'} ב-${Math.abs(cp)}% משבוע שעבר.`],
-    o.excess > 0 && ['down', `בזבוז: ${kfmt(o.excess)} הלכו השבוע על קמפיינים עם בעיה.`],
+    
     c.red && ['down', `${c.red} לקוחות צריכים טיפול עכשיו, ${c.yellow} במעקב.`],
     w.handled && ['up', `טופלו השבוע ${w.handled} בעיות${w.improved ? `, ${w.improved} מהן כבר השתפרו בפועל` : ''}.`],
     o.opps && ['up', `יש ${o.opps} הזדמנויות להרחבה אצל לקוחות תקינים.`],
