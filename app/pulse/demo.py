@@ -11,11 +11,11 @@ import random
 
 from .engine import iso_of
 
-TEAM = [
-    {"id": "niv", "name": "ניב", "role": "בעלים", "approver": True},
-    {"id": "yuval", "name": "יובל", "role": "מנהל תפעול", "approver": True},
-    {"id": "dana", "name": "דנה", "role": "מנהלת קמפיינים", "approver": False},
-    {"id": "omer", "name": "עומר", "role": "מנהל קמפיינים", "approver": False},
+TEAM = [  # קמפיינרים (מדומים). המשתמש המחובר (ניב) הוא המנהל ולא מחזיק לקוחות בעצמו
+    {"id": "dana", "name": "דנה", "role": "קמפיינרית", "approver": False},
+    {"id": "omer", "name": "עומר", "role": "קמפיינר", "approver": False},
+    {"id": "shiran", "name": "שירן", "role": "קמפיינרית", "approver": False},
+    {"id": "avi", "name": "אבי", "role": "קמפיינר", "approver": False},
 ]
 TYPES = ["מרפאת שיניים", "סטודיו פילאטיס", "משרד עורכי דין", 'שיווק נדל"ן', "מכון כושר", "קבלן שיפוצים", 'משרד רו"ח', "מטבחים",
          "קוסמטיקה", "גני אירועים", "סוכנות ביטוח", "אנרגיה סולארית", "אופטיקה", "פיזיותרפיה", "קורסים אונליין", "השכרת רכב",
@@ -25,7 +25,7 @@ NAMES = ["כהן", "לוי", "מזרחי", "פרץ", "ביטון", "אברהם",
 SCEN = [("healthy", 24), ("cpl_spike", 5), ("no_leads", 4), ("gradual", 5), ("improved", 4), ("low_data", 3), ("multi", 2),
         ("data_gap", 1), ("no_sales", 2)]
 CAUSES = ["cvr", "cpm", "ctr", "cvr", "cpm"]
-OWNERS = ["dana", "omer", "dana", "omer", "yuval"]
+OWNERS = ["dana", "omer", "shiran", "avi", "dana", "omer", "shiran"]
 
 # תרחישי Demo Lab (מופעלים על לקוח ירוק שנבחר)
 SCENARIOS = [

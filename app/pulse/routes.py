@@ -132,6 +132,11 @@ class AgencyThIn(BaseModel):
     thresholds: dict[str, float]
 
 
+class HandoverIn(BaseModel):
+    frm: str = Field(..., max_length=40)
+    to: str = Field(..., max_length=40)
+
+
 class AssumptionsIn(BaseModel):
     minPerClient: float = Field(..., ge=0, le=120)
     minPerAlert: float = Field(..., ge=0, le=240)
@@ -680,6 +685,18 @@ def register(app: FastAPI, db: Database) -> None:
         w["settings"]["assumptions"] = body.model_dump()
         S.save_settings(db, ctx.account_id, w["settings"])
         return {"ok": True}
+
+    @app.get("/api/pulse/team/perf")
+    def team_perf(ctx: Ctx = Depends(current)):
+        W(ctx)
+        return S.team_perf(db, ctx.account_id)
+
+    @app.post("/api/pulse/team/handover")
+    def handover(body: HandoverIn, ctx: Ctx = Depends(current)):
+        W(ctx)
+        if not can_approve(ctx):
+            raise HTTPException(403, "מסירה בין קמפיינרים מותרת למנהל")
+        return S.handover(db, ctx.account_id, body.frm, body.to, uname(ctx))
 
     @app.get("/api/pulse/team")
     def team(ctx: Ctx = Depends(current)):

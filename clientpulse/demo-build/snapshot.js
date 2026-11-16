@@ -118,6 +118,13 @@
       var msgs = { satisfaction: 'שביעות הרצון עודכנה', notes: 'נשמר בתיק הלקוח', contacts: 'איש הקשר נוסף', commitments: 'ההתחייבות נשמרה', 'update-draft': 'הטיוטה נשמרה בלשונית "טיפול". אפשר להעתיק ולשלוח.' };
       return msgs[kind] ? { body: { ok: true, msg: msgs[kind], text: lastTxt }, status: kind === 'satisfaction' || kind === 'update-draft' ? 200 : 201 } : null;
     }
+    if (url === '/api/pulse/team/handover') {
+      var moved = 0, ids = {};
+      walk(D, function (o) { if (o.assignee === body.frm && 'requires_approval' in o && o.status !== 'closed') { o.assignee = body.to; ids[o.id] = 1; } });
+      Object.keys(ids).forEach(function () { moved++; });
+      walk(D, function (o) { if (o.task_id && ids[o.task_id] && 'owner_name' in o) o.owner_name = memberName(D, body.to); });
+      return { body: { ok: true, msg: 'עברו ל' + memberName(D, body.to) + ': ' + moved + ' משימות. הלקוחות נשארים אצל ' + memberName(D, body.frm) + '.', moved: moved } };
+    }
     if (url === '/api/pulse/tasks/manual') {
       var mt = { id: 'snap' + (++seq), client_id: body.client_id, alert_key: null, title: body.title, severity: 'imp', plan: [{ text: body.title, actionType: 'check' }],
         success: null, requires_approval: false, approved_by: null, assignee: (D['/api/pulse/state'].team[0] || {}).id, due_day: ref(D) + (body.due_days || 7), status: 'new',

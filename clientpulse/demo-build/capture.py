@@ -27,7 +27,7 @@ data = {}
 G = lambda u: data.__setitem__(u, c.get(u).json())
 for u in ["/api/pulse/state", "/api/pulse/overview", "/api/pulse/alerts", "/api/pulse/clients", "/api/pulse/tasks", "/api/pulse/notifications",
           "/api/pulse/automations", "/api/pulse/impact", "/api/pulse/team", "/api/pulse/profit", "/api/pulse/opportunities", "/api/pulse/lab",
-          "/api/pulse/integrations", "/api/pulse/ask/suggestions", "/api/pulse/brief", "/api/pulse/ads", "/api/pulse/my", "/api/pulse/trend",
+          "/api/pulse/integrations", "/api/pulse/ask/suggestions", "/api/pulse/brief", "/api/pulse/ads", "/api/pulse/my", "/api/pulse/trend", "/api/pulse/team/perf",
           "/api/pulse/settings/thresholds", "/api/pulse/knowledge", "/api/pulse/decisions", "/api/pulse/commitments"]:
     G(u)
 data["/api/pulse/state"]["unread"] = 0

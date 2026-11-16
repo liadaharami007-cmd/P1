@@ -78,11 +78,13 @@ V.home = async (view, p = {}) => {
   if (p.v === 'big' || p.v === 'today') return V.today(view);
   if (p.v === 'plan') return V.plan(view, p);
   if (p.v === 'focus') return V.focus(view);
-  const [ab, o, t] = await Promise.all([api('/api/pulse/alerts'), api('/api/pulse/overview'), api('/api/pulse/trend')]);
+  const [ab, o, t, perf] = await Promise.all([api('/api/pulse/alerts'), api('/api/pulse/overview'), api('/api/pulse/trend'), api('/api/pulse/team/perf')]);
   const hour = new Date().getHours(), greet = hour < 12 ? 'בוקר טוב' : hour < 18 ? 'צהריים טובים' : 'ערב טוב';
   const byClient = {};
   ab.cards.forEach((x) => { if (!byClient[x.client_id]) byClient[x.client_id] = x; });
-  const rows = ab.board.map((x) => ({ ...x, card: byClient[x.id], st: x.status === 'nodata' ? 'green' : x.status }));
+  const who = p.m || '', me_ = perf.find((x) => x.id === who);
+  const rows = ab.board.filter((x) => !who || x.owner === who).map((x) => ({ ...x, card: byClient[x.id], st: x.status === 'nodata' ? 'green' : x.status }));
+  const q = (extra) => `home?${new URLSearchParams({ ...(who ? { m: who } : {}), ...extra }).toString()}`;
   const keyOf = (x) => (x.st === 'green' ? (x.status === 'nodata' ? 'data_missing' : x.suggest?.kind || 'keep') : x.card ? x.card.key.split(':')[1] : 'keep');
   const groupsOf = (k) => {
     const g = {};
@@ -91,7 +93,7 @@ V.home = async (view, p = {}) => {
       open: items.filter((x) => x.card && (!x.card.task_id || x.card.task_status === 'new')).length }))
       .sort((a1, z) => (a1.gk === 'keep') - (z.gk === 'keep') || (z.pot - a1.pot) || (z.items.length - a1.items.length));
   };
-  const n = { red: o.counts.red, yellow: o.counts.yellow, green: o.counts.green + o.counts.nodata };
+  const n = { red: rows.filter((x) => x.st === 'red').length, yellow: rows.filter((x) => x.st === 'yellow').length, green: rows.filter((x) => x.st === 'green').length };
   const sel = p.c || 'red', og = p.g || '';
   const how = (k, g) => k === 'green' ? (g.gk === 'keep' ? 'לשמור על הקיים' : g.items[0].suggest?.action || '') : k === 'red' ? g.items[0].card?.next : (g.items[0].card?.check?.[0] || g.items[0].card?.next);
   const best = groupsOf('red')[0];
@@ -101,24 +103,44 @@ V.home = async (view, p = {}) => {
   const gs = groupsOf(sel);
   view.innerHTML = `<div class="pro">
   <div class="phead"><div class="row"><h2 style="flex:1">${greet} ${esc(st.me.user.name)}</h2><button class="psearch" data-act="palette">${ic('search', 15)} חיפוש לקוח מתוך ${N(rows.length)}</button></div>
-    <p>${n.red ? `יש היום <b>${N(n.red)}</b> לקוחות שאפשר לשפר, <b>${N(n.yellow)}</b> לבדוק, ו-<b>${N(n.green)}</b> שאפשר לעזור להם לגדול.` : 'כל הלקוחות במצב טוב היום.'}</p></div>
-  <div class="card pchart"><div class="pc-l"><div class="note">לידים בשבוע · כל המשרד</div><div id="pChart"></div></div>
+    <p>${me_ ? `הלקוחות של ${esc(me_.name)}: ` : ''}${n.red ? `יש היום <b>${N(n.red)}</b> לקוחות שאפשר לשפר, <b>${N(n.yellow)}</b> לבדוק, ו-<b>${N(n.green)}</b> שאפשר לעזור להם לגדול.` : 'כל הלקוחות במצב טוב היום.'}</p></div>
+  <div class="who"><a class="${!who ? 'on' : ''}" href="#/home">כל המשרד</a>${perf.map((x) => `<a class="${who === x.id ? 'on' : ''}" href="#/home?m=${x.id}">${esc(x.name)} <span class="note">${N(x.clients)}</span></a>`).join('')}</div>
+  ${me_ ? `<div class="card mcard"><div><b>${esc(me_.name)}</b> <span class="note">${esc(me_.role || '')} · ${N(me_.clients)} לקוחות</span></div>
+    <div class="mstats"><span><b>${N(me_.handled)}</b> טופלו השבוע</span><span><b>${N(me_.improved)}</b> השתפרו</span><span class="${me_.late ? 'bad' : ''}"><b>${N(me_.late)}</b> באיחור</span><span><b>${N(me_.leads.toLocaleString())}</b> לידים השבוע</span></div>
+    <button class="btn sec sm" data-act="handover" data-arg="${me_.id}">מסירה (חופשה / מחלה)</button></div>` : ''}
+  <div class="card pchart" ${me_ ? 'hidden' : ''}><div class="pc-l"><div class="note">לידים בשבוע · כל המשרד</div><div id="pChart"></div></div>
     <div class="pc-r"><div class="note">מה רואים</div><p>${lchg == null ? 'אין עדיין מספיק שבועות.' : lchg < 0 ? `השבוע נכנסו ${N(last.leads.toLocaleString())} לידים, ${Math.abs(lchg)}% פחות משבוע שעבר.` : `השבוע נכנסו ${N(last.leads.toLocaleString())} לידים, ${lchg}% יותר משבוע שעבר.`}</p>
       ${best ? `<div class="note">מה הכי ישפר</div><p><b>${esc(GROUP[best.gk] || best.gk)}</b> אצל ${N(best.items.length)} לקוחות${best.pot ? ` — כ-<b>${N(best.pot)}</b> לידים נוספים בשבוע` : ''}.</p>
-      <button class="btn pri sm" data-act="go" data-arg="home?c=red&g=${encodeURIComponent(best.gk)}">לשיפור ←</button>` : '<p>אין כרגע משהו דחוף לשפר.</p>'}</div></div>
-  <div class="lights4">${['red', 'yellow', 'green'].map((k) => `<button class="lc lc-${k} ${sel === k ? 'on' : ''}" data-act="go" data-arg="home?c=${k}"><span class="bulb b-${k}"></span><span class="lcn">${N(n[k])}</span><span class="lct"><b>${LIGHT[k].t}</b><span>${ROLE[k]}</span></span></button>`).join('')}</div>
+      <button class="btn pri sm" data-act="go" data-arg="${q({ c: 'red', g: best.gk })}">לשיפור ←</button>` : '<p>אין כרגע משהו דחוף לשפר.</p>'}</div></div>
+  <div class="lights4">${['red', 'yellow', 'green'].map((k) => `<button class="lc lc-${k} ${sel === k ? 'on' : ''}" data-act="go" data-arg="${q({ c: k })}"><span class="bulb b-${k}"></span><span class="lcn">${N(n[k])}</span><span class="lct"><b>${LIGHT[k].t}</b><span>${ROLE[k]}</span></span></button>`).join('')}</div>
   <div class="card gtable"><div class="gt-h"><span class="bulb b-${sel}"></span><b>${LIGHT[sel].t}</b><span class="note">${ROLE[sel]}</span></div>
     <div class="gtr gth"><span>${sel === 'green' ? 'הזדמנות' : 'נושא'}</span><span>לקוחות</span><span>${sel === 'green' ? 'איך עוזרים' : sel === 'red' ? 'איך משפרים' : 'מה בודקים'}</span><span>${sel === 'green' ? '' : 'פוטנציאל'}</span><span></span></div>
     ${gs.map((g) => { const id = g.gk, open = og === id, bulk = sel === 'green' ? g.items.filter((x) => x.suggest?.action).length : 0;
-      return `<button class="gtr ${open ? 'on' : ''}" data-act="go" data-arg="home?c=${sel}${open ? '' : '&g=' + encodeURIComponent(id)}"><span><b>${esc(GROUP[g.gk] || g.gk)}</b></span><span>${N(g.items.length)}</span><span class="tx2">${esc(how(sel, g) || '—')}</span><span class="ok">${g.pot ? `+${N(g.pot)} לידים/שבוע` : ''}</span><span class="chev">${open ? '−' : '‹'}</span></button>
+      return `<button class="gtr ${open ? 'on' : ''}" data-act="go" data-arg="${open ? q({ c: sel }) : q({ c: sel, g: id })}"><span><b>${esc(GROUP[g.gk] || g.gk)}</b></span><span>${N(g.items.length)}</span><span class="tx2">${esc(how(sel, g) || '—')}</span><span class="ok">${g.pot ? `+${N(g.pot)} לידים/שבוע` : ''}</span><span class="chev">${open ? '−' : '‹'}</span></button>
       ${open ? `<div class="gtc">${(p.all === '1' ? g.items : g.items.slice(0, 10)).map((x) => `<div class="cgi"><i class="dot d-${x.status}"></i><a href="#/client/${x.id}">${esc(x.name)}</a><span class="note">${x.card?.potential_leads ? `+${x.card.potential_leads} לידים/שבוע` : sel === 'green' && x.cpl ? `${x.leads} לידים · עלות לליד ${money(x.cpl)}` : ''}</span><span class="sp"></span>
         ${sel === 'green' ? '' : !x.card ? '' : x.card.task_id && !['new', 'in_progress'].includes(x.card.task_status) ? '<span class="note ok">טופל ✓</span>' : `<button class="btn sec sm" data-act="handle" data-arg="${esc(x.card.key)}|done">טיפלתי</button>`}</div>`).join('')}
-        ${g.items.length > 10 && p.all !== '1' ? `<a class="quiet" href="#/home?c=${sel}&g=${encodeURIComponent(id)}&all=1">ועוד ${N(g.items.length - 10)} לקוחות</a>` : ''}
+        ${g.items.length > 10 && p.all !== '1' ? `<a class="quiet" href="#/${q({ c: sel, g: id, all: '1' })}">ועוד ${N(g.items.length - 10)} לקוחות</a>` : ''}
         ${bulk > 1 ? `<button class="btn sec sm" style="margin-top:8px" data-act="offerGroup" data-arg="${esc(g.gk)}">הכן הצעה לכל ה-${N(bulk)}</button>` : ''}</div>` : ''}`; }).join('') || '<div class="empty">אין לקוחות כאן</div>'}</div>
-  <p class="note" style="text-align:center">נבדקו ${N(n.red + n.yellow + n.green)} לקוחות אוטומטית · <a href="#/home?v=today">פירוט מלא</a></p></div>`;
+  ${!who && perf.length ? `<div class="card gtable"><div class="gt-h"><b>הקמפיינרים</b><span class="note">ביצועים השבוע · לחיצה פותחת את הלוח של הקמפיינר</span></div>
+    <div class="gtr gth tp"><span>קמפיינר</span><span>לקוחות</span><span>מצב הלקוחות</span><span>טופלו / השתפרו</span><span>באיחור</span></div>
+    ${perf.map((x) => `<a class="gtr tp" href="#/home?m=${x.id}"><span><b>${esc(x.name)}</b></span><span>${N(x.clients)}</span><span class="tri"><i class="dot d-red"></i>${N(x.red)} <i class="dot d-yellow"></i>${N(x.yellow)} <i class="dot d-green"></i>${N(x.green)}</span><span>${N(x.handled)} / <span class="ok">${N(x.improved)}</span></span><span class="${x.late ? 'bad' : 'note'}">${N(x.late)}</span></a>`).join('')}</div>` : ''}
+  <p class="note" style="text-align:center">נבדקו ${N(ab.board.length)} לקוחות אוטומטית · <a href="#/home?v=today">פירוט מלא</a></p></div>`;
   chart($('#pChart'), { labels: w.map((x) => x.label), h: 170, fmt: (v) => Math.round(v).toLocaleString(), series: [{ name: 'לידים', color: 'var(--acc)', w: 2.6, vals: w.map((x) => x.leads) }] });
   st._rows = rows; st._keyOf = keyOf;
 };
+A.handover = async (b, frm) => {
+  const perf = await api('/api/pulse/team/perf');
+  const ab = await api('/api/pulse/alerts');
+  const from = perf.find((x) => x.id === frm);
+  const mine = ab.cards.filter((c) => ab.board.find((x) => x.id === c.client_id)?.owner === frm);
+  const seen = new Set(), top = mine.filter((c) => !seen.has(c.client_id) && seen.add(c.client_id)).slice(0, 8);
+  modal(`<div class="mh"><b>מסירה זמנית · ${esc(from.name)}</b><div class="sp"></div><button class="iconbtn" data-act="close">${ic('x')}</button></div>
+    <div class="pad"><p class="tx2" style="margin-top:0">מה שמי שמחליף צריך לדעת על ${N(from.clients)} הלקוחות של ${esc(from.name)}:</p>
+    ${top.map((c) => `<div class="cgi"><i class="dot d-${c.severity}"></i><b>${esc(c.client)}</b><span class="note">${esc(c.title)} — ${esc(c.next)}</span></div>`).join('') || '<p class="note">אין כרגע חריגות פתוחות.</p>'}
+    <div class="row" style="margin-top:14px"><label class="small" for="hoTo">להעביר את כל המשימות הפתוחות אל:</label><select class="inp" id="hoTo">${perf.filter((x) => x.id !== frm).map((x) => `<option value="${x.id}">${esc(x.name)}</option>`).join('')}</select>
+    <button class="btn pri" data-act="doHandover" data-arg="${frm}">העבר</button></div><p class="note">הלקוחות נשארים של ${esc(from.name)}; רק הטיפול עובר זמנית. הכול מתועד.</p></div>`);
+};
+A.doHandover = async (b, frm) => { const r = await api('/api/pulse/team/handover', { method: 'POST', body: { frm, to: document.getElementById('hoTo').value } }); toast(r.msg, r.ok ? '' : 'warn'); closeModal(); render(); };
 A.offerGroup = async (btn, gk) => {
   const items = (st._rows || []).filter((x) => x.st === 'green' && st._keyOf(x) === gk && x.suggest?.action);
   btn.disabled = true; btn.textContent = 'מכין…';

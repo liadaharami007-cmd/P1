@@ -210,7 +210,7 @@ def seed_demo(db: Database, acc: str, owner: str | None = None, size: int = 50) 
     s.update({"demo": True, "ops": {}, "improved_seen": {}, "summary_day": None, "weekly_day": None})
     save_settings(db, acc, s)
     reset_demo_data(db, acc)
-    for m in ([] if owner else demo.TEAM):
+    for m in demo.TEAM:
         exe(db, "INSERT OR IGNORE INTO pulse_team (account_id, id, name, role, approver, is_demo) VALUES (?,?,?,?,?,1)",
             (acc, m["id"], m["name"], m["role"], 1 if m["approver"] else 0))
     w = ws(db, acc)
@@ -220,7 +220,7 @@ def seed_demo(db: Database, acc: str, owner: str | None = None, size: int = 50) 
         exe(db, """INSERT OR REPLACE INTO pulse_clients (account_id, id, name, industry, owner, target_cpl, monthly_budget, fee_monthly,
                    hours_monthly, hourly_cost, other_costs_monthly, platforms_json, thresholds_json, is_demo, params_json, source, created_at)
                    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,1,?,'demo',?)""",
-            (acc, "d" + c["id"], c["name"], c["industry"], owner or c["owner"], c["target_cpl"], c["monthly_budget"], c["fee_monthly"],
+            (acc, "d" + c["id"], c["name"], c["industry"], c["owner"], c["target_cpl"], c["monthly_budget"], c["fee_monthly"],
              c["hours_monthly"], c["hourly_cost"], c["other_costs_monthly"], j(c["platforms"]), j({}), j(p), now()))
     sync_demo(db, acc)
     _seed_demo_ops(db, acc, T0)
@@ -1020,7 +1020,7 @@ def alert_board(db: Database, acc: str) -> dict:
     return {"cards": cards, "happened": happened, "missing": missing, "ref": ref,
             "board": [{"id": r["id"], "name": r["name"], "status": r["status"], "improved": bool(r["improved"]), "cpl": r["rec"]["cpl"],
                        "leads": r["rec"]["leads"], "base_cpl": r["base"]["cpl"], "suggest": suggestion(r, run["clients"][r["id"]]),
-                       "excess": round(r["excess"]), "spend7": round(r["rec"]["spend"]),
+                       "excess": round(r["excess"]), "spend7": round(r["rec"]["spend"]), "owner": r["owner"],
                        "title": r["alerts"][0]["title"] if r["alerts"] else ("השתפר" if r["improved"] else "תקין")} for r in run["results"]]}
 
 
@@ -1503,3 +1503,42 @@ def office_score(db: Database, acc: str, run: dict) -> dict:
                        WHERE account_id=? AND day<=? GROUP BY client_id)""", (acc, ref - 7))
     prev = score([h["status"] for h in hist]) if len(hist) >= max(3, len(run["results"]) // 2) else None
     return {"score": now_, "prev": prev, "formula": "תקין = 100, במעקב = 50, דחוף = 0; ממוצע על כל הלקוחות שיש עליהם מספיק נתונים"}
+
+
+def team_perf(db: Database, acc: str) -> list[dict]:
+    """מדידת קמפיינרים: לקוחות, מצב הרמזור שלהם, מה טופל והשתפר השבוע. מדידה של תוצאות, לא מעקב אחרי אנשים."""
+    run = analysis(db, acc)
+    ref = run["ref"]
+    out = []
+    for m in team(db, acc):
+        mine = [r for r in run["results"] if r["owner"] == m["id"]]
+        if not mine:
+            continue
+        cnt = {k: sum(1 for r in mine if (r["status"] if r["status"] != "nodata" else "green") == k) for k in ("red", "yellow", "green")}
+        handled = one(db, "SELECT COUNT(*) n FROM pulse_tasks WHERE account_id=? AND assignee=? AND done_day>=?", (acc, m["id"], ref - 6))["n"]
+        improved = one(db, """SELECT COUNT(*) n FROM pulse_verifications v JOIN pulse_tasks t ON t.id=v.task_id
+                              WHERE v.account_id=? AND t.assignee=? AND v.day>=?""", (acc, m["id"], ref - 6))["n"]
+        late = sum(1 for t in open_tasks(db, acc) if t["assignee"] == m["id"] and t["due_day"] is not None and t["due_day"] < ref
+                   and t["status"] in ("new", "in_progress", "awaiting_approval"))
+        out.append({"id": m["id"], "name": m["name"], "role": m["role"], "clients": len(mine), **cnt, "handled": handled, "improved": improved, "late": late,
+                    "leads": sum(r["rec"]["leads"] for r in mine)})
+    return out
+
+
+def handover(db: Database, acc: str, frm: str, to: str, by: str) -> dict:
+    """מסירה זמנית (חופשה / מחלה): כל המשימות וההתחייבויות הפתוחות של קמפיינר עוברות לקמפיינר אחר, עם תיעוד."""
+    tm = team_map(db, acc)
+    if frm not in tm or to not in tm or frm == to:
+        return {"ok": False, "msg": "בחרו שני קמפיינרים שונים"}
+    ref = ref_day(ws(db, acc))
+    moved = 0
+    for t in open_tasks(db, acc):
+        if t["assignee"] == frm:
+            t["assignee"] = to
+            _th(t, ref, by, f"הועבר ל{tm[to]['name']} (מסירה זמנית מ{tm[frm]['name']})")
+            _save_task(db, t)
+            moved += 1
+    cm = exe(db, "UPDATE pulse_commitments SET owner=? WHERE account_id=? AND owner=? AND status='open'", (to, acc, frm))
+    ev(db, acc, ref, "task", f"מסירה זמנית: {tm[frm]['name']} ← {tm[to]['name']} ({moved} משימות, {cm} התחייבויות)", None, by)
+    bump(db, acc)
+    return {"ok": True, "msg": f"עברו ל{tm[to]['name']}: {moved} משימות ו-{cm} התחייבויות. הלקוחות נשארים של {tm[frm]['name']}.", "moved": moved}

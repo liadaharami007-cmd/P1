@@ -494,3 +494,9 @@ details.more{margin-top:8px}details.more>summary{font-size:12.5px;color:var(--ac
 .gtr b{font-weight:600}.lc{transition:box-shadow .15s,transform .15s}.lc:hover{transform:translateY(-1px)}
 .talk textarea{width:100%;margin-top:6px;line-height:1.6}.tk-c{display:flex;gap:12px;align-items:baseline;flex-wrap:wrap;padding:12px 14px;border:1px solid var(--line);border-radius:12px;background:var(--card2)}
 body{letter-spacing:.05px}
+.who{display:flex;gap:6px;flex-wrap:wrap}.who a{padding:7px 14px;border-radius:99px;border:1px solid var(--line);background:var(--card);color:var(--tx2);font-size:13.5px}
+.who a.on{background:var(--tx);color:var(--bg);border-color:var(--tx)}.who a.on .note{color:var(--bg);opacity:.7}
+.mcard{display:flex;align-items:center;gap:20px;flex-wrap:wrap;padding:16px 20px}.mstats{display:flex;gap:18px;flex:1;flex-wrap:wrap;font-size:13.5px;color:var(--tx2)}.mstats b{color:var(--tx);font-size:17px}
+.gtr.tp{grid-template-columns:minmax(120px,1fr) 80px 1.4fr 120px 80px;color:var(--tx)}.tri{display:inline-flex;align-items:center;gap:6px}.tri .dot{margin-inline-start:6px}
+@media (max-width:900px){.gtr.tp{grid-template-columns:1fr auto}.gtr.tp>span:nth-child(n+3){grid-column:1/-1}}
+[hidden]{display:none!important}
