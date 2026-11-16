@@ -487,3 +487,10 @@ details.more{margin-top:8px}details.more>summary{font-size:12.5px;color:var(--ac
 .gtc{padding:6px 20px 14px;background:var(--card2);border-top:1px solid var(--line)}
 @media (max-width:900px){.pchart{grid-template-columns:1fr}.pc-r{border:0;padding:0}.lights4{grid-template-columns:1fr}.gth{display:none}
   .gtr{grid-template-columns:1fr auto 24px}.gtr>span:nth-child(3){grid-column:1/-1;grid-row:2}.gtr>span:nth-child(4){grid-column:1/-1;grid-row:3}}
+/* ---- ליטוש ---- */
+.psearch{display:inline-flex;align-items:center;gap:8px;padding:9px 14px;border:1px solid var(--line);border-radius:12px;background:var(--card);color:var(--tx2);font-size:13.5px}
+.psearch:hover{border-color:var(--line2);color:var(--tx)}
+.card,.lc,.gtable,.pchart{border-color:var(--line)}.pro .card{border-radius:18px}
+.gtr b{font-weight:600}.lc{transition:box-shadow .15s,transform .15s}.lc:hover{transform:translateY(-1px)}
+.talk textarea{width:100%;margin-top:6px;line-height:1.6}.tk-c{display:flex;gap:12px;align-items:baseline;flex-wrap:wrap;padding:12px 14px;border:1px solid var(--line);border-radius:12px;background:var(--card2)}
+body{letter-spacing:.05px}

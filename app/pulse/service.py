@@ -202,7 +202,7 @@ def import_csv(db: Database, acc: str, cid: str, text: str) -> dict:
 
 
 # ================================================================ דמו
-def seed_demo(db: Database, acc: str, owner: str | None = None) -> dict:
+def seed_demo(db: Database, acc: str, owner: str | None = None, size: int = 50) -> dict:
     """owner: חבר הצוות של המשתמש המחובר. כשניתן — כל לקוחות הדמו שלו (משרד של אדם אחד, כמו אצל ניב)."""
     w = ws(db, acc)
     s = w["settings"]
@@ -215,7 +215,7 @@ def seed_demo(db: Database, acc: str, owner: str | None = None) -> dict:
             (acc, m["id"], m["name"], m["role"], 1 if m["approver"] else 0))
     w = ws(db, acc)
     T0 = ref_day(w)
-    for c in demo.build_clients(T0):
+    for c in demo.build_clients(T0, size=size):
         p = c["params"]
         exe(db, """INSERT OR REPLACE INTO pulse_clients (account_id, id, name, industry, owner, target_cpl, monthly_budget, fee_monthly,
                    hours_monthly, hourly_cost, other_costs_monthly, platforms_json, thresholds_json, is_demo, params_json, source, created_at)
@@ -224,7 +224,7 @@ def seed_demo(db: Database, acc: str, owner: str | None = None) -> dict:
              c["hours_monthly"], c["hourly_cost"], c["other_costs_monthly"], j(c["platforms"]), j({}), j(p), now()))
     sync_demo(db, acc)
     _seed_demo_ops(db, acc, T0)
-    ev(db, acc, T0, "lab", "סביבת דמו נוצרה: 50 לקוחות מדומים עם 90 ימי היסטוריה")
+    ev(db, acc, T0, "lab", f"סביבת דמו נוצרה: {size} לקוחות מדומים עם 90 ימי היסטוריה")
     return run_check(db, acc, manual=True)
 
 

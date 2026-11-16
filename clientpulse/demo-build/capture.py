@@ -7,7 +7,7 @@ from app.main import create_app
 OUT = sys.argv[1]
 c = TestClient(create_app(db=Database(tempfile.mkdtemp() + "/s.db")))
 assert c.post("/api/auth/register", json={"email": "niv@demo-agency.co", "password": "correct-horse-battery", "name": "ניב", "account_name": "משרד הפרסום — דמו"}).status_code == 201
-c.post("/api/pulse/demo")
+c.post("/api/pulse/demo?size=300")
 P = lambda u, b=None: c.post(u, json=b or {}).json()
 tasks = [t for t in c.get("/api/pulse/tasks").json()["tasks"]]
 reds = [t for t in tasks if t["severity"] == "red" and (t["alert_key"] or "").endswith(":cpl")] or [t for t in tasks if t["severity"] == "red"]
@@ -33,14 +33,13 @@ for u in ["/api/pulse/state", "/api/pulse/overview", "/api/pulse/alerts", "/api/
 data["/api/pulse/state"]["unread"] = 0
 for m in data["/api/pulse/state"]["team"]:
     G(f"/api/pulse/my?member={m['id']}")
-for cl in data["/api/pulse/clients"]["clients"]:
-    if cl["source"] == "demo":
+for i, cl in enumerate(data["/api/pulse/clients"]["clients"]):
+    if cl["source"] == "demo" and i < 40:
         G(f"/api/pulse/ads?client={cl['id']}")
-    for d in (30, 90):
-        G(f"/api/pulse/clients/{cl['id']}?days={d}")
+    G(f"/api/pulse/clients/{cl['id']}?days=30")
 asks = {}
 qs = list(data["/api/pulse/ask/suggestions"]["suggestions"])
-for cl in data["/api/pulse/clients"]["clients"]:
+for cl in data["/api/pulse/clients"]["clients"][:40]:
     if cl["alerts"]:
         qs += [f"למה {cl['name']} במצב הזה?", f"תכין לי סיכום לפגישה עם {cl['name']}"]
 for q in qs:

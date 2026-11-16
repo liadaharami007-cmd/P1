@@ -53,9 +53,13 @@ def _poisson(rng: random.Random, lam: float) -> int:
             return k - 1
 
 
-def build_clients(T0: int, seed: int = 206) -> list[dict]:
+CITIES = ["תל אביב", "חיפה", "ירושלים", "באר שבע", "ראשון לציון", "נתניה", "פתח תקווה", "אשדוד", "הרצליה", "רעננה", "מודיעין", "כפר סבא"]
+
+
+def build_clients(T0: int, seed: int = 206, size: int = 50) -> list[dict]:
     rng = random.Random(seed)
-    scen = [s for s, n in SCEN for _ in range(n)]
+    mult = max(1, round(size / 50))
+    scen = [s for s, n in SCEN for _ in range(n * mult)][:size]
     rng.shuffle(scen)
     spike_n = 0
     out = []
@@ -95,8 +99,9 @@ def build_clients(T0: int, seed: int = 206) -> list[dict]:
         industry = TYPES[(i * 7) % len(TYPES)]
         deal = {"מטבחים": 18000, "אנרגיה סולארית": 35000, 'שיווק נדל"ן': 25000, "גני אירועים": 40000}.get(industry, 2500)
         fee = round((1500 + daily * 30.4 * 0.12) / 100) * 100
+        base_name = f"{industry} {NAMES[(i * 11 + 3) % len(NAMES)]}"
         out.append({
-            "id": f"c{i + 1}", "name": f"{industry} {NAMES[(i * 11 + 3) % len(NAMES)]}", "industry": industry, "owner": OWNERS[i % len(OWNERS)],
+            "id": f"c{i + 1}", "name": base_name if i < 100 else f"{base_name} · {CITIES[(i // 100 + i) % len(CITIES)]}", "industry": industry, "owner": OWNERS[i % len(OWNERS)],
             "scenario": sc, "target_cpl": round(cpl * (1.1 + rng.random() * 0.2)),
             "monthly_budget": round(daily * 30.4 * (1.05 + rng.random() * 0.15) / 100) * 100,
             "fee_monthly": fee, "hours_monthly": round(6 + rng.random() * 18 + (8 if sc in ("multi", "cpl_spike") else 0)),

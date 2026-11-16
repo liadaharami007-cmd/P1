@@ -183,10 +183,10 @@ def register(app: FastAPI, db: Database) -> None:
                 "auto_daily": w["settings"].get("auto_daily", True)}
 
     @app.post("/api/pulse/demo")
-    def demo_start(ctx: Ctx = Depends(current)):
+    def demo_start(size: int = 50, ctx: Ctx = Depends(current)):
         W(ctx)
         mine = store.one(db, "SELECT id FROM pulse_team WHERE account_id=? AND user_id=?", (ctx.account_id, ctx.user_id))
-        return {"ok": True, "check": S.seed_demo(db, ctx.account_id, mine["id"] if mine else None)}
+        return {"ok": True, "check": S.seed_demo(db, ctx.account_id, mine["id"] if mine else None, max(10, min(500, size)))}
 
     @app.delete("/api/pulse/demo")
     def demo_remove(ctx: Ctx = Depends(current)):

@@ -24,7 +24,7 @@
     if (m === 'GET') {
       if (D[url]) return res(D[url]);
       var mm = url.match(/^\/api\/pulse\/clients\/([^?]+)\?days=(\d+)/);
-      if (mm) { var k = '/api/pulse/clients/' + mm[1] + '?days=' + (+mm[2] > 45 ? 90 : 30); if (D[k]) return res(D[k]); }
+      if (mm) { var k = '/api/pulse/clients/' + mm[1] + '?days=' + (+mm[2] > 45 ? 90 : 30); if (D[k]) return res(D[k]); if (D['/api/pulse/clients/' + mm[1] + '?days=30']) return res(D['/api/pulse/clients/' + mm[1] + '?days=30']); }
       var base = url.split('?')[0];
       if (D[base]) return res(D[base]);
       return res({ detail: 'המסך הזה לא נכלל בגרסת התצוגה' }, 404);
@@ -101,7 +101,7 @@
     if ((mm = url.match(/^\/api\/pulse\/clients\/([^/]+)\/(\w[\w-]*)$/))) {
       var keys = Object.keys(D).filter(function (k) { return k.indexOf('/api/pulse/clients/' + mm[1] + '?') === 0; });
       if (!keys.length) return null;
-      var kind = mm[2];
+      var kind = mm[2], lastTxt = '';
       keys.forEach(function (k) {
         var d = D[k];
         if (kind === 'satisfaction') d.client.satisfaction = body.score;
@@ -112,11 +112,11 @@
           var r = d.result, a0 = d.alerts[0];
           var txt = 'היי, עדכון שבועי על הקמפיינים:\n• 7 הימים האחרונים: ' + r.rec.leads + ' לידים, עלות לליד ₪' + Math.round(r.rec.cpl || 0) + (r.base.cpl ? ' (לעומת ₪' + Math.round(r.base.cpl) + ' בממוצע).' : '.') +
             (a0 ? '\n• מה זיהינו: ' + a0.card.what + '\n• מה אנחנו עושים: ' + a0.card.next + '.' : '\n• הקמפיינים יציבים ובטווח התקין.') + '\nנמשיך לעקוב ונעדכן.';
-          d.drafts.unshift({ id: 900 + (++seq), text: txt, channel: 'WhatsApp', status: 'draft' });
+          d.drafts.unshift({ id: 900 + (++seq), text: txt, channel: 'WhatsApp', status: 'draft' }); lastTxt = txt;
         }
       });
       var msgs = { satisfaction: 'שביעות הרצון עודכנה', notes: 'נשמר בתיק הלקוח', contacts: 'איש הקשר נוסף', commitments: 'ההתחייבות נשמרה', 'update-draft': 'הטיוטה נשמרה בלשונית "טיפול". אפשר להעתיק ולשלוח.' };
-      return msgs[kind] ? { body: { ok: true, msg: msgs[kind] }, status: kind === 'satisfaction' || kind === 'update-draft' ? 200 : 201 } : null;
+      return msgs[kind] ? { body: { ok: true, msg: msgs[kind], text: lastTxt }, status: kind === 'satisfaction' || kind === 'update-draft' ? 200 : 201 } : null;
     }
     if (url === '/api/pulse/tasks/manual') {
       var mt = { id: 'snap' + (++seq), client_id: body.client_id, alert_key: null, title: body.title, severity: 'imp', plan: [{ text: body.title, actionType: 'check' }],

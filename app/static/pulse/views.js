@@ -100,7 +100,7 @@ V.home = async (view, p = {}) => {
   const ROLE = { red: 'לטפל עכשיו — איך משפרים', yellow: 'לבדוק לפני שזה מחמיר', green: 'הכול טוב — איך עוזרים להם לגדול' };
   const gs = groupsOf(sel);
   view.innerHTML = `<div class="pro">
-  <div class="phead"><h2>${greet} ${esc(st.me.user.name)}</h2>
+  <div class="phead"><div class="row"><h2 style="flex:1">${greet} ${esc(st.me.user.name)}</h2><button class="psearch" data-act="palette">${ic('search', 15)} חיפוש לקוח מתוך ${N(rows.length)}</button></div>
     <p>${n.red ? `יש היום <b>${N(n.red)}</b> לקוחות שאפשר לשפר, <b>${N(n.yellow)}</b> לבדוק, ו-<b>${N(n.green)}</b> שאפשר לעזור להם לגדול.` : 'כל הלקוחות במצב טוב היום.'}</p></div>
   <div class="card pchart"><div class="pc-l"><div class="note">לידים בשבוע · כל המשרד</div><div id="pChart"></div></div>
     <div class="pc-r"><div class="note">מה רואים</div><p>${lchg == null ? 'אין עדיין מספיק שבועות.' : lchg < 0 ? `השבוע נכנסו ${N(last.leads.toLocaleString())} לידים, ${Math.abs(lchg)}% פחות משבוע שעבר.` : `השבוע נכנסו ${N(last.leads.toLocaleString())} לידים, ${lchg}% יותר משבוע שעבר.`}</p>
@@ -111,8 +111,9 @@ V.home = async (view, p = {}) => {
     <div class="gtr gth"><span>${sel === 'green' ? 'הזדמנות' : 'נושא'}</span><span>לקוחות</span><span>${sel === 'green' ? 'איך עוזרים' : sel === 'red' ? 'איך משפרים' : 'מה בודקים'}</span><span>${sel === 'green' ? '' : 'פוטנציאל'}</span><span></span></div>
     ${gs.map((g) => { const id = g.gk, open = og === id, bulk = sel === 'green' ? g.items.filter((x) => x.suggest?.action).length : 0;
       return `<button class="gtr ${open ? 'on' : ''}" data-act="go" data-arg="home?c=${sel}${open ? '' : '&g=' + encodeURIComponent(id)}"><span><b>${esc(GROUP[g.gk] || g.gk)}</b></span><span>${N(g.items.length)}</span><span class="tx2">${esc(how(sel, g) || '—')}</span><span class="ok">${g.pot ? `+${N(g.pot)} לידים/שבוע` : ''}</span><span class="chev">${open ? '−' : '‹'}</span></button>
-      ${open ? `<div class="gtc">${g.items.map((x) => `<div class="cgi"><i class="dot d-${x.status}"></i><a href="#/client/${x.id}">${esc(x.name)}</a><span class="note">${x.card?.potential_leads ? `+${x.card.potential_leads} לידים/שבוע` : sel === 'green' && x.cpl ? `${x.leads} לידים · עלות לליד ${money(x.cpl)}` : ''}</span><span class="sp"></span>
+      ${open ? `<div class="gtc">${(p.all === '1' ? g.items : g.items.slice(0, 10)).map((x) => `<div class="cgi"><i class="dot d-${x.status}"></i><a href="#/client/${x.id}">${esc(x.name)}</a><span class="note">${x.card?.potential_leads ? `+${x.card.potential_leads} לידים/שבוע` : sel === 'green' && x.cpl ? `${x.leads} לידים · עלות לליד ${money(x.cpl)}` : ''}</span><span class="sp"></span>
         ${sel === 'green' ? '' : !x.card ? '' : x.card.task_id && !['new', 'in_progress'].includes(x.card.task_status) ? '<span class="note ok">טופל ✓</span>' : `<button class="btn sec sm" data-act="handle" data-arg="${esc(x.card.key)}|done">טיפלתי</button>`}</div>`).join('')}
+        ${g.items.length > 10 && p.all !== '1' ? `<a class="quiet" href="#/home?c=${sel}&g=${encodeURIComponent(id)}&all=1">ועוד ${N(g.items.length - 10)} לקוחות</a>` : ''}
         ${bulk > 1 ? `<button class="btn sec sm" style="margin-top:8px" data-act="offerGroup" data-arg="${esc(g.gk)}">הכן הצעה לכל ה-${N(bulk)}</button>` : ''}</div>` : ''}`; }).join('') || '<div class="empty">אין לקוחות כאן</div>'}</div>
   <p class="note" style="text-align:center">נבדקו ${N(n.red + n.yellow + n.green)} לקוחות אוטומטית · <a href="#/home?v=today">פירוט מלא</a></p></div>`;
   chart($('#pChart'), { labels: w.map((x) => x.label), h: 170, fmt: (v) => Math.round(v).toLocaleString(), series: [{ name: 'לידים', color: 'var(--acc)', w: 2.6, vals: w.map((x) => x.leads) }] });
@@ -297,6 +298,20 @@ V.meet = async (view, p) => {
     series: [{ name: 'עלות לליד', color: 'var(--acc)', w: 2.6, vals: roll.map((x) => x.cpl) }] });
 };
 
+A.talk = async (b, cid) => {
+  const d = st._client;
+  const r = await api(`/api/pulse/clients/${cid}/update-draft`, { method: 'POST' });
+  const ct = (d.contacts || [])[0];
+  const phone = ct?.phone ? ct.phone.replace(/\D/g, '').replace(/^0/, '972') : '';
+  const wa = phone ? `https://wa.me/${phone}?text=${encodeURIComponent(r.text)}` : `https://wa.me/?text=${encodeURIComponent(r.text)}`;
+  modal(`<div class="mh"><b>דבר עם הלקוח · ${esc(d.client.name)}</b><div class="sp"></div><button class="iconbtn" data-act="close">${ic('x')}</button></div>
+    <div class="pad talk">${ct ? `<div class="tk-c"><b>${esc(ct.name)}</b><span class="note">${esc(ct.role || '')}</span><bdi class="tx2">${esc(ct.phone || '')}</bdi></div>` : '<p class="note">אין איש קשר שמור — אפשר להוסיף בתיק הלקוח.</p>'}
+    <div class="note" style="margin-top:12px">הודעה מוכנה מהנתונים (אפשר לערוך):</div><textarea class="inp" id="talkT" rows="7">${esc(r.text)}</textarea>
+    <div class="row" style="margin-top:12px"><a class="btn pri" id="waBtn" href="${wa}" target="_blank" rel="noopener">פתח בוואטסאפ</a><button class="btn sec" data-act="copyTalk">העתק</button><span class="note">לא נשלח אוטומטית — אתה שולח</span></div></div>`);
+  const ta = document.getElementById('talkT');
+  ta.oninput = () => { document.getElementById('waBtn').href = `https://wa.me/${phone}?text=${encodeURIComponent(ta.value)}`; };
+};
+A.copyTalk = async () => { try { await navigator.clipboard.writeText(document.getElementById('talkT').value); toast('הועתק'); } catch { document.getElementById('talkT').select(); toast('סמנו והעתיקו', 'warn'); } };
 A.commitDone = async (b, id) => { const r = await api(`/api/pulse/commitments/${id}`, { method: 'PATCH', body: { status: 'done' } }); toast(r.msg); render(); };
 
 // ================================================================ ניתוח מודעות (הבקשה של יובל: מה לשפר בהצעה, בקופי ובקריאייטיב)
@@ -423,7 +438,7 @@ V.client = async (view, p) => {
   view.innerHTML = `<a class="back" href="#/clients">${ic('back', 14)} כל הלקוחות</a>
   <div class="ch"><div><div class="row" style="gap:10px"><i class="dot d-${r.status}" style="width:12px;height:12px"></i><h2>${esc(c.name)}</h2></div>
     <div class="meta2" style="margin:6px 0 0"><span>${esc(SL[r.status])}</span><span>${esc(c.industry || '')}</span></div></div>
-    <div class="sp"></div><div class="row"><button class="btn sec sm" data-act="updDraft" data-arg="${c.id}">עדכון ללקוח</button>
+    <div class="sp"></div><div class="row"><button class="btn pri sm" data-act="talk" data-arg="${c.id}">${ic('chat', 14)} דבר עם הלקוח</button>
       <details class="menu"><summary class="btn sec sm">עוד</summary><div class="menu-list"><a href="/api/pulse/reports/client/${c.id}.html?days=30" target="_blank" rel="noopener">דוח ללקוח</a><a href="/api/pulse/reports/client/${c.id}.pdf?days=30">PDF</a>
         <a href="#/meet/${c.id}">מצב פגישה עם הלקוח</a><a href="#/ask?q=${encodeURIComponent('למה ' + c.name + ' במצב הזה?')}">שאל על הלקוח</a>${c.is_demo ? `<a href="#/ads?client=${c.id}">ניתוח המודעות</a>` : ''}<button data-act="editClient" data-arg="${c.id}">הגדרות ויעדים</button></div></details></div></div>
   <div class="k4s cl">${[['לידים 7 ימים', r.rec.leads, r.base.leads / 3, true, (v) => Math.round(v)], ['עלות לליד', r.rec.cpl, r.base.cpl, false, money], ['הוצאה 7 ימים', r.rec.spend, r.base.spend / 3, null, money]].map(([l, v, pv, gu, fm]) => {
