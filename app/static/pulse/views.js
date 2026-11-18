@@ -147,6 +147,8 @@ const sortRows = (rs, s) => {
   if (s === 'leads') r.sort((a, b) => (a.leads_norm ? a.leads / a.leads_norm : 9) - (b.leads_norm ? b.leads / b.leads_norm : 9));
   else if (s === 'check') r.sort((a, b) => (b.check.ago ?? 99) - (a.check.ago ?? 99));
   else if (s === 'name') r.sort((a, b) => a.name.localeCompare(b.name, 'he'));
+  else if (s === 'cpl') r.sort((a, b) => ((b.cpl_norm && b.cpl ? b.cpl / b.cpl_norm : 0) - (a.cpl_norm && a.cpl ? a.cpl / a.cpl_norm : 0)));
+  else if (s === 'contact') r.sort((a, b) => (b.contact.ago ?? 99) - (a.contact.ago ?? 99));
   return r;
 };
 const cplCell = (x) => (x.cpl == null ? '<span class="cpm">אין לידים</span>' : `${money(x.cpl)}${x.cpl_norm ? `<small class="${x.cpl > x.cpl_norm * 1.2 ? 'bad' : 'cpm'}">רגיל ${money(x.cpl_norm)}</small>` : ''}`);
@@ -218,6 +220,17 @@ const deepHTML = (i, x) => {
       <div><h4>אחראי ומעקב</h4><p>${esc(M.owner)}${x ? ` · בדיקת קמפיין ${esc(ago(x.check.ago))} · קשר ${esc(ago(x.contact.ago))}` : ''}</p></div>
     </div></details>`;
 };
+const openSide = (view, bd) => {
+  const sx = BD.exp && bd.groups.flatMap((g) => g.rows).find((r) => r.id === BD.exp);
+  if (!sx) return;
+  const m = bd.groups.find((g) => g.id === sx.owner);
+  view.insertAdjacentHTML('beforeend', `<aside class="sd" role="dialog" aria-label="${esc(sx.name)}">
+    <header class="sd-h"><div><h2><a href="#/client/${sx.id}">${esc(sx.name)}</a></h2>
+      <p><em class="sdt st-${LT(sx.status)}">${ST3[sx.status]}</em>${m ? `<span>${esc(m.name)}</span>` : ''}<span>${esc(sx.why)}</span></p></div>
+      <button class="sd-x" data-act="sdClose" aria-label="סגירה">✕</button></header>
+    <div class="sd-b">${bdExp(sx)}</div></aside>`);
+  loadDeep(sx.id);
+};
 V.home = async (view, p = {}) => {
   if (p.v === 'big' || p.v === 'today') return V.today(view);
   if (p.v === 'plan') return V.plan(view, p);
@@ -229,7 +242,8 @@ V.home = async (view, p = {}) => {
   const match = (x) => (!q || x.name.includes(q)) && (!f || LT(x.status) === f);
   const C_ = bd.counts;
   const groups = bd.groups.filter((g) => !p.m || g.id === p.m).map((g) => ({ ...g, rows: sortRows(g.rows.filter(match), s_) }));
-  const hdr = `<div class="mr mh"><span>לקוח</span><span>קמפיינר</span><span>סטטוס</span><span>למה</span><span>לידים</span><span>עלות לליד</span><span>בדיקת קמפיין</span><span>קשר עם הלקוח</span><span>המלצה</span><span></span></div>`;
+  const sh = (k, t) => `<span class="sortable ${s_ === k ? 'on' : ''}" data-act="bdSortH" data-arg="${k}" role="button" tabindex="0" title="מיון">${t}${s_ === k ? ' ▾' : ''}</span>`;
+  const hdr = `<div class="mr mh">${sh('name', 'לקוח')}<span>קמפיינר</span>${sh('', 'סטטוס')}<span>למה</span>${sh('leads', 'לידים')}${sh('cpl', 'עלות לליד')}${sh('check', 'בדיקת קמפיין')}${sh('contact', 'קשר עם הלקוח')}<span>המלצה</span><span></span></div>`;
   const bat = (rs) => { const n = rs.length || 1; return `<div class="mbat">${['red', 'yellow', 'green'].map((k) => { const c = rs.filter((x) => LT(x.status) === k).length; return c ? `<i class="st-${k}" style="flex:${c}" title="${ST3[k]}: ${c}"></i>` : ''; }).join('')}</div>`; };
   const grp = (id, name, color, rs, extra, open) => `<section class="mg" style="--gc:${color}">
     <div class="mg-h" data-act="bdGroup" data-arg="${id}" role="button" tabindex="0" aria-expanded="${open}"><span class="car">${open ? '▾' : '◂'}</span><b>${esc(name)}</b><span class="mg-c">${N(rs.length)} לקוחות</span>${extra || ''}
@@ -243,7 +257,7 @@ V.home = async (view, p = {}) => {
     <form id="bdQ" class="mtool"><span aria-hidden="true">⌕</span><input name="q" value="${esc(q)}" placeholder="חיפוש" aria-label="חיפוש לקוח"></form>
     ${sel('bdM', 'קמפיינר', [['', 'כולם'], ...bd.groups.map((g) => [g.id, g.name])], p.m || '')}
     ${sel('bdF', 'סטטוס', [['', 'הכול'], ['red', `לטיפול (${C_.red})`], ['yellow', `לבדיקה (${C_.yellow + C_.nodata})`], ['green', `תקין (${C_.green})`]], f)}
-    ${sel('bdS', 'מיון', [['', 'דחוף קודם'], ['leads', 'ירידה בלידים'], ['check', 'לא נבדק הכי הרבה'], ['name', 'שם']], s_)}
+    ${sel('bdS', 'מיון', [['', 'דחוף קודם'], ['leads', 'ירידה בלידים'], ['check', 'לא נבדק הכי הרבה'], ['cpl', 'עלות לליד חריגה'], ['contact', 'בלי קשר הכי הרבה'], ['name', 'שם']], s_)}
     ${q || f || p.m || s_ ? '<a class="mtool" href="#/home">ניקוי</a>' : ''}</div>
   ${!p.m && urgentRows.length ? grp('__urgent', 'דורשים תשומת לב היום', '#676879', urgentRows, '', !BD.closed.has('__urgent')) : ''}
   ${groups.map((g, gi) => grp(g.id, g.name, MCOL[bd.groups.indexOf(bd.groups.find((y) => y.id === g.id)) % MCOL.length], g.rows,
@@ -254,16 +268,7 @@ V.home = async (view, p = {}) => {
   $('#bdQ').addEventListener('submit', (e) => { e.preventDefault(); location.hash = bdLink(p, { q: new FormData(e.target).get('q') || '' }); });
   $('#bdM').addEventListener('change', (e) => { location.hash = bdLink(p, { m: e.target.value }); });
   $('#bdS').addEventListener('change', (e) => { location.hash = bdLink(p, { s: e.target.value }); });
-  const sx = BD.exp && bd.groups.flatMap((g) => g.rows).find((r) => r.id === BD.exp);
-  if (sx) {
-    const m = bd.groups.find((g) => g.id === sx.owner);
-    view.insertAdjacentHTML('beforeend', `<aside class="sd" role="dialog" aria-label="${esc(sx.name)}">
-      <header class="sd-h"><div><h2><a href="#/client/${sx.id}">${esc(sx.name)}</a></h2>
-        <p><em class="sdt st-${LT(sx.status)}">${ST3[sx.status]}</em>${m ? `<span>${esc(m.name)}</span>` : ''}<span>${esc(sx.why)}</span></p></div>
-        <button class="sd-x" data-act="sdClose" aria-label="סגירה">✕</button></header>
-      <div class="sd-b">${bdExp(sx)}</div></aside>`);
-    loadDeep(sx.id);
-  }
+  openSide(view, bd);
 };
 const loadDeep = async (cid) => {
   const el = document.getElementById('bd-' + cid); if (!el) return;
@@ -271,6 +276,7 @@ const loadDeep = async (cid) => {
   el.innerHTML = deepHTML(i, (st._bd?.groups || []).flatMap((g) => g.rows).find((r) => r.id === cid));
 };
 A.bdRow = (el, arg, ev) => { const ln = ev && ev.target.closest('a[href]'); if (ln) { location.hash = ln.getAttribute('href'); return; } const [cid, gid] = arg.split('|'); const same = BD.exp === cid && BD.expG === gid; BD.exp = same ? null : cid; BD.expG = gid; if (same) BD.deep = null; render(); };
+A.bdSortH = (b, k) => { const p_ = new URLSearchParams(location.hash.split('?')[1] || ''); if (k) p_.set('s', k); else p_.delete('s'); location.hash = '#/home?' + p_.toString(); };
 A.sdClose = () => { BD.exp = null; render(); };
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && BD.exp && document.querySelector('.sd')) { BD.exp = null; render(); } });
 A.bdDeep = (b, arg) => { const [cid, gid] = arg.split('|'); const same = BD.exp === cid && (!gid || BD.expG === gid); BD.exp = same ? null : cid; if (gid) BD.expG = gid; render(); };
@@ -539,31 +545,79 @@ A.copyTalk = async () => { try { await navigator.clipboard.writeText(document.ge
 A.commitDone = async (b, id) => { const r = await api(`/api/pulse/commitments/${id}`, { method: 'PATCH', body: { status: 'done' } }); toast(r.msg); render(); };
 
 // ================================================================ ניתוח מודעות (הבקשה של יובל: מה לשפר בהצעה, בקופי ובקריאייטיב)
+const VERD = { red: ['לעצור או לשכתב', '#E2445C'], yellow: ['לשפר', '#FDAB3D'], win: ['מנצחות — להגדיל', '#00C875'], ok: ['תקינות', '#579BFC'] };
+const vk = (a) => (a.tone === 'red' ? 'red' : a.verdict.startsWith('מנצחת') ? 'win' : a.tone === 'yellow' ? 'yellow' : 'ok');
 V.ads = async (view, p) => {
   const d = await api('/api/pulse/ads' + (p.client ? `?client=${encodeURIComponent(p.client)}` : ''));
-  const an = d.analysis, s = an.summary;
-  const tone = { red: 'p-red', yellow: 'p-yellow', green: 'p-green' };
-  view.innerHTML = `<div class="row" style="margin-bottom:12px"><select class="inp" id="adC" style="flex:1;max-width:460px" aria-label="לקוח">${d.clients.map((c) => `<option value="${c.id}" ${d.client && c.id === d.client.id ? 'selected' : ''}>${esc(c.name)} · ${esc(c.headline)}</option>`).join('')}</select>
-    <span class="engine">${d.ai ? 'הצעות קופי: ' + esc(d.ai) : 'בדיקה לפי כללים · הצעות קופי יופעלו עם Gemini'}</span></div>
-  ${d.note ? `<div class="card pad">${esc(d.note)}</div>` : ''}
-  ${s ? `<div class="card pad" style="margin-bottom:14px"><div class="row"><div><h3 style="margin:0">${esc(d.client.name)} ${demoTag(d.client.is_demo)}</h3><div class="note">${esc(s.note)}</div></div><span class="sp"></span>
-    <div class="sv"><div class="note">מסקנה</div><b>${esc(s.headline)}</b></div>${s.waste ? `<div class="sv"><div class="note">כסף שהולך על מודעות חלשות (7 ימים)</div><b class="bad">${N(money(s.waste))}</b></div>` : ''}${s.winner ? `<div class="sv"><div class="note">המנצחת</div><b class="ok">${esc(s.winner)}</b></div>` : ''}</div></div>` : ''}
-  <div class="stack">${an.ads.map((a) => `<div class="card pad sev-${a.tone === 'green' ? 'green' : a.tone}">
-    <div class="row"><b>${esc(a.name)}</b>${demoTag(a.is_demo)}<span class="pill ${tone[a.tone]}">${esc(a.verdict)}</span><span class="sp"></span>
-      <span class="small tx2">הוצאה ${N(money(a.spend))} · CTR ${N(pctf(a.ctr, 2))} · המרה ${N(pctf(a.cvr, 1))} · עלות לליד ${N(money(a.cpl))} · תדירות ${N(a.frequency)}</span></div>
-    ${a.recs.length ? `<div class="small" style="margin-top:6px"><b>הכי חשוב:</b> ${esc(a.recs[0].issue)} — ${esc(a.recs[0].do)}</div>` : ''}
-    <details class="more"><summary>פירוט: טקסט המודעה, כל ההמלצות ושיפור קופי</summary>
-    <div class="adbox"><div class="adh">${esc(a.headline)}</div><div class="small">${esc(a.text)}</div><div class="row small" style="margin-top:6px">${Object.entries(a.checks).map(([k, v]) => `<span class="pill ${v ? 'p-green' : 'p-red'}">${v ? '✓' : '✗'} ${esc(k)}</span>`).join('')}</div></div>
-    ${a.recs.length ? `<div class="recs">${a.recs.map((r) => `<div class="rec"><span class="pill p-gray">${esc(r.area)}</span><div><b>${esc(r.issue)}</b> — ${esc(r.why)}<div class="small">מה לעשות: ${esc(r.do)}</div></div></div>`).join('')}</div>` : '<p class="small ok">אין מה לתקן במודעה הזו לפי הנתונים.</p>'}
-    <div class="row" style="margin-top:10px">${a.recs.length ? `<button class="btn pri sm" data-act="adRewrite" data-arg="${esc(a.id)}">${ic('spark', 13)} הצע קופי משופר</button><button class="btn sec sm" data-act="oppTask" data-arg="${esc(d.client.id)}|${esc(a.name + ': ' + a.recs[0].do)}">צור משימה</button>` : ''}</div>
-    <div id="rw_${esc(a.id)}"></div></details></div>`).join('') || (d.note ? '' : `<div class="card">${empty('אין מודעות להצגה')}</div>`)}</div>`;
-  $('#adC').onchange = (e) => go('ads?client=' + e.target.value);
+  const an = d.analysis, sm = an.summary;
+  st._ads = d;
+  const hdr = `<div class="mr mh mad"><span>מודעה</span><span>פורמט</span><span>החלטה</span><span>הוצאה</span><span>CTR</span><span>המרה</span><span>עלות לליד</span><span>תדירות</span><span>הבעיה המרכזית</span><span></span></div>`;
+  const row = (a, color) => `<div class="mr mad ${BD.ad === a.id ? 'open' : ''}" style="--gc:${color}" data-act="adRow" data-arg="${esc(a.id)}" role="button" tabindex="0">
+    <span class="m-name"><b>${esc(a.name.split(' · ')[0])}</b></span><span class="m-n">${esc(a.format)}</span>
+    <span class="m-st"><em style="background:${color}">${esc(VERD[vk(a)][0].split(' — ')[0])}</em></span>
+    <span class="m-n">${money(a.spend)}</span><span class="m-n">${pctf(a.ctr, 2)}</span><span class="m-n">${pctf(a.cvr, 1)}</span>
+    <span class="m-n ${a.tone === 'red' ? 'bad' : ''}">${a.cpl == null ? '—' : money(a.cpl)}</span><span class="m-n ${a.frequency >= 3.5 ? 'bad' : ''}">${N(a.frequency)}</span>
+    <span class="m-tx m-rec">${a.recs.length ? esc(a.recs[0].issue) : 'אין בעיה'}</span>
+    <span class="m-go"><button class="m-help" data-act="adRow" data-arg="${esc(a.id)}">איך לשפר ←</button></span></div>`;
+  const groups = ['red', 'yellow', 'win', 'ok'].map((k) => [k, an.ads.filter((a) => vk(a) === k)]).filter(([, l]) => l.length);
+  view.innerHTML = `<div class="mb2">
+  <header class="mb2-h"><h1>מודעות</h1><p>${d.client ? `${esc(d.client.name)} · ${sm ? esc(sm.headline) : ''}${sm?.winner ? ` · המובילה: ${esc(sm.winner)}` : ''}` : 'בחר לקוח'}</p></header>
+  <div class="mtools">
+    <label class="mtool">לקוח<select id="adC">${d.clients.map((c) => `<option value="${c.id}" ${d.client && c.id === d.client.id ? 'selected' : ''}>${esc(c.name)}${c.to_fix ? ` · ${c.to_fix} לשפר` : ''}</option>`).join('')}</select></label>
+    ${sm ? `<span class="mtool cpm">${esc(sm.note)}</span>` : ''}
+    <span class="mtool cpm">${d.ai ? 'קופי חלופי: ' + esc(d.ai) : 'בדיקה לפי כללים · קופי חלופי לא מחובר (צריך Gemini)'}</span></div>
+  ${d.note ? `<p class="cpm">${esc(d.note)}</p>` : ''}
+  ${groups.map(([k, l]) => `<section class="mg" style="--gc:${VERD[k][1]}"><div class="mg-h"><b>${VERD[k][0]}</b><span class="mg-c">${N(l.length)} מודעות</span></div>
+    <div class="mt">${hdr}${l.map((a) => row(a, VERD[k][1])).join('')}</div></section>`).join('') || (d.note ? '' : '<p class="cpm">אין מודעות להצגה</p>')}</div>`;
+  $('#adC').onchange = (e) => { BD.ad = null; go('ads?client=' + e.target.value); };
+  const ad = BD.ad && an.ads.find((a) => a.id === BD.ad);
+  if (ad) {
+    const color = VERD[vk(ad)][1];
+    view.insertAdjacentHTML('beforeend', `<aside class="sd" role="dialog" aria-label="${esc(ad.name)}">
+      <header class="sd-h"><div><h2>${esc(ad.name)}</h2><p><em class="sdt" style="background:${color}">${esc(ad.verdict)}</em><span>${esc(d.client.name)}</span>${ad.is_demo ? '<span>מודעת דמו</span>' : ''}</p></div>
+        <button class="sd-x" data-act="adClose" aria-label="סגירה">✕</button></header>
+      <div class="sd-b"><div class="hp">
+        <div class="hp-who"><div class="hp-k">המודעה</div><p class="hp-about"><b>${esc(ad.headline)}</b><br>${esc(ad.text)}</p>
+          <div class="ad-chk">${Object.entries(ad.checks).map(([k, v]) => `<span class="${v ? 'ok' : 'bad'}">${v ? '✓' : '✗'} ${esc(k)}</span>`).join('')}</div></div>
+        <div class="hp-short"><div class="hp-k">איך לשפר — בקצרה</div>
+          ${ad.recs.length ? `<ol class="hp-steps">${ad.recs.map((r) => `<li><b>${esc(r.area)}:</b> ${esc(r.do)}</li>`).join('')}</ol>` : '<p class="hp-what">המודעה עובדת טוב. אם היא מנצחת — להגדיל לה תקציב בהדרגה.</p>'}
+          <p class="hp-meas">✓ איך נדע שהצליח: עלות לליד יורדת אל מתחת לממוצע של הלקוח (${money(sm.avg.cpl)}) תוך 7 ימים</p>
+          <div class="hp-acts"><button class="hp-b pri" data-act="oppTask" data-arg="${esc(d.client.id)}|${esc(ad.name + ': ' + (ad.recs[0]?.do || 'להגדיל תקציב בהדרגה'))}">פתח משימה לקמפיינר</button></div></div>
+        <div class="hp-ai"><div class="hp-k">ה-AI יכול לעזור</div><div class="hp-ai-l">
+          ${d.ai ? `<button class="hp-ai-i" data-act="adRewrite" data-arg="${esc(ad.id)}"><b>לכתוב 3 גרסאות קופי</b><small>רק מעובדות שבמודעה — בלי להמציא</small></button>` : '<div class="hp-ai-i off"><b>לכתוב 3 גרסאות קופי</b><small>לא מחובר · צריך מפתח Gemini בשרת</small></div>'}
+          <div class="hp-ai-i off"><b>לעצור מודעה / להעביר תקציב</b><small>לא מחובר · צריך Meta Ads · תמיד באישור מנהל</small></div></div><div id="rw_${esc(ad.id)}"></div></div>
+        <details class="hp-more"><summary>בהרחבה — למה ומה הנתונים</summary><div class="dp">
+          ${ad.recs.map((r) => `<div class="wide"><h4>${esc(r.area)} · ${esc(r.issue)}</h4><p>${esc(r.why)}</p></div>`).join('')}
+          <div><h4>ביצועים 7 ימים</h4><p>הוצאה ${money(ad.spend)} · ${N(ad.leads)} לידים · ${N(ad.clicks)} הקלקות</p></div>
+          <div><h4>מול ממוצע הלקוח</h4><p>CTR ${pctf(ad.ctr, 2)} מול ${pctf(sm.avg.ctr, 2)} · המרה ${pctf(ad.cvr, 1)} מול ${pctf(sm.avg.cvr, 1)}</p></div></div></details>
+      </div></div></aside>`);
+  }
 };
+A.adRow = (b, id) => { BD.ad = BD.ad === id ? null : id; render(); };
+A.adClose = () => { BD.ad = null; render(); };
+A.addClient = () => {
+  document.querySelector('.sd')?.remove();
+  const g = st._bd?.groups || [];
+  document.getElementById('view').insertAdjacentHTML('beforeend', `<aside class="sd" role="dialog" aria-label="לקוח חדש"><header class="sd-h"><div><h2>לקוח חדש</h2><p><span>הנתונים מגיעים מייבוא CSV או מחיבור Meta</span></p></div><button class="sd-x" data-act="sdRemove" aria-label="סגירה">✕</button></header>
+    <div class="sd-b"><form id="ncF" class="nc">
+      <label>שם הלקוח<input name="name" required minlength="1" maxlength="120"></label>
+      <label>תחום<input name="industry" maxlength="80" placeholder="למשל: מרפאת שיניים"></label>
+      <label>קמפיינר<select name="owner"><option value="">ללא</option>${g.filter((x) => x.id).map((x) => `<option value="${x.id}">${esc(x.name)}</option>`).join('')}</select></label>
+      <label>יעד עלות לליד (₪)<input name="target_cpl" type="number" min="0"></label>
+      <label>תקציב חודשי (₪)<input name="monthly_budget" type="number" min="0"></label>
+      <button class="hp-b pri">הוסף לקוח</button></form></div></aside>`);
+  document.getElementById('ncF').addEventListener('submit', async (e) => {
+    e.preventDefault(); const f = new FormData(e.target); const body = {};
+    for (const [k, v] of f.entries()) if (v !== '') body[k] = ['target_cpl', 'monthly_budget'].includes(k) ? Number(v) : v;
+    const r = await api('/api/pulse/clients', { method: 'POST', body }); toast(`${r.name || body.name} נוסף. עכשיו אפשר לייבא נתונים בתיק הלקוח.`); document.querySelector('.sd')?.remove(); render();
+  });
+};
+A.sdRemove = () => document.querySelector('.sd')?.remove();
 A.adRewrite = async (b, id) => {
   b.disabled = true; b.textContent = 'כותב…';
   try {
     const r = await api(`/api/pulse/ads/${encodeURIComponent(id)}/rewrite`, { method: 'POST' });
-    document.getElementById('rw_' + id).innerHTML = `<div class="recs" style="margin-top:10px">${r.variants.map((v) => `<div class="rec"><span class="pill p-imp">גרסה</span><div><b>${esc(v.headline)}</b><div class="small">${esc(v.text)}</div><div class="note">${esc(v.why)}</div></div><button class="btn sec sm" data-act="copy" data-arg="${esc(v.headline + '\n' + v.text)}">העתק</button></div>`).join('')}<p class="note">נכתב ע"י ${esc(r.engine)} מתוך המודעה והבעיות שזוהו. לבדוק לפני שימוש.</p></div>`;
+    (document.getElementById('rw_' + id) || {}).innerHTML = `<div class="recs" style="margin-top:10px">${r.variants.map((v) => `<div class="rec"><span class="pill p-imp">גרסה</span><div><b>${esc(v.headline)}</b><div class="small">${esc(v.text)}</div><div class="note">${esc(v.why)}</div></div><button class="btn sec sm" data-act="copy" data-arg="${esc(v.headline + '\n' + v.text)}">העתק</button></div>`).join('')}<p class="note">נכתב ע"י ${esc(r.engine)} מתוך המודעה והבעיות שזוהו. לבדוק לפני שימוש.</p></div>`;
   } catch { /* ההודעה הוצגה */ } finally { b.disabled = false; b.innerHTML = ic('spark', 13) + ' הצע קופי משופר'; }
 };
 
@@ -608,49 +662,47 @@ function feedItem(e) {
 
 // ================================================================ לקוחות
 V.clients = async (view, p) => {
-  const d = await api('/api/pulse/clients');
-  st.clients = d.clients;
-  const f = p.f || 'all', q = p.q || '';
-  const rowsF = d.clients.filter((c) => (f === 'all' || (f === 'improved' ? c.improved : c.status === f)) && (!q || c.name.includes(q) || (c.industry || '').includes(q)));
-  const cnt = (k) => d.clients.filter((c) => (k === 'all' ? 1 : k === 'improved' ? c.improved : c.status === k)).length;
-  view.innerHTML = `<div class="card"><div class="toolbar"><input class="inp" id="cq" placeholder="חיפוש לקוח או ענף" value="${esc(q)}" style="flex:1;min-width:160px">
-    <div class="chips">${[['all', 'הכול'], ['red', 'דחוף'], ['yellow', 'במעקב'], ['green', 'תקין'], ['nodata', 'אין מספיק מידע'], ['improved', 'השתפרו']].map(([k, t]) => `<button class="chip ${f === k ? 'on' : ''}" data-act="go" data-arg="clients?f=${k}">${t} ${N(cnt(k))}</button>`).join('')}</div>
-    <button class="btn sec sm" data-act="addClient">+ לקוח</button></div>
-    <div class="list"><div class="rw hd"><span>לקוח</span><span>מצב</span><span class="c-cpl">עלות לליד 7 ימים</span><span class="c-leads">לידים</span><span class="c-owner">אחראי</span><span>הנושא המרכזי</span></div>
-    ${rowsF.map((c) => `<button class="rw" data-act="go" data-arg="client/${c.id}"><span class="nm"><span class="ring" style="--v:${c.health ?? 0};--c:var(--${c.health == null ? 'line2' : c.health >= 75 ? 'g' : c.health >= 45 ? 'y' : 'r'});width:30px;height:30px"><b style="width:24px;height:24px;font-size:10.5px">${N(c.health ?? '—')}</b></span><span style="min-width:0"><span class="t">${esc(c.name)}</span> ${demoTag(c.is_demo)}<div class="s">${esc(c.industry || '')}</div></span></span>
-      <span>${pill(c.status)}</span><span class="c-cpl">${N(money(c.cpl))}${chg(c.cpl, c.base_cpl, true)}</span><span class="c-leads">${N(c.leads)}</span><span class="c-owner">${esc(memberName(c.owner))}</span>
-      <span class="iss">${c.alerts.length ? esc(c.alerts[0].title) + (c.alerts.length > 1 ? ` <span class="note">+${c.alerts.length - 1}</span>` : '') + (c.alerts[0].handling && c.alerts[0].handling !== 'open' ? ` <span class="pill p-gray">${esc(HANDLING[c.alerts[0].handling])}</span>` : '') : c.improved ? '<span class="pill p-imp">השתפר</span>' : c.lowData ? '<span class="note">מעט נתונים</span>' : '<span class="muted">—</span>'}</span></button>`).join('') || empty('אין לקוחות בסינון הזה')}</div></div>`;
-  const inp = $('#cq');
-  inp.oninput = () => { clearTimeout(inp._t); inp._t = setTimeout(() => { history.replaceState(null, '', `#/clients?f=${f}&q=${encodeURIComponent(inp.value)}`); V.clients(view, { f, q: inp.value }).then(() => { const i = $('#cq'); i.focus(); i.setSelectionRange(i.value.length, i.value.length); }); }, 250); };
+  const [d, bd] = await Promise.all([api('/api/pulse/clients'), api('/api/pulse/board')]);
+  st.clients = d.clients; st._bd = bd;
+  const q = (p.q || '').trim(), m_ = p.m || '', s_ = p.s || '';
+  const bi = Object.fromEntries(bd.groups.flatMap((g) => g.rows).map((r) => [r.id, r]));
+  const gi = Object.fromEntries(bd.groups.map((g, i) => [g.id, i]));
+  let rows = d.clients.filter((c) => (!q || c.name.includes(q) || (c.industry || '').includes(q)) && (!m_ || c.owner === m_));
+  if (s_ === 'name') rows.sort((x, y) => x.name.localeCompare(y.name, 'he'));
+  else if (s_ === 'leads') rows.sort((x, y) => y.leads - x.leads);
+  else if (s_ === 'spend') rows.sort((x, y) => y.spend - x.spend);
+  const link = (o) => `#/clients?${new URLSearchParams(Object.fromEntries(Object.entries({ q, m: m_, s: s_, ...o }).filter(([, v]) => v))).toString()}`;
+  const hdr = `<div class="mr mh mc"><span>לקוח</span><span>קמפיינר</span><span>סטטוס</span><span>תחום</span><span>לידים 7 ימים</span><span>עלות לליד</span><span>יעד</span><span>הוצאה 7 ימים</span><span>הנושא המרכזי</span><span></span></div>`;
+  const row = (c, color, gid) => { const x = bi[c.id] || {}; const own = bd.groups[gi[c.owner]];
+    return `<div class="mr mc ${BD.exp === c.id ? 'open' : ''}" style="--gc:${color}" data-act="clRow" data-arg="${c.id}" role="button" tabindex="0">
+      <span class="m-name"><b>${esc(c.name)}</b></span>
+      <span class="m-own">${own ? `<i class="m-av" style="background:${MCOL[gi[c.owner] % MCOL.length]}">${esc(own.name[0])}</i>` : ''}</span>
+      <span class="m-st"><em class="st-${LT(c.status)}">${ST3[c.status]}</em></span>
+      <span class="m-tx">${esc(c.industry || '')}</span>
+      <span class="m-n">${N(c.leads)}</span>
+      <span class="m-n ${c.cpl && c.target && c.cpl > c.target ? 'bad' : ''}">${c.cpl == null ? '—' : money(c.cpl)}</span>
+      <span class="m-n">${c.target ? money(c.target) : '—'}</span>
+      <span class="m-n">${money(c.spend)}</span>
+      <span class="m-tx m-rec">${esc(c.alerts.length ? c.alerts[0].title : c.improved ? 'השתפר' : x.why || 'תקין')}</span>
+      <span class="m-go"><button class="m-help" data-act="clRow" data-arg="${c.id}">פרטים ←</button></span></div>`; };
+  const grp = (k, name, color) => { const rs = rows.filter((c) => LT(c.status) === k); const open = !BD.closed.has('cl_' + k);
+    return `<section class="mg" style="--gc:${color}"><div class="mg-h" data-act="bdGroup" data-arg="cl_${k}" role="button" tabindex="0"><span class="car">${open ? '▾' : '◂'}</span><b>${name}</b><span class="mg-c">${N(rs.length)} לקוחות</span></div>
+      ${open ? `<div class="mt">${hdr}${rs.map((c) => row(c, color, k)).join('') || '<div class="mr-empty">אין לקוחות</div>'}</div>` : ''}</section>`; };
+  view.innerHTML = `<div class="mb2">
+  <header class="mb2-h"><h1>לקוחות</h1><p>${N(d.clients.length)} לקוחות במשרד · לחיצה על לקוח פותחת את הפרטים בצד</p></header>
+  <div class="mtools">
+    <form id="clQ" class="mtool"><span aria-hidden="true">⌕</span><input name="q" value="${esc(q)}" placeholder="חיפוש לקוח או תחום" aria-label="חיפוש לקוח"></form>
+    <label class="mtool">קמפיינר<select id="clM"><option value="">כולם</option>${bd.groups.map((g) => `<option value="${g.id}" ${m_ === g.id ? 'selected' : ''}>${esc(g.name)}</option>`).join('')}</select></label>
+    <label class="mtool">מיון<select id="clS">${[['', 'דחוף קודם'], ['leads', 'הכי הרבה לידים'], ['spend', 'הוצאה'], ['name', 'שם']].map(([v, t]) => `<option value="${v}" ${s_ === v ? 'selected' : ''}>${t}</option>`).join('')}</select></label>
+    <button class="mtool" data-act="addClient">+ לקוח חדש</button>
+    ${q || m_ || s_ ? '<a class="mtool" href="#/clients">ניקוי</a>' : ''}</div>
+  ${grp('red', 'לטיפול', '#E2445C')}${grp('yellow', 'לבדיקה', '#FDAB3D')}${grp('green', 'תקינים', '#00C875')}</div>`;
+  $('#clQ').addEventListener('submit', (e) => { e.preventDefault(); location.hash = link({ q: new FormData(e.target).get('q') || '' }); });
+  $('#clM').addEventListener('change', (e) => { location.hash = link({ m: e.target.value }); });
+  $('#clS').addEventListener('change', (e) => { location.hash = link({ s: e.target.value }); });
+  openSide(view, bd);
 };
-
-A.addClient = () => modal(`<div class="mh"><b>לקוח חדש</b><div class="sp"></div><button class="iconbtn" data-act="close">${ic('x')}</button></div>
-  <form class="pad" id="ncF">${clientFields({})}<button class="btn pri" style="margin-top:10px">שמירה</button></form>`) || bindClientForm(null);
-function clientFields(c) {
-  const f = (k, l, t = 'number', v = c[k]) => `<div class="fld"><label for="f_${k}">${l}</label><input class="inp" id="f_${k}" name="${k}" type="${t}" ${t === 'number' ? 'step="any" min="0"' : ''} value="${v == null ? '' : esc(v)}"></div>`;
-  return `<div class="frm">${f('name', 'שם הלקוח', 'text')}${f('industry', 'ענף', 'text')}<div class="fld"><label for="f_owner">אחראי</label><select class="inp" id="f_owner" name="owner">${memberOpts(c.owner)}</select></div>
-  ${f('target_cpl', 'יעד עלות לליד (₪)', 'number', c.goals?.targetCpl ?? c.target_cpl)}${f('monthly_budget', 'תקציב פרסום חודשי (₪)', 'number', c.goals?.monthlyBudget ?? c.monthly_budget)}${f('website', 'אתר / דף נחיתה', 'url')}</div>
-  <div class="h2" style="margin-top:12px">רווחיות לסוכנות <span class="note">(נפרד מתקציב הפרסום)</span></div>
-  <div class="frm">${f('fee_monthly', 'הכנסה חודשית לסוכנות (₪)')}${f('hours_monthly', 'שעות עבודה בחודש')}${f('hourly_cost', 'עלות שעה (₪)')}${f('other_costs_monthly', 'עלויות נוספות בחודש (₪)')}</div>`;
-}
-function readClientForm(form) {
-  const o = {};
-  new FormData(form).forEach((v, k) => { if (v === '') { o[k] = null; return; } o[k] = ['name', 'industry', 'owner', 'website'].includes(k) ? v : Number(v); });
-  if (!o.name) delete o.name;
-  return o;
-}
-function bindClientForm(cid) {
-  const form = $(cid ? '#ecF' : '#ncF');
-  form.onsubmit = async (e) => {
-    e.preventDefault();
-    const body = readClientForm(form);
-    const r = await api(cid ? `/api/pulse/clients/${cid}` : '/api/pulse/clients', { method: cid ? 'PATCH' : 'POST', body });
-    closeModal(); toast(cid ? 'נשמר. הניתוח עודכן.' : 'הלקוח נוסף. עכשיו ייבאו נתונים (CSV) כדי שהמנוע ינתח אותו.');
-    st.clients = null; await refreshMe(); go('client/' + r.id);
-  };
-}
-
-// ================================================================ תיק לקוח 360
+A.clRow = (b, cid) => { BD.exp = BD.exp === cid ? null : cid; render(); };
 V.client360 = async (view, p) => {
   const days = Number(p.days || 30), metric = p.m || 'cpl';
   const d = await api(`/api/pulse/clients/${encodeURIComponent(p.id)}?days=${days}`);

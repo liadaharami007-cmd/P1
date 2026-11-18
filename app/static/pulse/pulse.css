@@ -919,3 +919,17 @@ button.hp-ai-i:hover:not(:disabled){border-color:#0073EA;background:#EEF4FF}butt
 .m-name b{font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .sd .hp-k .cpm{font-weight:400}
 @media (max-width:760px){.hp-dl>div{grid-template-columns:1fr;gap:2px}}
+/* לקוחות ומודעות בשיטת Monday */
+.mr.mc{grid-template-columns:minmax(150px,1.5fr) 64px 108px minmax(110px,1fr) 86px 88px 80px 96px minmax(130px,1.5fr) 92px}
+.mr.mad{grid-template-columns:minmax(110px,1fr) 80px 120px 88px 72px 72px 88px 72px minmax(150px,1.8fr) 100px}
+.mh .sortable{cursor:pointer}.mh .sortable:hover{color:#0073EA}.mh .sortable.on{color:#0073EA}
+.ad-chk{display:flex;gap:12px;flex-wrap:wrap;font-size:13px;margin-top:4px}
+.nc{display:grid;gap:12px;background:#fff;border:1px solid #E6E9EF;border-radius:8px;padding:18px}
+.nc label{display:grid;gap:4px;font-size:13px;color:var(--tx2)}
+.nc input,.nc select{border:1px solid #C5C7D0;border-radius:4px;padding:9px 10px;font:inherit;font-size:14px;color:var(--tx);background:#fff}
+.nc input:focus,.nc select:focus{outline:0;border-color:#0073EA}
+button.mtool{border:0;background:none;font:inherit}
+@media (max-width:1100px){.mr.mc{grid-template-columns:minmax(140px,1.6fr) 56px 100px minmax(100px,1fr) 80px 84px minmax(120px,1.5fr) 90px}.mr.mc>span:nth-child(7),.mr.mc>span:nth-child(8){display:none}
+  .mr.mad{grid-template-columns:minmax(100px,1fr) 110px 84px 84px minmax(130px,1.8fr) 96px}.mr.mad>span:nth-child(2),.mr.mad>span:nth-child(5),.mr.mad>span:nth-child(6),.mr.mad>span:nth-child(8){display:none}}
+@media (max-width:760px){.mr.mc,.mr.mad{grid-template-columns:1fr 34px 96px}.mr.mad>span:nth-child(2){display:none}}
+@media (max-width:760px){.mr.mad{grid-template-columns:1fr auto;grid-template-areas:"n s" "g g"}.mr.mad>.m-st{margin:8px 10px 0}.mr.mad>.m-st em{white-space:nowrap}.mtools .cpm{display:none}}
