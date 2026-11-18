@@ -88,6 +88,10 @@ const gauge = (c) => {
   const seg = (n, col) => { const len = n / tot * C; const s_ = `<circle r="${R}" cx="80" cy="80" fill="none" stroke="${col}" stroke-width="16" stroke-dasharray="${Math.max(0, len - 3)} ${C}" stroke-dashoffset="${-off}" transform="rotate(-90 80 80)"/>`; off += len; return s_; };
   return `<svg class="gauge" viewBox="0 0 160 160" role="img" aria-label="מצב המשרד"><circle r="${R}" cx="80" cy="80" fill="none" stroke="var(--line)" stroke-width="16"/>${seg(c.red, 'var(--r)')}${seg(c.yellow, 'var(--y)')}${seg(c.green, 'var(--g)')}</svg>`;
 };
+// מסך הבית בסגנון לוח סטטוסים: שלוש קבוצות (דחוף / במעקב / תקין), שורה לכל לקוח, תא סטטוס צבעוני שמתקדם בלחיצה
+const HS = { new: ['צריך טיפול', 'st-new'], check: ['לבדוק', 'st-work'], in_progress: ['בטיפול', 'st-prog'], done: ['טופל', 'st-done'] };
+const hstate = (c) => (!c ? null : c.task_id && !['new', 'in_progress'].includes(c.task_status) ? 'done' : c.task_status === 'in_progress' ? 'in_progress' : 'new');
+const battery = (parts) => { const t = parts.reduce((s_, x) => s_ + x[0], 0) || 1; return `<div class="mb-bat">${parts.filter((x) => x[0]).map(([n, cls, lab]) => `<span class="${cls}" style="flex:${n}" aria-label="${esc(lab)}: ${n}"></span>`).join('')}</div>`; };
 V.home = async (view, p = {}) => {
   if (p.v === 'big' || p.v === 'today') return V.today(view);
   if (p.v === 'plan') return V.plan(view, p);
@@ -96,40 +100,54 @@ V.home = async (view, p = {}) => {
   const hour = new Date().getHours(), greet = hour < 12 ? 'בוקר טוב' : hour < 18 ? 'צהריים טובים' : 'ערב טוב';
   const byClient = {};
   ab.cards.forEach((x) => { if (!byClient[x.client_id]) byClient[x.client_id] = x; });
-  const rows = ab.board.map((x) => ({ ...x, card: byClient[x.id], st: x.status === 'nodata' ? 'green' : x.status }));
-  const cnt = (m, k) => rows.filter((x) => (!m || x.owner === m) && x.st === k).length;
-  const tot = { red: cnt('', 'red'), yellow: cnt('', 'yellow'), green: cnt('', 'green') };
+  const pi = Object.fromEntries(perf.map((x, i) => [x.id, i]));
+  const selM = p.m || '', q = (p.q || '').trim();
+  const all = ab.board.map((x) => ({ ...x, card: byClient[x.id], st: x.status === 'nodata' ? 'green' : x.status }));
+  const rows = all.filter((x) => (!selM || x.owner === selM) && (!q || x.name.includes(q)));
   const pot = rows.filter((x) => x.st === 'red').reduce((s_, x) => s_ + (x.card?.potential_leads || 0), 0);
-  const selM = p.m || '', selK = p.k || '';
-  const cell = (m, k) => { const n = cnt(m, k), on = selM === m && selK === k; return `<a class="mx-c mx-${k} ${on ? 'on' : ''} ${n ? '' : 'zero'}" href="#/home?${new URLSearchParams({ ...(m ? { m } : {}), k }).toString()}"><b>${N(n)}</b></a>`; };
-  let detail = '';
-  if (selK) {
-    const list = rows.filter((x) => (!selM || x.owner === selM) && x.st === selK);
-    const g = {};
-    list.forEach((x) => { const gk = selK === 'green' ? (x.status === 'nodata' ? 'data_missing' : x.suggest?.kind || 'keep') : x.card ? x.card.key.split(':')[1] : 'keep'; (g[gk] = g[gk] || []).push(x); });
-    const groups = Object.entries(g).sort((a1, z) => (a1[0] === 'keep') - (z[0] === 'keep') || z[1].length - a1[1].length);
-    const og = p.g || groups[0]?.[0];
-    const who = perf.find((x) => x.id === selM);
-    const act = (x) => selK === 'green' ? (x.suggest?.action ? `<button class="btn sec sm" data-act="oppTask" data-arg="${x.id}|${esc(x.suggest.action)}">הצע</button>` : '')
-      : !x.card ? '' : x.card.task_id && !['new', 'in_progress'].includes(x.card.task_status) ? '<span class="note ok">טופל ✓</span>' : `<button class="btn sec sm" data-act="handle" data-arg="${esc(x.card.key)}|done">טיפלתי</button>`;
-    detail = `<section class="mx-d"><div class="mx-dh"><span class="bulb b-${selK}"></span><h2>${LIGHT[selK].t} · ${who ? esc(who.name) : 'כל המשרד'} · ${N(list.length)}</h2><a class="note" href="#/home">סגור ✕</a>
-        ${who ? `<button class="btn sec sm" data-act="handover" data-arg="${who.id}">מסירה (חופשה / מחלה)</button>` : ''}</div>
-      <div class="mx-g">${groups.map(([gk, items]) => `<a class="mx-gb ${og === gk ? 'on' : ''}" href="#/home?${new URLSearchParams({ ...(selM ? { m: selM } : {}), k: selK, g: gk }).toString()}">${esc(GROUP[gk] || gk)} <b>${N(items.length)}</b></a>`).join('')}</div>
-      ${(g[og] || []).length ? `<div class="mx-do">${selK === 'green' ? 'מה אפשר להציע' : selK === 'red' ? 'מה עושים' : 'מה בודקים'}: <b>${esc(selK === 'green' ? (g[og][0].suggest?.action || 'לשמור על הקיים') : selK === 'red' ? g[og][0].card?.next : (g[og][0].card?.check?.[0] || g[og][0].card?.next))}</b></div>` : ''}
-      <div class="mx-l">${(g[og] || []).slice(0, p.all === '1' ? 999 : 12).map((x) => `<div class="mx-r"><i class="dot d-${x.status}"></i><a href="#/client/${x.id}">${esc(x.name)}</a><span class="note">${!selM ? esc((perf.find((y) => y.id === x.owner) || {}).name || '') + ' · ' : ''}${x.card?.potential_leads ? `+${x.card.potential_leads} לידים/שבוע` : selK === 'green' && x.cpl ? `${x.leads} לידים בשבוע` : ''}</span><span class="sp"></span>${act(x)}</div>`).join('')}</div>
-      ${(g[og] || []).length > 12 && p.all !== '1' ? `<a class="quiet" href="#/home?${new URLSearchParams({ ...(selM ? { m: selM } : {}), k: selK, g: og, all: '1' }).toString()}">ועוד ${N(g[og].length - 12)}</a>` : ''}</section>`;
-  }
-  view.innerHTML = `<div class="mx">
-  <header class="mx-h"><h1>${greet}, ${esc(st.me.user.name)}</h1>
-    <p>${tot.red ? `<b>${N(tot.red)}</b> לקוחות צריכים טיפול היום${pot ? ` — טיפול בהם יכול להחזיר כ-<b>${N(pot)}</b> לידים בשבוע` : ''}. לחץ על מספר כדי לראות מי.` : 'כל הלקוחות במצב טוב היום.'}</p></header>
-  <section class="mx-t">
-    <div class="mx-row mx-head"><span></span><span><i class="dot d-red"></i>דחוף</span><span><i class="dot d-yellow"></i>במעקב</span><span><i class="dot d-green"></i>תקין</span></div>
-    ${perf.map((x) => `<div class="mx-row ${selM === x.id ? 'sel' : ''}"><span class="mx-n">${esc(x.name)}<small>${N(x.clients)} לקוחות</small></span>${cell(x.id, 'red')}${cell(x.id, 'yellow')}${cell(x.id, 'green')}</div>`).join('')}
-    <div class="mx-row mx-tot"><span class="mx-n">כל המשרד<small>${N(rows.length)} לקוחות</small></span>${cell('', 'red')}${cell('', 'yellow')}${cell('', 'green')}</div>
-  </section>
-  ${detail}
+  const nRed = rows.filter((x) => x.st === 'red').length;
+  const who = perf.find((x) => x.id === selM);
+  const link = (o) => `#/home?${new URLSearchParams(Object.fromEntries(Object.entries({ m: selM, q, ...o }).filter(([, v]) => v))).toString()}`;
+  const owner = (x) => { const m = perf[pi[x.owner]]; return m ? `${avatar(m.name, pi[x.owner])}<span class="mb-on">${esc(m.name)}</span>` : ''; };
+  const row = (x, k) => {
+    const c = x.card, hs = hstate(c);
+    const status = k === 'green'
+      ? `<span class="mb-st st-ok">${x.status === 'nodata' ? 'חסרים נתונים' : 'תקין'}</span>`
+      : hs === 'done' ? `<span class="mb-st st-done">טופל ✓</span>`
+      : `<button class="mb-st ${HS[k === 'yellow' && hs === 'new' ? 'check' : hs][1]}" data-act="handle" data-arg="${esc(c.key)}|${hs === 'new' ? 'start' : 'done'}" title="${hs === 'new' ? 'לחץ: התחלתי לטפל' : 'לחץ: סיימתי'}">${HS[k === 'yellow' && hs === 'new' ? 'check' : hs][0]}</button>`;
+    const what = k === 'green' ? (x.suggest?.action ? `אפשר להציע: ${x.suggest.action}` : 'יציב — לשמור על הקיים') : c ? c.title : '';
+    const todo = k === 'green' ? '' : c ? (k === 'red' ? c.next : c.check?.[0] || c.next) : '';
+    const act = k === 'green' && x.suggest?.action ? `<button class="mb-btn" data-act="oppTask" data-arg="${x.id}|${esc(x.suggest.action)}">הצע ללקוח</button>`
+      : c?.potential_leads && hs !== 'done' ? `<span class="mb-pot">+${N(c.potential_leads)} לידים</span>` : '';
+    return `<div class="mb-r g-${k}"><a class="mb-name" href="#/client/${x.id}">${esc(x.name)}</a><span class="mb-own">${owner(x)}</span>${status}
+      <span class="mb-what" title="${esc(todo)}">${esc(what)}</span><span class="mb-act">${act}</span></div>`;
+  };
+  const group = (k) => {
+    const list = rows.filter((x) => x.st === k);
+    const open = k !== 'green' || p.open === 'green';
+    const lim = p.more === k ? 9999 : 5;
+    const hsCount = (s_) => list.filter((x) => hstate(x.card) === s_).length;
+    const bat = k === 'green' ? battery([[list.filter((x) => x.status !== 'nodata').length, 'st-ok', 'תקין'], [list.filter((x) => x.status === 'nodata').length, 'st-mute', 'חסרים נתונים']])
+      : battery([[hsCount('new'), k === 'red' ? 'st-new' : 'st-work', k === 'red' ? 'צריך טיפול' : 'לבדוק'], [hsCount('in_progress'), 'st-prog', 'בטיפול'], [hsCount('done'), 'st-done', 'טופל']]);
+    return `<section class="mb-g g-${k}">
+      <a class="mb-gh" href="${link(k === 'green' ? { open: open ? '' : 'green' } : {})}"><span class="mb-car">${open ? '▾' : '◂'}</span><h2>${LIGHT[k].t}</h2><span class="mb-cnt">${N(list.length)}</span></a>
+      ${open && list.length ? `<div class="mb-t"><div class="mb-r mb-hd"><span>לקוח</span><span>קמפיינר</span><span>סטטוס</span><span>${k === 'green' ? 'מה אפשר לשפר' : 'מה קרה'}</span><span></span></div>
+        ${list.slice(0, lim).map((x) => row(x, k)).join('')}
+        ${list.length > lim ? `<a class="mb-more" href="${link({ more: k, open: k === 'green' ? 'green' : '' })}">+ עוד ${N(list.length - lim)} לקוחות</a>` : ''}</div>` : ''}
+      <div class="mb-foot">${bat}</div></section>`;
+  };
+  view.innerHTML = `<div class="mb">
+  <header class="mb-h"><h1>${greet}, ${esc(st.me.user.name)}</h1><p>${nRed ? 'הנה מה שכדאי לטפל בו היום' : 'הכול רגוע היום'}</p></header>
+  <div class="mb-bar">
+    <a class="mb-chip ${selM ? '' : 'on'}" href="#/home${q ? `?q=${encodeURIComponent(q)}` : ''}">כל המשרד</a>
+    ${perf.map((x, i) => `<a class="mb-chip ${selM === x.id ? 'on' : ''}" href="#/home?${new URLSearchParams({ m: x.id }).toString()}">${avatar(x.name, i)}${esc(x.name)}</a>`).join('')}
+    <span class="sp"></span>
+    <form class="mb-q" id="mbQ"><input class="inp" name="q" value="${esc(q)}" placeholder="חיפוש לקוח" aria-label="חיפוש לקוח"></form>
+    ${who ? `<button class="mb-btn" data-act="handover" data-arg="${who.id}">מסירה (חופשה / מחלה)</button>` : ''}
+  </div>
+  ${group('red')}${group('yellow')}${group('green')}
   </div>`;
-  st._rows = rows; st._keyOf = (x) => (x.st === 'green' ? x.suggest?.kind || 'keep' : x.card ? x.card.key.split(':')[1] : 'keep');
+  $('#mbQ').addEventListener('submit', (e) => { e.preventDefault(); location.hash = link({ q: new FormData(e.target).get('q') || '' }); });
 };
 A.handover = async (b, frm) => {
   const perf = await api('/api/pulse/team/perf');
