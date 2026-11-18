@@ -139,7 +139,7 @@ export const insightChart = async (cid) => {
 const ST3 = { red: 'לטיפול', yellow: 'לבדיקה', green: 'תקין', nodata: 'חסרים נתונים' };
 const ago = (n) => (n == null ? 'אין תיעוד' : n === 0 ? 'היום' : n === 1 ? 'אתמול' : `לפני ${n} ימים`);
 const openSet = () => { try { return new Set(JSON.parse(localStorage.getItem('cp.closed') || '[]')); } catch { return new Set(); } };
-const BD = { closed: openSet(), exp: null, deep: null };
+const BD = { closed: openSet(), openG: new Set((() => { try { return JSON.parse(localStorage.getItem('cp.open') || '[]'); } catch { return []; } })()), exp: null, deep: null };
 const bdLink = (p, o) => `#/home?${new URLSearchParams(Object.fromEntries(Object.entries({ q: p.q, f: p.f, m: p.m, s: p.s, ...o }).filter(([, v]) => v))).toString()}`;
 const sortRows = (rs, s) => {
   const r = [...rs];
@@ -150,18 +150,23 @@ const sortRows = (rs, s) => {
 };
 const cplCell = (x) => (x.cpl == null ? '<span class="cpm">אין לידים</span>' : `${money(x.cpl)}${x.cpl_norm ? `<small class="${x.cpl > x.cpl_norm * 1.2 ? 'bad' : 'cpm'}">רגיל ${money(x.cpl_norm)}</small>` : ''}`);
 const leadsCell = (x) => `${N(x.leads)}${x.leads_norm != null ? `<small class="${x.leads < x.leads_norm * 0.7 ? 'bad' : 'cpm'}">מתוך ~${N(x.leads_norm)}</small>` : ''}`;
-const bRow = (x, owner) => `
-  <div class="bt-r ${BD.exp === x.id ? 'open' : ''}" data-act="bdRow" data-arg="${x.id}" role="button" tabindex="0" aria-expanded="${BD.exp === x.id}">
-    <span class="c-name"><a href="#/client/${x.id}" data-stop="1">${esc(x.name)}</a>${owner ? `<small>${esc(owner)}</small>` : ''}</span>
-    <span class="c-st"><em class="sp-${x.status}">${ST3[x.status]}</em></span>
-    <span class="c-why">${esc(x.why)}${x.since ? `<small>מאז ${esc(x.since)}</small>` : ''}</span>
-    <span class="c-num">${cplCell(x)}</span>
-    <span class="c-num">${leadsCell(x)}</span>
-    <span class="c-chk ${x.check.late ? 'late' : ''}">${ago(x.check.ago)}<small>כל ${N(x.check.every)} ימים</small></span>
-    <span class="c-chk ${x.contact.late ? 'late' : ''}">${ago(x.contact.ago)}</span>
-    <span class="c-num">${x.tasks ? `${N(x.tasks)}${x.approval ? '<small class="bad">לאישור</small>' : x.tasks_late ? '<small class="bad">באיחור</small>' : ''}` : '<span class="cpm">—</span>'}</span>
-    <span class="c-rec">${esc(x.rec)}<button class="deep" data-act="bdDeep" data-arg="${x.id}">בדיקה מעמיקה</button></span>
-  </div>${BD.exp === x.id ? `<div class="bt-x" id="bx-${x.id}">${bdExp(x)}</div>` : ''}`;
+const MCOL = ['#579BFC', '#A25DDC', '#FF7575', '#00A9A5', '#FDAB3D', '#9CD326', '#CAB641', '#784BD1'];
+const bRow = (x, gc, gid) => {
+  const on = BD.exp === x.id && BD.expG === gid;
+  const m = (st._bd?.groups || []).find((g) => g.id === x.owner);
+  return `<div class="mr ${on ? 'open' : ''}" style="--gc:${gc}" data-act="bdRow" data-arg="${x.id}|${gid}" role="button" tabindex="0" aria-expanded="${on}">
+    <span class="m-name" title="${esc(x.name)}"><a href="#/client/${x.id}">${esc(x.name)}</a></span>
+    <span class="m-own">${m ? `<i class="m-av" style="background:${MCOL[(st._bd.groups.indexOf(m)) % MCOL.length]}">${esc(m.name[0])}</i>` : ''}</span>
+    <span class="m-st"><em class="st-${x.status}">${ST3[x.status]}</em></span>
+    <span class="m-tx" title="${esc(x.why)}">${esc(x.why)}</span>
+    <span class="m-n ${x.leads_norm != null && x.leads < x.leads_norm * 0.7 ? 'bad' : ''}">${N(x.leads)}${x.leads_norm != null ? `<i>/${N(x.leads_norm)}</i>` : ''}</span>
+    <span class="m-n ${x.cpl && x.cpl_norm && x.cpl > x.cpl_norm * 1.2 ? 'bad' : ''}">${x.cpl == null ? '—' : money(x.cpl)}</span>
+    <span class="m-n ${x.check.late ? 'bad' : ''}">${ago(x.check.ago)}</span>
+    <span class="m-n ${x.contact.late ? 'bad' : ''}">${ago(x.contact.ago)}</span>
+    <span class="m-tx m-rec" title="${esc(x.rec)}">${esc(x.rec)}</span>
+    <span class="m-go"><button class="m-help" data-act="bdDeep" data-arg="${x.id}|${gid}">איך לעזור ←</button></span>
+  </div>${on ? `<div class="mx-x" id="bx-${x.id}" style="--gc:${gc}">${bdExp(x)}</div>` : ''}`;
+};
 const bdExp = (x) => `<div class="bx-line"><b>${esc(x.headline)}</b> — ${esc(x.rec)}</div>
   <div class="bx-acts">
     <button data-act="bdTouch" data-arg="${x.id}|check">✓ בדקתי את הקמפיין</button>
@@ -199,26 +204,28 @@ V.home = async (view, p = {}) => {
   const match = (x) => (!q || x.name.includes(q)) && (!f || (f === 'green' ? ['green', 'nodata'].includes(x.status) : x.status === f));
   const C_ = bd.counts;
   const groups = bd.groups.filter((g) => !p.m || g.id === p.m).map((g) => ({ ...g, rows: sortRows(g.rows.filter(match), s_) }));
-  const hdr = `<div class="bt-r bt-h"><span>לקוח</span><span>סטטוס</span><span>למה</span><span>עלות לליד</span><span>לידים 7 ימים</span><span>בדיקת קמפיין</span><span>קשר עם הלקוח</span><span>משימות</span><span>המלצה</span></div>`;
-  const fl = (k, label, n) => `<a class="bf ${f === k ? 'on' : ''}" href="${bdLink(p, { f: f === k ? '' : k })}"><i class="dot d-${k}"></i>${N(n)} ${label}</a>`;
-  view.innerHTML = `<div class="bd">
-  <header class="bd-h"><h1>${greet}, ${esc(st.me.user.name)}</h1><p>${C_.red ? 'אלה הלקוחות שדורשים את תשומת הלב שלך היום.' : 'אין היום לקוחות שדורשים התערבות.'}</p>
-    <div class="bd-f">${fl('red', 'לטיפול', C_.red)}${fl('yellow', 'לבדיקה', C_.yellow)}${fl('green', 'תקינים', C_.green + C_.nodata)}
-      <a class="bf" href="#/tasks">${N(bd.tasks_today)} משימות להיום</a>${bd.approvals ? `<a class="bf" href="#/tasks">${N(bd.approvals)} ממתינות לאישורך</a>` : ''}</div></header>
-  ${bd.urgent.length && !q && !f && !p.m ? `<section class="bg urgent"><div class="bg-h"><b>דורשים תשומת לב היום</b><span class="cpm">${N(bd.urgent.length)} לקוחות · בסדר עדיפות</span></div>
-    <div class="bt">${bd.urgent.map((x, i) => `<div class="ur" data-act="bdJump" data-arg="${x.id}" role="button" tabindex="0"><span class="ur-n">${i + 1}</span><span class="ur-b"><b>${esc(x.name)}</b> <span class="cpm">· ${esc((bd.groups.find((g) => g.id === x.owner) || {}).name || '')}</span><small>${esc(x.why)} — ${esc(x.rec)}</small></span><span class="cpm ur-l">${N(x.leads)} לידים${x.leads_norm != null ? ` מתוך ~${N(x.leads_norm)}` : ''}</span></div>`).join('')}</div></section>` : ''}
-  <div class="bd-tools">
-    <form id="bdQ"><input name="q" value="${esc(q)}" placeholder="חיפוש לקוח" aria-label="חיפוש לקוח"></form>
-    <select id="bdM" aria-label="קמפיינר"><option value="">כל הקמפיינרים</option>${bd.groups.map((g) => `<option value="${g.id}" ${p.m === g.id ? 'selected' : ''}>${esc(g.name)}</option>`).join('')}</select>
-    <select id="bdS" aria-label="מיון"><option value="">מיון: דחוף קודם</option><option value="leads" ${s_ === 'leads' ? 'selected' : ''}>ירידה בלידים</option><option value="check" ${s_ === 'check' ? 'selected' : ''}>לא נבדק הכי הרבה זמן</option><option value="name" ${s_ === 'name' ? 'selected' : ''}>שם</option></select>
-    ${q || f || p.m || s_ ? `<a class="cpm" href="#/home">ניקוי</a>` : ''}</div>
-  ${groups.map((g, gi) => { const closed = BD.closed.has(g.id) && !q && !f; return `<section class="bg" style="--gc:${AVC[gi % AVC.length]}">
-    <div class="bg-h" data-act="bdGroup" data-arg="${g.id}" role="button" tabindex="0" aria-expanded="${!closed}"><span class="car">${closed ? '◂' : '▾'}</span><b>${esc(g.name)}</b><span class="cpm">${N(g.clients)} לקוחות</span>
-      <span class="gc"><i class="dot d-red"></i>${N(g.counts.red)} <i class="dot d-yellow"></i>${N(g.counts.yellow)} <i class="dot d-green"></i>${N(g.counts.green + g.counts.nodata)}</span>
-      <span class="cpm gt">${g.late_checks ? `<em class="bad">${N(g.late_checks)} בדיקות באיחור</em>` : 'בודק בזמן'} · ${N(g.late_contact)} בלי קשר בזמן · ${N(g.open_tasks)} משימות פתוחות</span>
-      ${g.id ? `<button class="hm-link" data-act="handover" data-arg="${g.id}">מסירה</button>` : ''}</div>
-    ${closed ? '' : `<div class="bt">${hdr}${g.rows.map((x) => bRow(x)).join('') || '<div class="cpm" style="padding:12px 16px">אין לקוחות שמתאימים לסינון</div>'}</div>`}</section>`; }).join('')}
-  <p class="bd-foot cpm">הסטטוס נקבע מול ההיסטוריה של כל לקוח (סטטיסטיקה, בלי מודל שפה) · עודכן ${esc(bd.ref_label)} · <a href="#/agents">איך המערכת עובדת</a></p></div>`;
+  const hdr = `<div class="mr mh"><span>לקוח</span><span>קמפיינר</span><span>סטטוס</span><span>למה</span><span>לידים</span><span>עלות לליד</span><span>בדיקת קמפיין</span><span>קשר עם הלקוח</span><span>המלצה</span><span></span></div>`;
+  const bat = (rs) => { const n = rs.length || 1; return `<div class="mbat">${['red', 'yellow', 'green', 'nodata'].map((k) => { const c = rs.filter((x) => x.status === k).length; return c ? `<i class="st-${k}" style="flex:${c}" title="${ST3[k]}: ${c}"></i>` : ''; }).join('')}</div>`; };
+  const grp = (id, name, color, rs, extra, open) => `<section class="mg" style="--gc:${color}">
+    <div class="mg-h" data-act="bdGroup" data-arg="${id}" role="button" tabindex="0" aria-expanded="${open}"><span class="car">${open ? '▾' : '◂'}</span><b>${esc(name)}</b><span class="mg-c">${N(rs.length)} לקוחות</span>${extra || ''}
+      ${open ? '' : `<span class="mg-sum"><em class="r">${N(rs.filter((x) => x.status === 'red').length)}</em><em class="y">${N(rs.filter((x) => x.status === 'yellow').length)}</em><em class="g">${N(rs.filter((x) => ['green', 'nodata'].includes(x.status)).length)}</em>${bat(rs)}</span>`}</div>
+    ${open ? `<div class="mt">${hdr}${rs.map((x) => bRow(x, color, id)).join('') || '<div class="mr-empty">אין לקוחות שמתאימים לסינון</div>'}<div class="mr mf"><span></span><span></span><span>${bat(rs)}</span><span></span><span class="m-n">${N(rs.reduce((t, x) => t + x.leads, 0))}</span><span></span><span class="m-n">${rs.filter((x) => x.check.late).length} באיחור</span><span class="m-n">${rs.filter((x) => x.contact.late).length} באיחור</span><span></span><span></span></div></div>` : ''}</section>`;
+  const urgentRows = bd.urgent.filter(match);
+  const sel = (id, label, opts, val) => `<label class="mtool">${label}<select id="${id}">${opts.map(([v, t]) => `<option value="${v}" ${val === v ? 'selected' : ''}>${t}</option>`).join('')}</select></label>`;
+  view.innerHTML = `<div class="mb2">
+  <header class="mb2-h"><h1>${greet}, ${esc(st.me.user.name)}</h1><p>${C_.red ? `אלה הלקוחות שדורשים את תשומת הלב שלך היום · ${N(bd.tasks_today)} משימות להיום${bd.approvals ? ` · ${N(bd.approvals)} ממתינות לאישורך` : ''}` : 'אין היום לקוחות שדורשים התערבות.'}</p></header>
+  <div class="mtools">
+    <form id="bdQ" class="mtool"><span aria-hidden="true">⌕</span><input name="q" value="${esc(q)}" placeholder="חיפוש" aria-label="חיפוש לקוח"></form>
+    ${sel('bdM', 'קמפיינר', [['', 'כולם'], ...bd.groups.map((g) => [g.id, g.name])], p.m || '')}
+    ${sel('bdF', 'סטטוס', [['', 'הכול'], ['red', `לטיפול (${C_.red})`], ['yellow', `לבדיקה (${C_.yellow})`], ['green', `תקין (${C_.green + C_.nodata})`]], f)}
+    ${sel('bdS', 'מיון', [['', 'דחוף קודם'], ['leads', 'ירידה בלידים'], ['check', 'לא נבדק הכי הרבה'], ['name', 'שם']], s_)}
+    ${q || f || p.m || s_ ? '<a class="mtool" href="#/home">ניקוי</a>' : ''}</div>
+  ${!p.m && urgentRows.length ? grp('__urgent', 'דורשים תשומת לב היום', '#676879', urgentRows, '', !BD.closed.has('__urgent')) : ''}
+  ${groups.map((g, gi) => grp(g.id, g.name, MCOL[bd.groups.indexOf(bd.groups.find((y) => y.id === g.id)) % MCOL.length], g.rows,
+    `<span class="mg-x">${g.late_checks ? `${N(g.late_checks)} בדיקות באיחור · ` : ''}${N(g.open_tasks)} משימות</span>${g.id ? `<button class="mg-ho" data-act="handover" data-arg="${g.id}">מסירה</button>` : ''}`,
+    BD.openG.has(g.id) || !!(q || f || p.m))).join('')}
+  </div>`;
+  $('#bdF').addEventListener('change', (e) => { location.hash = bdLink(p, { f: e.target.value }); });
   $('#bdQ').addEventListener('submit', (e) => { e.preventDefault(); location.hash = bdLink(p, { q: new FormData(e.target).get('q') || '' }); });
   $('#bdM').addEventListener('change', (e) => { location.hash = bdLink(p, { m: e.target.value }); });
   $('#bdS').addEventListener('change', (e) => { location.hash = bdLink(p, { s: e.target.value }); });
@@ -229,10 +236,10 @@ const loadDeep = async (cid) => {
   const i = await api(`/api/pulse/clients/${encodeURIComponent(cid)}/insight`);
   el.innerHTML = deepHTML(i);
 };
-A.bdRow = (el, cid, ev) => { const ln = ev && ev.target.closest('a[href]'); if (ln) { location.hash = ln.getAttribute('href'); return; } BD.exp = BD.exp === cid ? null : cid; if (BD.exp !== cid) BD.deep = null; render(); };
-A.bdDeep = (b, cid) => { BD.exp = cid; BD.deep = BD.deep === cid ? null : cid; render(); };
-A.bdGroup = (b, gid) => { BD.closed.has(gid) ? BD.closed.delete(gid) : BD.closed.add(gid); try { localStorage.setItem('cp.closed', JSON.stringify([...BD.closed])); } catch { /* */ } render(); };
-A.bdJump = (b, cid) => { BD.exp = cid; BD.deep = cid; const x = st._bd?.groups.find((g) => g.rows.some((r) => r.id === cid)); if (x) BD.closed.delete(x.id); render(); setTimeout(() => document.getElementById('bx-' + cid)?.scrollIntoView({ block: 'center', behavior: 'smooth' }), 120); };
+A.bdRow = (el, arg, ev) => { const ln = ev && ev.target.closest('a[href]'); if (ln) { location.hash = ln.getAttribute('href'); return; } const [cid, gid] = arg.split('|'); const same = BD.exp === cid && BD.expG === gid; BD.exp = same ? null : cid; BD.expG = gid; if (same) BD.deep = null; render(); };
+A.bdDeep = (b, arg) => { const [cid, gid] = arg.split('|'); BD.exp = cid; if (gid) BD.expG = gid; BD.deep = BD.deep === cid ? null : cid; render(); setTimeout(() => document.getElementById('bx-' + cid)?.scrollIntoView({ block: 'nearest', behavior: 'smooth' }), 80); };
+A.bdGroup = (b, gid) => { const S_ = gid === '__urgent' ? BD.closed : BD.openG; S_.has(gid) ? S_.delete(gid) : S_.add(gid); try { localStorage.setItem('cp.closed', JSON.stringify([...BD.closed])); localStorage.setItem('cp.open', JSON.stringify([...BD.openG])); } catch { /* */ } render(); };
+A.bdJump = (b, cid) => { BD.exp = cid; BD.deep = cid; const x = st._bd?.groups.find((g) => g.rows.some((r) => r.id === cid)); if (x) { BD.openG.add(x.id); BD.expG = x.id; } render(); setTimeout(() => document.getElementById('bx-' + cid)?.scrollIntoView({ block: 'center', behavior: 'smooth' }), 120); };
 A.bdTouch = async (b, arg) => { const [cid, kind] = arg.split('|'); b.disabled = true; const r = await api(`/api/pulse/clients/${cid}/touch`, { method: 'POST', body: { kind } }); toast(r.msg); render(); };
 
 // ================================================================ תיק לקוח — ארבעה אזורים בלבד
