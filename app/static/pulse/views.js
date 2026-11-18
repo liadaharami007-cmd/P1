@@ -156,7 +156,7 @@ const bRow = (x, gc, gid) => {
   const on = BD.exp === x.id && BD.expG === gid;
   const m = (st._bd?.groups || []).find((g) => g.id === x.owner);
   return `<div class="mr ${on ? 'open' : ''}" style="--gc:${gc}" data-act="bdRow" data-arg="${x.id}|${gid}" role="button" tabindex="0" aria-expanded="${on}">
-    <span class="m-name" title="${esc(x.name)}"><a href="#/client/${x.id}">${esc(x.name)}</a></span>
+    <span class="m-name" title="${esc(x.name)}"><b>${esc(x.name)}</b></span>
     <span class="m-own">${m ? `<i class="m-av" style="background:${MCOL[(st._bd.groups.indexOf(m)) % MCOL.length]}">${esc(m.name[0])}</i>` : ''}</span>
     <span class="m-st"><em class="st-${LT(x.status)}">${ST3[x.status]}</em></span>
     <span class="m-tx" title="${esc(x.why)}">${esc(x.why)}</span>
@@ -177,9 +177,17 @@ const deepHTML = (i, x) => {
   const what = stable ? (i.strategy.opportunities[0]?.action || 'הלקוח יציב — אין צורך בפעולה. לבדוק שוב לפי התדירות.') : L.kind === 'stable' ? (i.strategy.recommendation || M.what) : L.improve;
   const taskBtn = E.task_id ? `<a class="hp-b" href="#/tasks?hl=${E.task_id}">משימה פתוחה · ${esc(STATUS[E.task_status] || '')}</a>`
     : (M.status !== 'green' || i.strategy.opportunities.length) ? `<button class="hp-b pri" data-act="agentAct" data-arg="${i.client.id}|${esc(E.key || '')}|${E.key ? '' : esc(i.strategy.opportunities[0]?.action || L.improve)}">פתח משימה עם הצעדים</button>` : '';
-  return `
+  const P = i.profile || {};
+  const about = P.about ? `<div class="hp-who">
+    <div class="hp-k">על הלקוח${P.demo ? ' <span class="cpm">(פרופיל דמו)</span>' : ''}</div>
+    <p class="hp-about">${esc(P.about)}</p>
+    <dl class="hp-dl">${P.goal ? `<div><dt>מה הוא רוצה</dt><dd>${esc(P.goal)}</dd></div>` : ''}${P.audience ? `<div><dt>הקהל שלו</dt><dd>${esc(P.audience)}</dd></div>` : ''}
+      ${P.likes?.length ? `<div><dt>מה חשוב לו</dt><dd>${P.likes.map(esc).join('<br>')}</dd></div>` : ''}${P.avoid ? `<div><dt>להימנע</dt><dd>${esc(P.avoid)}</dd></div>` : ''}</dl>
+    ${P.help?.length ? `<p class="hp-tip">💡 ${P.help.map(esc).join(' · ')}</p>` : ''}</div>`
+    : `<div class="hp-who"><div class="hp-k">על הלקוח</div><p class="cpm">עוד לא הוזן פרופיל ללקוח הזה${P.contact ? ` · איש קשר: ${esc(P.contact)}` : ''}. אפשר להוסיף הערה בתיק הלקוח.</p></div>`;
+  return `${about}
   <div class="hp-short">
-    <div class="hp-k">בקצרה</div>
+    <div class="hp-k">איך לעזור לו — בקצרה</div>
     <p class="hp-what"><b>${esc(L.headline)}.</b> ${esc(what)}</p>
     ${steps.length ? `<ol class="hp-steps">${steps.map((t) => `<li>${esc(t)}</li>`).join('')}</ol>` : ''}
     <p class="hp-meas">✓ איך נדע שהצליח: ${esc(stable ? 'הרמה נשמרת בבדיקה הבאה' : L.kind === 'stable' ? 'החריגה נסגרת בבדיקה החוזרת' : L.measure)}${M.recheck && !stable ? ` · המערכת תבדוק שוב ב-${esc(M.recheck)}` : ''}</p>

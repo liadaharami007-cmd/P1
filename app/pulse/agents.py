@@ -224,7 +224,25 @@ def client_insight(db: Database, acc: str, cid: str) -> dict | None:
         adapt or "",
         (f"אחראי: {monitor['owner']}" + (f", בדיקה חוזרת ב-{monitor['recheck']}." if monitor["recheck"] else ".")) if a else "",
     ] if x)
-    return {"client": {"id": c["id"], "name": c["name"], "industry": c.get("industry"), "is_demo": bool(c.get("is_demo")), "owner": r["owner"]},
+    ct = one(db, "SELECT name, role FROM pulse_contacts WHERE account_id=? AND client_id=? ORDER BY id LIMIT 1", (acc, cid))
+    if c.get("is_demo"):
+        from . import demo
+        prof = demo.profile_for(c, f"{ct['name']} ({ct['role']})" if ct else None, 6 + ((c.get("params") or {}).get("seed", 1) % 31))
+    else:  # לקוח אמיתי: רק מה שהסוכנות הזינה בפועל
+        prof = {"about": c.get("notes_text") or None, "goal": None, "audience": None, "likes": [], "avoid": None,
+                "contact": f"{ct['name']} ({ct['role']})" if ct else None, "demo": False}
+    # איך לעזור לו נכון: ההמלצה מותאמת למה שחשוב ללקוח
+    tips = []
+    if any("תקציב" in x or "עלות" in x for x in prof.get("likes") or []) and (r["status"] != "green"):
+        tips.append("לפני שינוי תקציב — לתאם איתו ולהראות מה העלות לליד עכשיו מול הרגיל")
+    if any("WhatsApp" in x for x in prof.get("likes") or []):
+        tips.append("לעדכן אותו בהודעת WhatsApp קצרה אחרי שמטפלים")
+    if any("איכות" in x for x in prof.get("likes") or []):
+        tips.append("לדבר איתו על איכות הלידים, לא רק על הכמות")
+    if any("קריאייטיב" in x for x in prof.get("likes") or []):
+        tips.append("להכין קריאייטיב חדש ולשלוח לו לאישור לפני העלאה")
+    prof["help"] = tips[:2]
+    return {"profile": prof, "client": {"id": c["id"], "name": c["name"], "industry": c.get("industry"), "is_demo": bool(c.get("is_demo")), "owner": r["owner"]},
             "engine": ENGINE, "monitor": monitor, "leads": leads, "campaigns": camp,
             "strategy": {"recommendation": rec_text, "adapt": adapt, "potential": (r.get("recovery") or {}).get("text"),
                          "potential_leads": (r.get("recovery") or {}).get("leads_week"), "opportunities": engine.opportunities(r, c)[:2]},

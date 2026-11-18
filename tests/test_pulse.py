@@ -377,6 +377,7 @@ def test_agents_team_brief_insight_and_act(make_client):
         if i["monitor"]["status"] in ("red", "yellow"):
             assert i["monitor"]["what"] and i["monitor"]["cause"] and i["monitor"]["owner"] and i["monitor"]["recheck"] and i["monitor"]["todo"]
         assert i["campaigns"]["budget"]["pace"] >= 0
+        assert i["profile"]["demo"] and i["profile"]["about"] and i["profile"]["goal"] and len(i["profile"]["likes"]) == 2
     # ביצוע: בעיה → משימה עם אחראי; רגישה → דורשת אישור
     p = next(x for x in b["top"] if x["kind"] == "problem")
     r = c.post("/api/pulse/agents/act", json={"client_id": p["client_id"], "key": p["key"]}).json()
