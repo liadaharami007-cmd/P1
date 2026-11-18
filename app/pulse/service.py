@@ -241,6 +241,14 @@ def _seed_demo_ops(db: Database, acc: str, T0: int) -> None:
             (acc, c["id"], f"{FIRST[i % len(FIRST)]} {c['name'].split()[-1]}", "בעלים" if i % 3 else "מנהלת שיווק",
              f"05{(i * 37) % 10}-{1000000 + i * 7919 % 9000000}", f"contact{i + 1}@example.com", now()))
         exe(db, "UPDATE pulse_clients SET contact_every_days=? WHERE account_id=? AND id=?", (14 if i % 4 == 0 else None, acc, c["id"]))
+        # בדיקות קמפיין מתועדות (נפרד מתקשורת עם הלקוח). קמפיינר אחד מפגר — כדי שהמעקב יראה משהו אמיתי.
+        every = 2 if i % 3 == 0 else 3
+        lag = (6 + i % 4) if c["owner"] == "avi" else (i * 7) % 4
+        exe(db, "UPDATE pulse_clients SET check_every_days=? WHERE account_id=? AND id=?", (every, acc, c["id"]))
+        for k, back in enumerate((lag, lag + every, lag + 2 * every)):
+            day = T0 - back
+            exe(db, "INSERT INTO pulse_events (account_id, day, t, type, text, client_id, user, ref) VALUES (?,?,?,?,?,?,?,?)",
+                (acc, day, now() - back * 86400, "check", "בדיקת קמפיין: " + ("עברתי על הביצועים, אין שינוי" if k else "בדקתי מודעות ועלות לליד"), c["id"], "דמו", "campaign"))
         if i % 4 != 1:  # שיחה מתועדת אחרונה
             day = T0 - (3 + (i * 5) % 20)
             exe(db, "INSERT INTO pulse_events (account_id, day, t, type, text, client_id, user, ref) VALUES (?,?,?,?,?,?,?,?)",

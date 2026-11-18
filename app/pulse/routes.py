@@ -10,9 +10,20 @@ from pydantic import BaseModel, Field
 
 from ..db import Database
 from ..saas.auth import Ctx, current
-from . import adlab, ask as ask_mod, demo, engine, report, service as S, store
+from . import adlab, agents, ask as ask_mod, demo, engine, report, service as S, store
 
 STATIC = Path(__file__).resolve().parent.parent / "static" / "pulse"
+
+
+class TouchIn(BaseModel):
+    kind: str = Field("check", pattern="^(check|call|meeting)$")
+    text: str = Field("", max_length=1000)
+
+
+class ActIn(BaseModel):
+    client_id: str = Field(max_length=64)
+    key: str | None = Field(default=None, max_length=128)
+    title: str | None = Field(default=None, max_length=300)
 
 
 class ClientIn(BaseModel):
@@ -820,3 +831,45 @@ def register(app: FastAPI, db: Database) -> None:
             {"id": "ai", "name": "מודל AI לסוכן", "status": "connected" if ai else "not_connected", "kind": "ai",
              "note": ", ".join(e["name"] for e in ai) if ai else "", "needs": "" if ai else "GEMINI_API_KEY (חינם) או ANTHROPIC_API_KEY בשרת. עד אז הסוכן עונה ממנוע כללים"},
         ]
+
+    # ---------------------------------------------------------------- צוות הסוכנים (agents.py) — שכבה מעל היכולות הקיימות
+    @app.get("/api/pulse/agents/brief")
+    def agents_brief(ctx: Ctx = Depends(current)):
+        W(ctx)
+        return agents.team_brief(db, ctx.account_id)
+
+    @app.get("/api/pulse/clients/{cid}/insight")
+    def client_insight(cid: str, ctx: Ctx = Depends(current)):
+        W(ctx)
+        r = agents.client_insight(db, ctx.account_id, cid)
+        if not r:
+            raise HTTPException(404, "לקוח לא נמצא")
+        from ..intelligence import engines
+        try:
+            eng = engines.active_engine()
+        except Exception:  # noqa: BLE001
+            eng = None
+        r["ai_engine"] = f"{eng.id}" if eng else None
+        r["capabilities"] = agents.capabilities(r["ai_engine"], r)
+        return r
+
+    @app.get("/api/pulse/board")
+    def pulse_board(ctx: Ctx = Depends(current)):
+        W(ctx)
+        return agents.board(db, ctx.account_id)
+
+    @app.post("/api/pulse/clients/{cid}/touch")
+    def client_touch(cid: str, body: TouchIn, ctx: Ctx = Depends(current)):
+        W(ctx)
+        try:
+            return agents.log_touch(db, ctx.account_id, cid, body.kind, body.text, uname(ctx))
+        except KeyError as e:
+            raise HTTPException(404, str(e).strip("'"))
+
+    @app.post("/api/pulse/agents/act")
+    def agents_act(body: ActIn, ctx: Ctx = Depends(current)):
+        W(ctx)
+        try:
+            return agents.act(db, ctx.account_id, body.client_id, body.key, body.title, uname(ctx), can_approve(ctx))
+        except KeyError as e:
+            raise HTTPException(409, str(e).strip("'"))

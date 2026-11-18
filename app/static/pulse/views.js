@@ -97,70 +97,195 @@ const better = (x) => {
   const c = x.card; if (!c) return { head: 'לבדוק', how: '' };
   return { head: IMPROVE[c.key.split(':')[1]] || c.title, how: x.st === 'red' ? c.next : c.check?.[0] || c.next };
 };
-// מסך הבית: עוזר שמכוון. למעלה — כמה זמן נחסך ושאלה פתוחה. מימין — רשימה שקטה לפי רמזור. משמאל — הלקוח שנבחר:
-// מה קורה, גרף מול הרמה הרגילה, מה אפשר לעשות, איך לשדרג, ומה סוכני ה-AI יכולים להכין.
+// מסך הבית — תדריך המנהל הראשי. למעלה: מצב הסוכנות במשפט + שלושת הדברים החשובים היום (מהמנהל הראשי, agents.py).
+// מתחת: רשימה שקטה לפי רמזור, ולצידה תיק התובנות של הלקוח שנבחר — כל ששת התפקידים בתמונה אחת.
 const dm = (d) => `${Number(d.slice(8, 10))}.${Number(d.slice(5, 7))}`;
+const STL = { red: 'דורש התערבות', yellow: 'במעקב', green: 'תקין', nodata: 'חסרים נתונים' };
+const actBtn = (cid, key, title, owner, cls = 'hm-pri') => `<button class="${cls}" data-act="agentAct" data-arg="${esc(cid)}|${esc(key || '')}|${esc(title || '')}">פתח משימה ל${esc(owner || 'קמפיינר')}</button>`;
+const taskTag = (st_, owner) => `<span class="hm-tag">${st_ === 'awaiting_approval' ? 'ממתין לאישור מנהל' : st_ === 'new' ? 'נפתחה משימה' : 'בטיפול'}${owner ? ` · ${esc(owner)}` : ''}</span>`;
+export const insightHTML = (i, opts = {}) => {
+  const M = i.monitor, L = i.leads, C = i.campaigns, G = i.strategy, E = i.execution, mem = i.memory;
+  return `
+    ${opts.head === false ? '' : `<div class="hm-dh"><div><h2><a href="#/client/${i.client.id}">${esc(i.client.name)}</a></h2><p><i class="dot d-${M.status}"></i>${STL[M.status]} · ${esc(i.client.industry || '')} · ${esc(M.owner)}</p></div>
+      ${M.status === 'green' && !G.opportunities.length ? '' : E.task_id ? taskTag(E.task_status, M.owner) : actBtn(i.client.id, E.key, E.key ? '' : (G.opportunities[0]?.action || ''), M.owner)}</div>`}
+    <div class="hm-sum">${esc(i.chief)}</div>
+    ${M.status !== 'green' && M.when ? `<div class="hm-sec"><h3>מה קרה</h3><dl class="hm-dl">
+      <div><dt>הממצא</dt><dd>${esc(M.what)}</dd></div><div><dt>מאז</dt><dd>${esc(M.when)}${M.days_open ? ` · ${N(M.days_open)} ימים` : ''}</dd></div>
+      <div><dt>סיבה אפשרית</dt><dd>${esc(M.cause)}</dd></div><div><dt>נתונים</dt><dd>${M.evidence.map(esc).join('<br>')}</dd></div>
+      <div><dt>אחראי</dt><dd>${esc(M.owner)}</dd></div><div><dt>בדיקה חוזרת</dt><dd>${esc(M.recheck || '—')}</dd></div></dl></div>` : ''}
+    <div class="hm-ch"><div class="hm-chl"><span><i style="background:var(--acc)"></i>לידים ביום</span><span><i class="ds"></i>הרמה הרגילה של הלקוח</span></div><div id="hmChart"></div></div>
+    <div class="hm-sec"><h3>לידים</h3><p class="hm-lead">${esc(L.state)}</p>
+      ${L.kind !== 'stable' ? `<p class="hm-why"><b>${L.kind === 'opportunity' ? 'ההזדמנות' : 'למה זה קורה'}:</b> ${esc(L.cause)}</p>` : ''}
+      ${L.data.length ? `<div class="hm-chips">${L.data.map((x) => `<span>${esc(x)}</span>`).join('')}</div>` : ''}</div>
+    ${M.todo.length ? `<div class="hm-sec"><h3>מה עושים</h3>${L.kind !== 'stable' ? `<p class="hm-why">${esc(L.improve)}</p>` : ''}<ol>${M.todo.map((s_) => `<li>${esc(s_)}</li>`).join('')}</ol>
+      <p class="hm-meas"><b>איך נדע שהצליח:</b> ${esc(L.kind !== 'stable' ? L.measure : 'החריגה נסגרת בבדיקה החוזרת')}</p>${G.adapt ? `<p class="hm-mem">${esc(G.adapt)}</p>` : ''}</div>` : ''}
+    ${G.opportunities.length ? `<div class="hm-sec"><h3>איך לשדרג</h3>${G.opportunities.map((o) => `<p>${esc(o.title)}<small>${esc(o.action)}${o.potential ? ' · ' + esc(o.potential) : ''}</small></p>`).join('')}</div>` : ''}
+    <div class="hm-sec"><h3>קמפיינים</h3>${C.connected ? `<p>${N(C.good)} מתוך ${N(C.count)} מודעות עובדות טוב${C.best ? ` · המובילה: ${esc(C.best)}` : ''}${C.top_fix ? `<small>לשפר: ${esc(C.top_fix.name)} — ${esc(C.top_fix.issue)}. ${esc(C.top_fix.do)}</small>` : ''}</p>` : `<p class="hm-why">${esc(C.missing)}</p>`}
+      ${C.budget.monthly ? `<div class="hm-bud"><span>ניצול תקציב (קצב חודשי)</span><div><i style="width:${Math.min(100, C.budget.use)}%" class="${C.budget.use > 110 ? 'over' : ''}"></i></div><b>${N(C.budget.use)}%</b><small>${money(C.budget.pace)} מתוך ${money(C.budget.monthly)}</small></div>` : ''}
+      ${C.connected ? `<a class="hm-link2" href="#/ads?client=${i.client.id}">ניתוח מודעות מלא ←</a>` : ''}</div>
+    ${mem.history.length || mem.commitments.length ? `<div class="hm-sec"><h3>מה כבר קרה אצל הלקוח</h3><ul class="hm-hist">${mem.history.map((h) => `<li><span>${esc(h.day)}</span>${esc(h.text)} — <em class="${h.ok ? 'ok' : 'no'}">${esc(h.result)}</em></li>`).join('')}${mem.commitments.map((x) => `<li><span>${esc(x.due)}</span>התחייבות פתוחה: ${esc(x.text)}</li>`).join('')}</ul></div>` : ''}
+    <div class="hm-sec"><h3>עוד אפשר</h3><div class="hm-ai">
+      <button data-act="updDraft" data-arg="${i.client.id}">${ic('spark', 14)}<span>לנסח עדכון ללקוח<small>טיוטה בלבד — לא נשלח</small></span></button>
+      <a href="#/ask?q=${encodeURIComponent('למה ' + i.client.name + ' במצב הזה?')}">${ic('chat', 14)}<span>לשאול את העוזר<small>תשובה מתוך הנתונים</small></span></a></div></div>`;
+};
+export const insightChart = async (cid) => {
+  const d = await api(`/api/pulse/clients/${encodeURIComponent(cid)}?days=30`);
+  const ser = d.series || [], base = d.result?.base?.dailyLeads;
+  const el = $('#hmChart'); if (!el) return;
+  chart(el, { labels: ser.map((x) => dm(x.date)), h: 150, fmt: (v) => Math.round(v).toLocaleString(),
+    series: [{ name: 'לידים', color: 'var(--acc)', w: 2.2, vals: ser.map((x) => x.leads) }, ...(base ? [{ name: 'רמה רגילה', color: 'var(--g)', w: 1.4, dash: true, vals: ser.map(() => Math.round(base * 10) / 10) }] : [])] });
+};
+// ================================================================ הלוח הראשי בשיטת Monday: קבוצה לכל קמפיינר, שורה לכל לקוח
+const ST3 = { red: 'לטיפול', yellow: 'לבדיקה', green: 'תקין', nodata: 'חסרים נתונים' };
+const ago = (n) => (n == null ? 'אין תיעוד' : n === 0 ? 'היום' : n === 1 ? 'אתמול' : `לפני ${n} ימים`);
+const openSet = () => { try { return new Set(JSON.parse(localStorage.getItem('cp.closed') || '[]')); } catch { return new Set(); } };
+const BD = { closed: openSet(), exp: null, deep: null };
+const bdLink = (p, o) => `#/home?${new URLSearchParams(Object.fromEntries(Object.entries({ q: p.q, f: p.f, m: p.m, s: p.s, ...o }).filter(([, v]) => v))).toString()}`;
+const sortRows = (rs, s) => {
+  const r = [...rs];
+  if (s === 'leads') r.sort((a, b) => (a.leads_norm ? a.leads / a.leads_norm : 9) - (b.leads_norm ? b.leads / b.leads_norm : 9));
+  else if (s === 'check') r.sort((a, b) => (b.check.ago ?? 99) - (a.check.ago ?? 99));
+  else if (s === 'name') r.sort((a, b) => a.name.localeCompare(b.name, 'he'));
+  return r;
+};
+const cplCell = (x) => (x.cpl == null ? '<span class="cpm">אין לידים</span>' : `${money(x.cpl)}${x.cpl_norm ? `<small class="${x.cpl > x.cpl_norm * 1.2 ? 'bad' : 'cpm'}">רגיל ${money(x.cpl_norm)}</small>` : ''}`);
+const leadsCell = (x) => `${N(x.leads)}${x.leads_norm != null ? `<small class="${x.leads < x.leads_norm * 0.7 ? 'bad' : 'cpm'}">מתוך ~${N(x.leads_norm)}</small>` : ''}`;
+const bRow = (x, owner) => `
+  <div class="bt-r ${BD.exp === x.id ? 'open' : ''}" data-act="bdRow" data-arg="${x.id}" role="button" tabindex="0" aria-expanded="${BD.exp === x.id}">
+    <span class="c-name"><a href="#/client/${x.id}" data-stop="1">${esc(x.name)}</a>${owner ? `<small>${esc(owner)}</small>` : ''}</span>
+    <span class="c-st"><em class="sp-${x.status}">${ST3[x.status]}</em></span>
+    <span class="c-why">${esc(x.why)}${x.since ? `<small>מאז ${esc(x.since)}</small>` : ''}</span>
+    <span class="c-num">${cplCell(x)}</span>
+    <span class="c-num">${leadsCell(x)}</span>
+    <span class="c-chk ${x.check.late ? 'late' : ''}">${ago(x.check.ago)}<small>כל ${N(x.check.every)} ימים</small></span>
+    <span class="c-chk ${x.contact.late ? 'late' : ''}">${ago(x.contact.ago)}</span>
+    <span class="c-num">${x.tasks ? `${N(x.tasks)}${x.approval ? '<small class="bad">לאישור</small>' : x.tasks_late ? '<small class="bad">באיחור</small>' : ''}` : '<span class="cpm">—</span>'}</span>
+    <span class="c-rec">${esc(x.rec)}<button class="deep" data-act="bdDeep" data-arg="${x.id}">בדיקה מעמיקה</button></span>
+  </div>${BD.exp === x.id ? `<div class="bt-x" id="bx-${x.id}">${bdExp(x)}</div>` : ''}`;
+const bdExp = (x) => `<div class="bx-line"><b>${esc(x.headline)}</b> — ${esc(x.rec)}</div>
+  <div class="bx-acts">
+    <button data-act="bdTouch" data-arg="${x.id}|check">✓ בדקתי את הקמפיין</button>
+    <button data-act="bdTouch" data-arg="${x.id}|call">☎ תיעדתי שיחה עם הלקוח</button>
+    ${x.task_id ? `<a href="#/tasks?hl=${x.task_id}">משימה פתוחה · ${esc(STATUS[x.task_status] || '')}</a>` : x.alert_key || x.status !== 'green' ? `<button data-act="agentAct" data-arg="${x.id}|${esc(x.alert_key || '')}|${x.alert_key ? '' : esc(x.rec)}">פתח משימה לקמפיינר</button>` : ''}
+    <a href="#/client/${x.id}">תיק לקוח</a>
+    <button data-act="bdDeep" data-arg="${x.id}">${BD.deep === x.id ? 'סגור בדיקה מעמיקה' : 'בדיקה מעמיקה'}</button></div>
+  ${BD.deep === x.id ? `<div class="bx-deep" id="bd-${x.id}"><div class="sk" style="height:120px"></div></div>` : ''}`;
+const deepHTML = (i) => {
+  const L = i.leads, M = i.monitor, C = i.campaigns, cap = i.capabilities || [], tf = C.top_fix;
+  const capTxt = { available: 'זמין', not_configured: 'לא מחובר', not_connected: 'לא מחובר', 'n/a': '' };
+  return `<div class="dp">
+    <div><h4>מצב נוכחי</h4><p>${esc(L.state)}</p>${M.what && M.status !== 'green' ? `<p class="cpm">${esc(M.what)}</p>` : ''}</div>
+    <div><h4>${L.kind === 'opportunity' ? 'הזדמנות' : L.kind === 'stable' ? 'מצב' : 'הבעיה והסיבה האפשרית'}</h4><p>${esc(L.cause)}</p></div>
+    <div><h4>נתונים תומכים</h4>${(L.data.length ? L.data : M.evidence).map((d) => `<p class="cpm">${esc(d)}</p>`).join('') || '<p class="cpm">—</p>'}</div>
+    <div><h4>מה לשפר</h4><p>${esc(L.kind === 'stable' ? (i.strategy.recommendation || L.improve) : L.improve)}</p>${i.strategy.adapt ? `<p class="mem">${esc(i.strategy.adapt)}</p>` : ''}</div>
+    <div><h4>איך לבצע</h4>${M.todo.length ? `<ol>${M.todo.map((t) => `<li>${esc(t)}</li>`).join('')}</ol>` : '<p class="cpm">אין צורך בפעולה כרגע</p>'}</div>
+    <div><h4>איך מודדים הצלחה</h4><p>${esc(L.kind === 'stable' ? 'הרמה נשמרת בבדיקה הבאה' : L.measure)}</p>${M.recheck ? `<p class="cpm">בדיקה חוזרת אוטומטית: ${esc(M.recheck)}</p>` : ''}</div>
+    ${tf ? `<div class="wide"><h4>המודעה החלשה: ${esc(tf.name)}</h4><p>${esc(tf.issue)} — ${esc(tf.why)}</p>
+      <table class="dt"><tr><td>קריאייטיב חלופי</td><td>${esc(tf.alt_creative)}</td></tr><tr><td>קהל חלופי</td><td>${esc(tf.alt_audience)}</td></tr><tr><td>קופי</td><td>${esc(tf.do)}</td></tr></table>
+      <div class="bx-acts"><button data-act="agentAct" data-arg="${i.client.id}||${esc(tf.name + ': ' + tf.do + ' · ' + tf.alt_creative)}">הכן משימה לקמפיינר</button>
+      ${cap.find((c) => c.id === 'copy')?.status === 'available' ? `<button data-act="adRewrite" data-arg="${esc(tf.id)}">כתוב קופי חלופי</button>` : ''}</div></div>` : C.connected === false ? `<div class="wide"><h4>מודעות</h4><p class="cpm">${esc(C.missing)}</p></div>` : ''}
+    <div class="wide"><h4>מה ה-AI עושה כאן</h4><table class="dt cap">${cap.filter((c) => c.status !== 'n/a').map((c) => `<tr class="${c.status}"><td>${esc(c.label)}</td><td>${capTxt[c.status]}${c.needs ? ` · ${esc(c.needs)}` : ''}</td></tr>`).join('')}</table>
+      <p class="cpm">דורש אישור מנהל: שינוי תקציב, עצירת קמפיין והודעה ללקוח${i.execution.needs_approval ? ' — והמשימה הפתוחה כאן' : ''}.</p></div>
+  </div>`;
+};
 V.home = async (view, p = {}) => {
   if (p.v === 'big' || p.v === 'today') return V.today(view);
   if (p.v === 'plan') return V.plan(view, p);
   if (p.v === 'focus') return V.focus(view);
-  const [ab, perf, ov] = await Promise.all([api('/api/pulse/alerts'), api('/api/pulse/team/perf'), api('/api/pulse/overview')]);
+  const bd = await api('/api/pulse/board');
+  st._bd = bd;
   const hour = new Date().getHours(), greet = hour < 12 ? 'בוקר טוב' : hour < 18 ? 'צהריים טובים' : 'ערב טוב';
-  const byClient = {};
-  ab.cards.forEach((x) => { if (!byClient[x.client_id]) byClient[x.client_id] = x; });
-  const pi = Object.fromEntries(perf.map((x, i) => [x.id, i]));
-  const selM = p.m || '';
-  const rows = ab.board.map((x) => ({ ...x, card: byClient[x.id], st: x.status === 'nodata' ? 'green' : x.status })).filter((x) => !selM || x.owner === selM);
-  const by = (k) => rows.filter((x) => x.st === k);
-  const sel = rows.find((x) => x.id === p.c) || by('red')[0] || by('yellow')[0] || rows[0];
-  const link = (o) => `#/home?${new URLSearchParams(Object.fromEntries(Object.entries({ m: selM, c: sel?.id, ...o }).filter(([, v]) => v))).toString()}`;
-  const tm = ov.time || {}, hrs = Math.round((tm.saved_min || 0) / 60);
-  const ready = rows.filter((x) => x.st !== 'green' || x.suggest?.action).length;
-  const improved = (ov.week_counts || {}).improved ?? perf.reduce((s_, x) => s_ + (x.improved || 0), 0);
-  const item = (x) => `<a class="hm-i ${x.id === sel?.id ? 'on' : ''}" href="${link({ c: x.id })}"><i class="dot d-${x.st}"></i><span class="hm-in">${esc(x.name)}<small>${esc(better(x).head)}</small></span>${perf[pi[x.owner]] ? avatar(perf[pi[x.owner]].name, pi[x.owner]) : ''}</a>`;
-  const grp = (k) => { const l = by(k); const open = k !== 'green' || p.g === 'green'; const lim = p.more === k ? 999 : 5;
-    return `<div class="hm-g"><a class="hm-gh" href="${link(k === 'green' ? { g: open ? '' : 'green' } : {})}"><i class="dot d-${k}"></i>${LIGHT[k].t}<span>${N(l.length)}</span></a>
-      ${open ? l.slice(0, lim).map(item).join('') + (l.length > lim ? `<a class="hm-more" href="${link({ more: k, g: k === 'green' ? 'green' : '' })}">עוד ${N(l.length - lim)}</a>` : '') : ''}</div>`; };
-  view.innerHTML = `<div class="hm">
-  <header class="hm-top">
-    <div><h1>${greet}, ${esc(st.me.user.name)}</h1>
-    <p class="hm-sub">בדקתי הבוקר את כל ${N(tm.clients || rows.length)} הלקוחות. הנה מה שאפשר לשפר.</p></div>
-    <form class="hm-ask" id="hmAsk"><input name="q" placeholder="מה תרצה לשפר היום? למשל: איך מעלים לידים לנעמה" autocomplete="off" aria-label="שאלה"><button>${ic('spark', 15)}</button></form>
-  </header>
-  <section class="hm-val">
-    <div><b>${N(hrs)} שעות</b><span>נחסכו היום בבדיקה ידנית<small>${N(tm.clients || 0)} לקוחות × ${N(tm.per_client || 0)} דק' · נבדק ב-${N(Math.round(tm.scan_ms || 0))} מ"ש</small></span></div>
-    <div><b>${N(ready)}</b><span>הצעות שיפור מוכנות<small>כל אחת עם הסבר וצעד הבא</small></span></div>
-    <div><b>${N(improved)}</b><span>לקוחות השתפרו השבוע<small>מאומת בנתונים אחרי טיפול</small></span></div>
-  </section>
-  <div class="hm-team"><a class="${selM ? '' : 'on'}" href="#/home">כל המשרד</a>${perf.map((x, i) => `<a class="${selM === x.id ? 'on' : ''}" href="#/home?m=${x.id}">${avatar(x.name, i)}${esc(x.name)}</a>`).join('')}
-    ${selM ? `<button class="hm-link" data-act="handover" data-arg="${selM}">מסירה זמנית</button>` : ''}</div>
-  <div class="hm-main">
-    <aside class="hm-list">${grp('red')}${grp('yellow')}${grp('green')}</aside>
-    <section class="hm-d" id="hmD"><div class="sk" style="height:300px"></div></section>
-  </div></div>`;
-  $('#hmAsk').addEventListener('submit', (e) => { e.preventDefault(); const q = new FormData(e.target).get('q'); if (q) go('ask?q=' + encodeURIComponent(q)); });
-  if (!sel) { $('#hmD').innerHTML = empty('אין לקוחות'); return; }
-  const d = await api(`/api/pulse/clients/${encodeURIComponent(sel.id)}?days=30`);
-  const c = sel.card, b_ = better(sel), m = perf[pi[sel.owner]];
-  const ser = d.series || [], wk = ser.slice(-7).reduce((s_, x) => s_ + (x.leads || 0), 0), prev = ser.slice(-14, -7).reduce((s_, x) => s_ + (x.leads || 0), 0);
-  const base = ser.length > 14 ? ser.slice(0, -7).reduce((s_, x) => s_ + (x.leads || 0), 0) / (ser.length - 7) : null;
-  const steps = c ? [c.next, ...(c.check || [])].filter(Boolean).filter((v, i, a) => a.indexOf(v) === i).slice(0, 3) : [];
-  const opp = d.opportunities?.[0];
-  $('#hmD').innerHTML = `
-    <div class="hm-dh"><div><h2><a href="#/client/${sel.id}">${esc(sel.name)}</a></h2><p>${m ? `${avatar(m.name, pi[sel.owner])}${esc(m.name)} · ` : ''}${esc(d.client.industry || '')}</p></div>
-      ${sel.st === 'green' ? '' : c?.task_id ? '<span class="hm-tag">אצל הקמפיינר ✓</span>' : `<button class="hm-pri" data-act="handle" data-arg="${esc(c.key)}|start">שלח ל${esc(m?.name || 'קמפיינר')}</button>`}</div>
-    <div class="hm-goal"><span class="hm-k">מה אפשר לשפר</span><b>${esc(b_.head)}</b>${c?.potential_leads ? `<span class="hm-gain">עד +${N(c.potential_leads)} לידים בשבוע</span>` : ''}</div>
-    <div class="hm-kpis"><div><span>לידים השבוע</span><b>${N(wk)}</b></div><div><span>שבוע קודם</span><b>${N(prev)}</b></div>${base != null ? `<div><span>רמה רגילה</span><b>${N(Math.round(base * 7))}</b></div>` : ''}</div>
-    <div class="hm-ch"><div class="hm-chl"><span><i style="background:var(--acc)"></i>לידים ביום</span>${base != null ? '<span><i class="ds"></i>הרמה הרגילה — לשם אפשר לחזור</span>' : ''}</div><div id="hmChart"></div></div>
-    ${steps.length || b_.how ? `<div class="hm-sec"><h3>מה אפשר לעשות</h3><ol>${(steps.length ? steps : [b_.how]).map((s_) => `<li>${esc(s_)}</li>`).join('')}</ol></div>` : ''}
-    ${opp || sel.suggest?.action ? `<div class="hm-sec"><h3>איך לשדרג</h3><p>${esc(opp?.title || sel.suggest.action)}${opp?.action ? `<small>${esc(opp.action)}</small>` : ''}</p></div>` : ''}
-    <div class="hm-sec"><h3>מה עוד אפשר</h3><div class="hm-ai">
-      <button data-act="updDraft" data-arg="${sel.id}">${ic('spark', 14)}<span>לנסח עדכון ללקוח<small>טיוטה בלבד — לא נשלח</small></span></button>
-      ${d.client.is_demo ? `<a href="#/ads?client=${sel.id}">${ic('spark', 14)}<span>לנתח את המודעות<small>הצעות להצעה, קופי וקריאייטיב</small></span></a>` : ''}
-      <a href="#/ask?q=${encodeURIComponent('למה ' + sel.name + ' במצב הזה?')}">${ic('chat', 14)}<span>לשאול את העוזר<small>תשובה מתוך הנתונים</small></span></a>
-      <a href="#/client/${sel.id}">${ic('users', 14)}<span>תיק הלקוח המלא<small>היסטוריה, משימות, התחייבויות</small></span></a></div></div>`;
-  chart($('#hmChart'), { labels: ser.map((x) => dm(x.date)), h: 170, fmt: (v) => Math.round(v).toLocaleString(),
-    series: [{ name: 'לידים', color: 'var(--acc)', w: 2.4, vals: ser.map((x) => x.leads) }, ...(base != null ? [{ name: 'רמה רגילה', color: 'var(--g)', w: 1.6, dash: true, vals: ser.map(() => Math.round(base * 10) / 10) }] : [])] });
+  const q = (p.q || '').trim(), f = p.f || '', s_ = p.s || '';
+  const match = (x) => (!q || x.name.includes(q)) && (!f || (f === 'green' ? ['green', 'nodata'].includes(x.status) : x.status === f));
+  const C_ = bd.counts;
+  const groups = bd.groups.filter((g) => !p.m || g.id === p.m).map((g) => ({ ...g, rows: sortRows(g.rows.filter(match), s_) }));
+  const hdr = `<div class="bt-r bt-h"><span>לקוח</span><span>סטטוס</span><span>למה</span><span>עלות לליד</span><span>לידים 7 ימים</span><span>בדיקת קמפיין</span><span>קשר עם הלקוח</span><span>משימות</span><span>המלצה</span></div>`;
+  const fl = (k, label, n) => `<a class="bf ${f === k ? 'on' : ''}" href="${bdLink(p, { f: f === k ? '' : k })}"><i class="dot d-${k}"></i>${N(n)} ${label}</a>`;
+  view.innerHTML = `<div class="bd">
+  <header class="bd-h"><h1>${greet}, ${esc(st.me.user.name)}</h1><p>${C_.red ? 'אלה הלקוחות שדורשים את תשומת הלב שלך היום.' : 'אין היום לקוחות שדורשים התערבות.'}</p>
+    <div class="bd-f">${fl('red', 'לטיפול', C_.red)}${fl('yellow', 'לבדיקה', C_.yellow)}${fl('green', 'תקינים', C_.green + C_.nodata)}
+      <a class="bf" href="#/tasks">${N(bd.tasks_today)} משימות להיום</a>${bd.approvals ? `<a class="bf" href="#/tasks">${N(bd.approvals)} ממתינות לאישורך</a>` : ''}</div></header>
+  ${bd.urgent.length && !q && !f && !p.m ? `<section class="bg urgent"><div class="bg-h"><b>דורשים תשומת לב היום</b><span class="cpm">${N(bd.urgent.length)} לקוחות · בסדר עדיפות</span></div>
+    <div class="bt">${bd.urgent.map((x, i) => `<div class="ur" data-act="bdJump" data-arg="${x.id}" role="button" tabindex="0"><span class="ur-n">${i + 1}</span><span class="ur-b"><b>${esc(x.name)}</b> <span class="cpm">· ${esc((bd.groups.find((g) => g.id === x.owner) || {}).name || '')}</span><small>${esc(x.why)} — ${esc(x.rec)}</small></span><span class="cpm ur-l">${N(x.leads)} לידים${x.leads_norm != null ? ` מתוך ~${N(x.leads_norm)}` : ''}</span></div>`).join('')}</div></section>` : ''}
+  <div class="bd-tools">
+    <form id="bdQ"><input name="q" value="${esc(q)}" placeholder="חיפוש לקוח" aria-label="חיפוש לקוח"></form>
+    <select id="bdM" aria-label="קמפיינר"><option value="">כל הקמפיינרים</option>${bd.groups.map((g) => `<option value="${g.id}" ${p.m === g.id ? 'selected' : ''}>${esc(g.name)}</option>`).join('')}</select>
+    <select id="bdS" aria-label="מיון"><option value="">מיון: דחוף קודם</option><option value="leads" ${s_ === 'leads' ? 'selected' : ''}>ירידה בלידים</option><option value="check" ${s_ === 'check' ? 'selected' : ''}>לא נבדק הכי הרבה זמן</option><option value="name" ${s_ === 'name' ? 'selected' : ''}>שם</option></select>
+    ${q || f || p.m || s_ ? `<a class="cpm" href="#/home">ניקוי</a>` : ''}</div>
+  ${groups.map((g, gi) => { const closed = BD.closed.has(g.id) && !q && !f; return `<section class="bg" style="--gc:${AVC[gi % AVC.length]}">
+    <div class="bg-h" data-act="bdGroup" data-arg="${g.id}" role="button" tabindex="0" aria-expanded="${!closed}"><span class="car">${closed ? '◂' : '▾'}</span><b>${esc(g.name)}</b><span class="cpm">${N(g.clients)} לקוחות</span>
+      <span class="gc"><i class="dot d-red"></i>${N(g.counts.red)} <i class="dot d-yellow"></i>${N(g.counts.yellow)} <i class="dot d-green"></i>${N(g.counts.green + g.counts.nodata)}</span>
+      <span class="cpm gt">${g.late_checks ? `<em class="bad">${N(g.late_checks)} בדיקות באיחור</em>` : 'בודק בזמן'} · ${N(g.late_contact)} בלי קשר בזמן · ${N(g.open_tasks)} משימות פתוחות</span>
+      ${g.id ? `<button class="hm-link" data-act="handover" data-arg="${g.id}">מסירה</button>` : ''}</div>
+    ${closed ? '' : `<div class="bt">${hdr}${g.rows.map((x) => bRow(x)).join('') || '<div class="cpm" style="padding:12px 16px">אין לקוחות שמתאימים לסינון</div>'}</div>`}</section>`; }).join('')}
+  <p class="bd-foot cpm">הסטטוס נקבע מול ההיסטוריה של כל לקוח (סטטיסטיקה, בלי מודל שפה) · עודכן ${esc(bd.ref_label)} · <a href="#/agents">איך המערכת עובדת</a></p></div>`;
+  $('#bdQ').addEventListener('submit', (e) => { e.preventDefault(); location.hash = bdLink(p, { q: new FormData(e.target).get('q') || '' }); });
+  $('#bdM').addEventListener('change', (e) => { location.hash = bdLink(p, { m: e.target.value }); });
+  $('#bdS').addEventListener('change', (e) => { location.hash = bdLink(p, { s: e.target.value }); });
+  if (BD.deep) loadDeep(BD.deep);
+};
+const loadDeep = async (cid) => {
+  const el = document.getElementById('bd-' + cid); if (!el) return;
+  const i = await api(`/api/pulse/clients/${encodeURIComponent(cid)}/insight`);
+  el.innerHTML = deepHTML(i);
+};
+A.bdRow = (el, cid, ev) => { const ln = ev && ev.target.closest('a[href]'); if (ln) { location.hash = ln.getAttribute('href'); return; } BD.exp = BD.exp === cid ? null : cid; if (BD.exp !== cid) BD.deep = null; render(); };
+A.bdDeep = (b, cid) => { BD.exp = cid; BD.deep = BD.deep === cid ? null : cid; render(); };
+A.bdGroup = (b, gid) => { BD.closed.has(gid) ? BD.closed.delete(gid) : BD.closed.add(gid); try { localStorage.setItem('cp.closed', JSON.stringify([...BD.closed])); } catch { /* */ } render(); };
+A.bdJump = (b, cid) => { BD.exp = cid; BD.deep = cid; const x = st._bd?.groups.find((g) => g.rows.some((r) => r.id === cid)); if (x) BD.closed.delete(x.id); render(); setTimeout(() => document.getElementById('bx-' + cid)?.scrollIntoView({ block: 'center', behavior: 'smooth' }), 120); };
+A.bdTouch = async (b, arg) => { const [cid, kind] = arg.split('|'); b.disabled = true; const r = await api(`/api/pulse/clients/${cid}/touch`, { method: 'POST', body: { kind } }); toast(r.msg); render(); };
+
+// ================================================================ תיק לקוח — ארבעה אזורים בלבד
+V.client = async (view, p) => {
+  const [i, d] = await Promise.all([api(`/api/pulse/clients/${encodeURIComponent(p.id)}/insight`), api(`/api/pulse/clients/${encodeURIComponent(p.id)}?days=30`)]);
+  const bd = st._bd || await api('/api/pulse/board');
+  const x = bd.groups.flatMap((g) => g.rows).find((r) => r.id === p.id) || {};
+  const c = d.client, M = i.monitor, L = i.leads, C = i.campaigns, r = d.result;
+  const sec = (k, t, body) => `<section class="cf"><h2>${t}</h2>${body}</section>`;
+  const kv = (rows_) => `<table class="dt kv">${rows_.filter(Boolean).map(([a, b]) => `<tr><td>${a}</td><td>${b}</td></tr>`).join('')}</table>`;
+  const contacts = d.contacts.map((y) => `${esc(y.name)} <span class="cpm">${esc(y.role || '')} · <bdi>${esc(y.phone || '')}</bdi></span>`).join('<br>') || '<span class="cpm">לא הוזן</span>';
+  const evs = d.events.filter((e) => ['check', 'note', 'task', 'verified', 'verify_failed'].includes(e.type)).slice(0, 8);
+  view.innerHTML = `<a class="back" href="#/home">${ic('back', 14)} הלוח</a>
+  <div class="cf-h"><h1>${esc(c.name)}</h1><em class="sp-${M.status}">${ST3[M.status]}</em><span class="cpm">${esc(c.industry || '')} · ${esc(M.owner)}</span>${c.is_demo ? demoTag() : ''}</div>
+  <div class="cf-g">
+  ${sec('a', 'פרטי הלקוח ומצבו', `<p class="cf-sum">${esc(i.chief)}</p>${kv([['סטטוס', `${ST3[M.status]} — ${esc(M.title)}`], M.when && ['מאז', esc(M.when)], M.status !== 'green' && ['סיבה', esc(M.cause)],
+    ['אחראי', esc(M.owner)], M.recheck && ['בדיקה חוזרת', esc(M.recheck)], ['אנשי קשר', contacts], c.goals?.targetCpl && ['יעד עלות לליד', money(c.goals.targetCpl)], c.goals?.monthlyBudget && ['תקציב חודשי', money(c.goals.monthlyBudget)]])}`)}
+  ${sec('b', 'קמפיינים ומעקב קמפיינר', `${kv([['הוצאה 7 ימים', money(r.rec.spend)], ['עלות לליד', r.rec.cpl ? `${money(r.rec.cpl)} <span class="cpm">(רגיל ${money(r.base.cpl)})</span>` : 'אין לידים'],
+    C.budget.monthly && ['ניצול תקציב', `${N(C.budget.use)}% <span class="cpm">קצב ${money(C.budget.pace)} מתוך ${money(C.budget.monthly)}</span>`],
+    C.connected ? ['מודעות', `${N(C.good)} מתוך ${N(C.count)} עובדות טוב${C.top_fix ? ` · לשפר: ${esc(C.top_fix.name)} (${esc(C.top_fix.issue)})` : ''} <a href="#/ads?client=${c.id}">ניתוח מודעות</a>`] : ['מודעות', `<span class="cpm">${esc(C.missing)}</span>`],
+    ['בדיקת קמפיין אחרונה', `<span class="${x.check?.late ? 'bad' : ''}">${ago(x.check?.ago)}</span> <span class="cpm">· נדרש כל ${N(x.check?.every)} ימים · ${N(x.check?.n)} בדיקות מתועדות</span>`],
+    ['קשר אחרון עם הלקוח', `<span class="${x.contact?.late ? 'bad' : ''}">${ago(x.contact?.ago)}</span> <span class="cpm">· נדרש כל ${N(x.contact?.every)} ימים</span>`]])}
+    <div class="bx-acts"><button data-act="cfTouch" data-arg="${c.id}|check">✓ בדקתי את הקמפיין</button><button data-act="cfTouch" data-arg="${c.id}|call">☎ תיעדתי שיחה</button><button data-act="cfTouch" data-arg="${c.id}|meeting">תיעדתי פגישה</button></div>
+    ${evs.length ? `<table class="dt log">${evs.map((e) => `<tr><td>${esc(dayLabel ? dayLabel(e.day) : e.day)}</td><td>${esc(e.text)}</td><td class="cpm">${esc(e.user || '')}</td></tr>`).join('')}</table>` : ''}`)}
+  ${sec('c', 'לידים ואיכות', `<p>${esc(L.state)}</p>${L.kind !== 'stable' ? `<p class="cpm">${esc(L.cause)}</p>` : ''}
+    ${kv([['לידים 7 ימים', `${N(r.rec.leads)} <span class="cpm">(רגיל ~${N(Math.round(r.base.dailyLeads * 7))})</span>`], ['המרה מקליק לליד', r.rec.cvr != null ? `${(r.rec.cvr * 100).toFixed(1)}% <span class="cpm">(רגיל ${r.base.cvr ? (r.base.cvr * 100).toFixed(1) + '%' : '—'})</span>` : '—'],
+      r.sales28 && ['מכירות 28 ימים', `${N(r.sales28.sales)} מתוך ${N(r.sales28.leads)} לידים`], !r.sales28 && ['איכות לידים', '<span class="cpm">אין נתוני מכירות מהלקוח — אפשר להזין ב-CSV</span>']])}
+    <div id="hmChart" class="cf-ch"></div>`)}
+  ${sec('d', 'המלצות ופעולות', `<p><b>${esc(L.headline)}</b> — ${esc(L.kind === 'stable' ? (i.strategy.recommendation || L.improve) : L.improve)}</p>
+    ${M.todo.length ? `<ol>${M.todo.map((t) => `<li>${esc(t)}</li>`).join('')}</ol>` : ''}<p class="cpm">איך נדע שהצליח: ${esc(L.kind === 'stable' ? 'הרמה נשמרת' : L.measure)}</p>
+    ${i.strategy.adapt ? `<p class="mem">${esc(i.strategy.adapt)}</p>` : ''}
+    <div class="bx-acts">${i.execution.task_id ? `<a href="#/tasks?hl=${i.execution.task_id}">משימה פתוחה · ${esc(STATUS[i.execution.task_status] || '')}</a>` : M.status !== 'green' || i.strategy.opportunities.length ? `<button data-act="agentAct" data-arg="${c.id}|${esc(i.execution.key || '')}|${i.execution.key ? '' : esc(i.strategy.opportunities[0]?.action || L.improve)}">פתח משימה לקמפיינר</button>` : ''}
+      <button data-act="updDraft" data-arg="${c.id}">נסח עדכון ללקוח</button><button data-act="bdDeepC" data-arg="${c.id}">בדיקה מעמיקה</button></div>
+    <div id="bd-${c.id}"></div>
+    ${i.memory.history.length ? `<table class="dt log">${i.memory.history.map((h) => `<tr><td>${esc(h.day)}</td><td>${esc(h.text)}</td><td class="${h.ok ? 'ok' : 'bad'}">${esc(h.result)}</td></tr>`).join('')}</table>` : ''}`)}
+  </div><p class="cpm" style="margin-top:18px"><a href="#/client360/${c.id}">היסטוריה ופרטים מלאים</a> · <a href="/api/pulse/reports/client/${c.id}.html?days=30" target="_blank" rel="noopener">דוח ללקוח</a></p>`;
+  insightChart(c.id);
+};
+A.cfTouch = async (b, arg) => { const [cid, kind] = arg.split('|'); b.disabled = true; const r = await api(`/api/pulse/clients/${cid}/touch`, { method: 'POST', body: { kind } }); toast(r.msg); st._bd = null; render(); };
+A.bdDeepC = async (b, cid) => { const el = document.getElementById('bd-' + cid); if (el.innerHTML) { el.innerHTML = ''; return; } el.innerHTML = '<div class="sk" style="height:100px"></div>'; el.classList.add('bx-deep'); el.innerHTML = deepHTML(await api(`/api/pulse/clients/${encodeURIComponent(cid)}/insight`)); };
+A.agentAct = async (b, arg) => {
+  const [client_id, key, title] = arg.split('|');
+  b.disabled = true;
+  try { const r = await api('/api/pulse/agents/act', { method: 'POST', body: { client_id, key: key || null, title: title || null } }); toast(r.msg); b.outerHTML = '<span class="hm-tag">נפתחה משימה ✓</span>'; }
+  catch (e) { b.disabled = false; }
+};
+V.agents = async (view) => {
+  const br = await api('/api/pulse/agents/brief');
+  view.innerHTML = `<div class="hm" style="max-width:860px"><header><h1 style="margin:0;font-size:26px;font-weight:600">צוות הסוכנים</h1>
+    <p class="hm-sub">שישה תפקידים שעובדים יחד על אותם נתונים. כל ממצא עובר מבקרה, לניתוח, להמלצה, לאישור, לביצוע ולבדיקה חוזרת.</p></header>
+    <ol class="ag">${br.agents.map((a, i) => `<li><span class="hm-n">${i + 1}</span><div><b>${esc(a.name)}</b><p>${esc(a.does)}</p><small>עובד על: ${esc(a.uses)}</small></div><em>${N(a.findings)}<small>${a.id === 'execution' ? 'משימות פתוחות' : a.id === 'chief' ? 'דברים להיום' : 'ממצאים'}</small></em></li>`).join('')}</ol>
+    <p class="note">מנוע: ${br.engine === 'rules' ? 'כללים וסטטיסטיקה מול ההיסטוריה של כל לקוח — בלי מודל שפה. חיבור Gemini / Claude ישפר ניסוח בלבד; ההחלטות נשארות מבוססות נתונים.' : esc(br.engine)}
+    · פעולות רגישות (תקציב, עצירת קמפיין, הודעה ללקוח) ממתינות לאישור מנהל.</p></div>`;
 };
 A.handover = async (b, frm) => {
   const perf = await api('/api/pulse/team/perf');
@@ -483,14 +608,14 @@ function bindClientForm(cid) {
 }
 
 // ================================================================ תיק לקוח 360
-V.client = async (view, p) => {
+V.client360 = async (view, p) => {
   const days = Number(p.days || 30), metric = p.m || 'cpl';
   const d = await api(`/api/pulse/clients/${encodeURIComponent(p.id)}?days=${days}`);
   const c = d.client, r = d.result, h = r.health, top = d.alerts[0];
   const met = (l, a, b, fmt, goodDown) => `<div class="met"><div class="l">${l}</div><div class="v">${N(a == null ? '—' : fmt(a))}</div><div class="c">${chg(a, b, goodDown)} <span class="note">מול ${N(b == null ? '—' : fmt(b))}</span></div></div>`;
   const tab = p.tab || (top ? 'issue' : 'perf');
   const cd = top && top.card;
-  const tabBtn = (k, t, n) => `<button class="${tab === k ? 'on' : ''}" data-act="go" data-arg="client/${c.id}?tab=${k}&days=${days}&m=${metric}">${t}${n ? ` <span class="note">${n}</span>` : ''}</button>`;
+  const tabBtn = (k, t, n) => `<button class="${tab === k ? 'on' : ''}" data-act="go" data-arg="client360/${c.id}?tab=${k}&days=${days}&m=${metric}">${t}${n ? ` <span class="note">${n}</span>` : ''}</button>`;
   view.innerHTML = `<a class="back" href="#/clients">${ic('back', 14)} כל הלקוחות</a>
   <div class="ch"><div><div class="row" style="gap:10px"><i class="dot d-${r.status}" style="width:12px;height:12px"></i><h2>${esc(c.name)}</h2></div>
     <div class="meta2" style="margin:6px 0 0"><span>${esc(SL[r.status])}</span><span>${esc(c.industry || '')}</span></div></div>
@@ -500,18 +625,14 @@ V.client = async (view, p) => {
   <div class="k4s cl">${[['לידים 7 ימים', r.rec.leads, r.base.leads / 3, true, (v) => Math.round(v)], ['עלות לליד', r.rec.cpl, r.base.cpl, false, money], ['הוצאה 7 ימים', r.rec.spend, r.base.spend / 3, null, money]].map(([l, v, pv, gu, fm]) => {
     const x = v != null && pv ? Math.round((v / pv - 1) * 100) : null;
     return `<div class="k4"><span class="note">${l}</span><b>${N(v == null ? '—' : fm(v))}</b>${x == null ? '' : `<span class="${gu == null ? 'note' : (x > 0) === gu ? 'ok' : 'bad'}">${x > 0 ? '▲' : '▼'} ${Math.abs(x)}% <span class="note">מהרגיל</span></span>`}</div>`; }).join('')}</div>
-  ${cd ? `<div class="card hero">
-      <div class="hrow"><span class="hk">מה קרה</span><div class="hv big">${esc(cd.what)}</div></div>
-      <div class="hrow"><span class="hk">מה לעשות</span><div class="hv"><b>${esc(cd.next)}</b>${cd.potential_leads ? `<div class="note">כ-${N(cd.potential_leads)} לידים בשבוע אפשר להחזיר</div>` : ''}</div></div>
-      <div class="row" style="margin-top:14px">${!top.task || top.task.status === 'new' ? `<button class="btn pri" data-act="handle" data-arg="${esc(top.key)}|${top.task ? 'done' : 'start'}">${top.task ? 'טיפלתי ✓' : 'אני מטפל'}</button>` : top.task.status === 'in_progress' ? `<button class="btn pri" data-act="handle" data-arg="${esc(top.key)}|done">טיפלתי ✓</button>` : `<span class="ok">טופל ✓ · המערכת תבדוק אם זה השתפר</span>`}</div></div>`
-    : `<div class="card hero"><div class="hv big">${r.status === 'nodata' ? 'אין מספיק נתונים כדי לקבוע מצב.' : r.improved ? esc(r.improved.what) : 'הכול תקין.'}</div>${(st._sugg = (d.opportunities[0] || null)) ? `<div class="hrow" style="margin-top:8px"><span class="hk">מה אפשר להציע</span><div class="hv">${esc(d.opportunities[0].action)}</div></div><div class="row" style="margin-top:12px"><button class="btn sec" data-act="oppTask" data-arg="${c.id}|${esc(d.opportunities[0].action)}">הפוך למשימה</button></div>` : ''}</div>`}
+  <section class="hm-d cl-ins" id="clIns"><div class="sk" style="height:240px"></div></section>
   <div class="card pad" style="margin-bottom:14px"><div class="note">עלות לליד · 30 יום (ממוצע נע)${r.goals.targetCpl ? ' · קו ירוק = יעד' : ''}</div><div id="cl30"></div></div>
   <details class="moreinfo" ${p.tab ? 'open' : ''}><summary>עוד פרטים</summary>
   <div class="seg tabbar">${top ? tabBtn('issue', 'פרטי הבעיה', d.alerts.length) : ''}${tabBtn('perf', 'ביצועים')}${tabBtn('work', 'טיפול', d.tasks.filter((t) => t.status !== 'closed').length || '')}${tabBtn('about', 'הלקוח')}</div>
   <div class="tabpane">${tab === 'issue' ? d.alerts.map((a, i) => alertCard(a, d, i === 0)).join('')
     : tab === 'perf' ? `  <div class="card pad" style="margin-bottom:14px"><div class="h2">ביצועים<span class="sp"></span>
-    <div class="seg">${[['cpl', 'עלות לליד'], ['leads', 'לידים'], ['spend', 'הוצאה'], ['ctr', 'CTR']].map(([k, t]) => `<button class="${metric === k ? 'on' : ''}" data-act="go" data-arg="client/${c.id}?tab=perf&days=${days}&m=${k}">${t}</button>`).join('')}</div>
-    <div class="seg">${[30, 60, 90].map((n) => `<button class="${days === n ? 'on' : ''}" data-act="go" data-arg="client/${c.id}?tab=perf&days=${n}&m=${metric}">${n} יום</button>`).join('')}</div></div>
+    <div class="seg">${[['cpl', 'עלות לליד'], ['leads', 'לידים'], ['spend', 'הוצאה'], ['ctr', 'CTR']].map(([k, t]) => `<button class="${metric === k ? 'on' : ''}" data-act="go" data-arg="client360/${c.id}?tab=perf&days=${days}&m=${k}">${t}</button>`).join('')}</div>
+    <div class="seg">${[30, 60, 90].map((n) => `<button class="${days === n ? 'on' : ''}" data-act="go" data-arg="client360/${c.id}?tab=perf&days=${n}&m=${metric}">${n} יום</button>`).join('')}</div></div>
     <div class="mets" style="margin-bottom:12px">${met('הוצאה 7 ימים', r.rec.spend, r.base.spend / 3, money)}${met('לידים 7 ימים', r.rec.leads, r.base.leads / 3, (v) => Math.round(v))}${met('עלות לליד', r.rec.cpl, r.base.cpl, money, true)}${met('CTR', r.rec.ctr, r.base.ctr, (v) => pctf(v, 2))}${met('המרה לליד', r.rec.cvr, r.base.cvr, (v) => pctf(v, 1))}${met('CPM', r.rec.cpm, r.base.cpm, money, true)}</div>
     <div id="chartBox"></div><div class="legend" style="margin-top:6px">${metric === 'cpl' ? '<span><i style="background:var(--acc)"></i>ממוצע נע 7 ימים</span><span><i style="background:var(--line2)"></i>יומי</span>' : ''}${r.goals.targetCpl && metric === 'cpl' ? '<span><i style="background:var(--g)"></i>יעד</span>' : ''}<span class="note">"מול" = ממוצע 21 הימים שלפני השבוע האחרון</span></div></div>`
     : tab === 'work' ? `<div class="grid g2"><div class="stack">      <div class="card pad"><div class="h2">${ic('check')} משימות</div>${d.tasks.length ? d.tasks.map((t) => `<button class="act" style="width:100%;margin-bottom:6px" data-act="go" data-arg="task/${t.id}"><div style="text-align:start"><b>${esc(t.title.split(' · ')[0])}</b><div class="small tx2">${esc(STATUS[t.status])} · ${esc(memberName(t.assignee))}</div></div></button>`).join('') : empty('אין משימות')}
@@ -526,6 +647,7 @@ V.client = async (view, p) => {
         ${d.notes.map((n) => `<div class="fi"><span class="pill p-gray">${{ note: 'הערה', call: 'שיחה', meeting: 'פגישה', decision: 'החלטה' }[n.kind]}</span><div>${esc(n.text)}<div class="note">${esc(n.user_name || '')}</div></div></div>`).join('')}</div>      <div class="card pad"><div class="h2">${ic('chart')} היסטוריית הרמזור</div>${d.status_history.map((x) => `<div class="fi"><span class="tm">${N(dayLabel(x.day))}</span>${pill(x.status)}<div class="small">${esc(x.reason || '')}</div></div>`).join('') || '<p class="small tx2">אין עדיין שינויים</p>'}</div></div><div class="stack">      ${d.opportunities.length ? `<div class="card pad"><div class="h2"><i class="dot d-imp"></i> הזדמנויות</div>${d.opportunities.map((o) => oppCard(o, c.id)).join('')}</div>` : ''}      <div class="card pad"><div class="h2">${ic('trophy')} ציון בריאות: ${N(h.score ?? 'אין מספיק מידע')}<span class="sp"></span><span class="note">ביטחון ${esc(h.confidence)}</span></div>
         ${h.parts.length ? `<table class="ft">${h.parts.map((x) => `<tr><td>${esc(x.label)}</td><td class="bad">${N(x.points)}</td></tr>`).join('')}</table>` : '<p class="small tx2">אין קנסות — 100.</p>'}<p class="note">${esc(h.formula)}</p></div>      <div class="card pad"><div class="h2">סיכון נטישה<span class="sp"></span>${d.risk.level === 'unknown' ? '<span class="pill p-gray">אין מספיק נתונים</span>' : `<span class="pill p-${d.risk.level === 'high' ? 'red' : d.risk.level === 'medium' ? 'yellow' : 'green'}">${{ high: 'גבוה', medium: 'בינוני', low: 'נמוך' }[d.risk.level]}</span>`}</div><ul class="ul">${d.risk.reasons.map((x) => `<li>${esc(x)}</li>`).join('')}</ul>${d.risk.note ? `<p class="note">${esc(d.risk.note)}</p>` : ''}</div>      <div class="card pad"><div class="h2">${ic('coin')} רווחיות לסוכנות</div>${d.profit ? `<div class="kv"><span>הכנסה חודשית</span><b>${N(money(d.profit.fee))}</b><span>עלות עבודה</span><span>${N(money(d.profit.labor))} (${N(d.profit.hours)} ש')</span><span>עלויות נוספות</span><span>${N(money(d.profit.other))}</span><span>רווח גולמי</span><b class="${d.profit.profit < 0 ? 'bad' : 'ok'}">${N(money(d.profit.profit))} · ${N(pctf(d.profit.margin))}</b><span>תקציב פרסום 30 יום</span><span class="muted">${N(money(d.profit.ad_spend_30))} (של הלקוח)</span></div>${d.profit.complete ? '' : '<p class="note">חסרות שעות או עלות שעה — הרווחיות חלקית.</p>'}` : '<p class="small tx2">לא הוזנה הכנסה חודשית. הוסיפו בהגדרות כדי לראות רווחיות.</p>'}</div>      ${!c.is_demo ? `<div class="card pad"><div class="h2">${ic('plug')} ייבוא נתונים (CSV)</div><p class="small tx2">ייצוא יומי מ-Meta Ads Manager / Google Ads. עמודות: date, spend, impressions, clicks, leads · אופציונלי: sales, revenue. כותרות בעברית נתמכות.</p>
         <input type="file" accept=".csv,text/csv" id="csvF" class="inp" style="width:100%"><button class="btn sec sm" style="margin-top:8px" data-act="importCsv" data-arg="${c.id}">ייבוא</button><div id="csvR" class="note"></div></div>` : ''}</div></div>`}</div></details>`;
+  api(`/api/pulse/clients/${encodeURIComponent(c.id)}/insight`).then((ins) => { const el = $('#clIns'); if (el) { el.innerHTML = insightHTML(ins, { head: false }); insightChart(c.id); } });
   // גרף
   const s = d.series, roll = d.rolling;
   if ($('#cl30')) chart($('#cl30'), { labels: roll.map((x) => x.date.slice(8, 10) + '.' + Number(x.date.slice(5, 7))), target: r.goals.targetCpl, fmt: (v) => money(v), h: 170, series: [{ name: 'עלות לליד', color: 'var(--acc)', w: 2.4, vals: roll.map((x) => x.cpl) }] });

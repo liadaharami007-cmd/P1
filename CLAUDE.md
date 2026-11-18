@@ -59,7 +59,8 @@ FastAPI (app/main.py): request-id, JSON logs, CSRF origin check, CSP, auth על 
   intelligence/  engines.py (anthropic / ollama / rules — מציג איזה פעיל) · analyst.py · personas_ai.py · client.py (עלויות)
   monitor.py     Smart Monitor: tick כל דקה מה-worker, השוואה, התראות new/fixed/score
   pulse/         ClientPulse OS (/pulse) — בקרת לקוחות לסוכנויות פרסום: engine (רמזור סטטיסטי, בריאות, הזדמנויות, סיכון, רווחיות) ·
-                 service (התראות→משימות→אישור→בדיקה חוזרת, 9 אוטומציות עם יומן+dedupe, Demo Lab, CSV) · ask · scheduler · report · routes. פירוט: clientpulse/README.md
+                 service (התראות→משימות→אישור→בדיקה חוזרת, 9 אוטומציות עם יומן+dedupe, Demo Lab, CSV) · ask · scheduler · report · routes.
+                 agents.py = צוות 6 תפקידים מעל הקיים (בקרה/קמפיינים/לידים/אסטרטגיה/ביצוע/מנהל ראשי): /api/pulse/agents/brief · /clients/{id}/insight · POST /agents/act. engine: rules פירוט: clientpulse/README.md
   report/        data.py · pdf.py (PDF ע"י Chromium)
   static/demo-store/  חנות דמו "סדנת פשתן" עם בעיות מכוונות (חלון קופץ, מדיניות דלה, כפתור לא בולט, קופה עם הרשמה כפויה, קישור שבור…)
   db.py          SQLite + מיגרציות (user_version=4: business_profiles, actions, activity, missions, clients, password_resets, billing_events): agent_runs, fix_previews, monitors, notifications, findings.fix_status/priority…

@@ -73,7 +73,7 @@ CREATE TABLE IF NOT EXISTS pulse_notes (
 _ensured: set[str] = set()
 
 
-ADDED = {"pulse_clients": {"satisfaction": "INTEGER", "satisfaction_day": "INTEGER", "contact_every_days": "INTEGER", "notes_text": "TEXT"}}
+ADDED = {"pulse_clients": {"satisfaction": "INTEGER", "satisfaction_day": "INTEGER", "contact_every_days": "INTEGER", "notes_text": "TEXT", "check_every_days": "INTEGER"}}
 
 
 def ensure(db: Database) -> None:

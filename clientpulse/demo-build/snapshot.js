@@ -98,6 +98,14 @@
       var b = D['/api/pulse/brief']; if (b) b.items = b.items.filter(function (x) { return !(x.action && x.action.arg === mm[1] && x.kind === 'commitment'); });
       return n ? { body: { ok: true, msg: 'ההתחייבות סומנה כבוצעה' } } : { body: { detail: 'לא נמצא' }, status: 404 };
     }
+    if ((mm = url.match(/^\/api\/pulse\/clients\/([^/]+)\/touch$/))) {
+      var bdx = D['/api/pulse/board'], hit = null;
+      if (bdx) bdx.groups.forEach(function (g) { g.rows.forEach(function (x) { if (x.id === mm[1]) hit = x; }); });
+      if (!hit) return { body: { detail: 'לקוח לא נמצא' }, status: 404 };
+      if (body.kind === 'check') { hit.check.ago = 0; hit.check.late = false; hit.check.n++; } else { hit.contact.ago = 0; hit.contact.late = false; }
+      bdx.groups.forEach(function (g) { g.late_checks = g.rows.filter(function (x) { return x.check.late; }).length; g.late_contact = g.rows.filter(function (x) { return x.contact.late; }).length; });
+      return { body: { ok: true, msg: body.kind === 'check' ? 'נרשמה בדיקת קמפיין' : 'נרשמה תקשורת עם הלקוח' } };
+    }
     if ((mm = url.match(/^\/api\/pulse\/clients\/([^/]+)\/(\w[\w-]*)$/))) {
       var keys = Object.keys(D).filter(function (k) { return k.indexOf('/api/pulse/clients/' + mm[1] + '?') === 0; });
       if (!keys.length) return null;
@@ -143,6 +151,16 @@
         return { body: { ok: true, msg: 'מעולה. טופל — המערכת תבדוק בעוד 3 ימים אם המספרים חזרו ליעד', task_id: tk.id } };
       }
       return { body: { ok: true, msg: 'רשמתי שאתה מטפל בזה', task_id: tk.id } };
+    }
+    if (url === '/api/pulse/agents/act') {
+      var tk2, msg2;
+      if (body.key) { var cr2 = act(D, '/api/pulse/tasks', 'POST', { alert_key: body.key }); if (!cr2 || cr2.status === 404) return { body: { detail: 'החריגה כבר לא פעילה' }, status: 409 }; tk2 = cr2.body; msg2 = 'נפתחה משימה'; }
+      var ik = '/api/pulse/clients/' + body.client_id + '/insight';
+      if (!body.key) { tk2 = act(D, '/api/pulse/tasks/manual', 'POST', { client_id: body.client_id, title: body.title, due_days: 7 }).body; if (D[ik]) tk2.assignee = D[ik].client.owner; msg2 = 'נפתחה משימת הזדמנות'; }
+      if (D[ik]) { D[ik].execution.task_id = tk2.id; D[ik].execution.task_status = 'new'; }
+      var bd2 = D['/api/pulse/board']; if (bd2) bd2.groups.forEach(function (g) { g.rows.forEach(function (x) { if (x.id === body.client_id) { x.task_id = tk2.id; x.task_status = 'new'; x.tasks++; } }); });
+      var br2 = D['/api/pulse/agents/brief']; if (br2) br2.top.forEach(function (x) { if (x.client_id === body.client_id) { x.task_id = tk2.id; x.task_status = 'new'; } });
+      return { body: { ok: true, msg: msg2 + ' · אחראי: ' + memberName(D, tk2.assignee), task: tk2 } };
     }
     if (url === '/api/pulse/check') { var st0 = D['/api/pulse/state']; return { body: { n: st0.clients, ms: 11, new: 0, cleared: 0 } }; }
     if (url === '/api/pulse/alerts/feedback') return { body: { ok: true, msg: 'תודה — המשוב נשמר' } };

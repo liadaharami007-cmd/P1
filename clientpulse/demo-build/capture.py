@@ -7,7 +7,7 @@ from app.main import create_app
 OUT = sys.argv[1]
 c = TestClient(create_app(db=Database(tempfile.mkdtemp() + "/s.db")))
 assert c.post("/api/auth/register", json={"email": "niv@demo-agency.co", "password": "correct-horse-battery", "name": "ניב", "account_name": "משרד הפרסום — דמו"}).status_code == 201
-c.post("/api/pulse/demo?size=300")
+c.post("/api/pulse/demo?size=100")
 P = lambda u, b=None: c.post(u, json=b or {}).json()
 tasks = [t for t in c.get("/api/pulse/tasks").json()["tasks"]]
 reds = [t for t in tasks if t["severity"] == "red" and (t["alert_key"] or "").endswith(":cpl")] or [t for t in tasks if t["severity"] == "red"]
@@ -25,7 +25,7 @@ for cl in [x for x in c.get("/api/pulse/clients").json()["clients"] if x["status
     P(f"/api/pulse/clients/{cl['id']}/update-draft")
 data = {}
 G = lambda u: data.__setitem__(u, c.get(u).json())
-for u in ["/api/pulse/state", "/api/pulse/overview", "/api/pulse/alerts", "/api/pulse/clients", "/api/pulse/tasks", "/api/pulse/notifications",
+for u in ["/api/pulse/board", "/api/pulse/agents/brief", "/api/pulse/state", "/api/pulse/overview", "/api/pulse/alerts", "/api/pulse/clients", "/api/pulse/tasks", "/api/pulse/notifications",
           "/api/pulse/automations", "/api/pulse/impact", "/api/pulse/team", "/api/pulse/profit", "/api/pulse/opportunities", "/api/pulse/lab",
           "/api/pulse/integrations", "/api/pulse/ask/suggestions", "/api/pulse/brief", "/api/pulse/ads", "/api/pulse/my", "/api/pulse/trend", "/api/pulse/team/perf",
           "/api/pulse/settings/thresholds", "/api/pulse/knowledge", "/api/pulse/decisions", "/api/pulse/commitments"]:
@@ -37,6 +37,7 @@ for i, cl in enumerate(data["/api/pulse/clients"]["clients"]):
     if cl["source"] == "demo" and i < 40:
         G(f"/api/pulse/ads?client={cl['id']}")
     G(f"/api/pulse/clients/{cl['id']}?days=30")
+    G(f"/api/pulse/clients/{cl['id']}/insight")
 asks = {}
 qs = list(data["/api/pulse/ask/suggestions"]["suggestions"])
 for cl in data["/api/pulse/clients"]["clients"][:40]:

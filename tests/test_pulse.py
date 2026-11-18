@@ -357,3 +357,57 @@ def test_campaigner_perf_and_handover(make_client):
     r = c.post("/api/pulse/team/handover", json={"frm": "dana", "to": "omer"}).json()
     assert r["ok"] and r["moved"] == len(dana_open)
     assert not [t for t in c.get("/api/pulse/tasks").json()["tasks"] if t["assignee"] == "dana" and t["status"] != "closed"]
+
+
+def test_agents_team_brief_insight_and_act(make_client):
+    """צוות הסוכנים: תדריך המנהל הראשי, תיק תובנות ללקוח (כל התפקידים), וסוכן הביצוע שפותח משימה עם אחראי."""
+    c = _login(make_client, "agents@agency.co")
+    assert c.post("/api/pulse/demo?size=40").status_code == 200
+    b = c.get("/api/pulse/agents/brief").json()
+    assert b["engine"] == "rules" and len(b["agents"]) == 6 and {a["id"] for a in b["agents"]} >= {"monitor", "campaigns", "leads", "strategy", "execution", "chief"}
+    assert sum(b["counts"].values()) == b["clients"] == 40
+    assert 1 <= len(b["top"]) <= 3 and len({x["headline"] for x in b["top"]}) == len(b["top"])
+    for x in b["top"]:
+        assert x["why"] and x["action"] and x["owner"]
+    # כל לקוח: הסבר מלא ללידים, בלי צבע בלי סיבה
+    for cl in c.get("/api/pulse/clients").json()["clients"]:
+        i = c.get(f"/api/pulse/clients/{cl['id']}/insight").json()
+        L = i["leads"]
+        assert L["state"] and L["headline"] and L["cause"] and L["measure"]
+        if i["monitor"]["status"] in ("red", "yellow"):
+            assert i["monitor"]["what"] and i["monitor"]["cause"] and i["monitor"]["owner"] and i["monitor"]["recheck"] and i["monitor"]["todo"]
+        assert i["campaigns"]["budget"]["pace"] >= 0
+    # ביצוע: בעיה → משימה עם אחראי; רגישה → דורשת אישור
+    p = next(x for x in b["top"] if x["kind"] == "problem")
+    r = c.post("/api/pulse/agents/act", json={"client_id": p["client_id"], "key": p["key"]}).json()
+    assert r["ok"] and r["task"]["assignee"] and r["task"]["status"] == "new"
+    again = c.post("/api/pulse/agents/act", json={"client_id": p["client_id"], "key": p["key"]}).json()
+    assert again["task"]["id"] == r["task"]["id"]  # לא נפתחת משימה כפולה
+    assert c.post("/api/pulse/agents/act", json={"client_id": "nope", "title": "x"}).status_code == 409
+
+
+def test_board_groups_tracking_and_touch(make_client):
+    """לוח Monday: קבוצה לכל קמפיינר, ספירת רמזור, מעקב בדיקות קמפיין נפרד מתקשורת עם הלקוח, ותיעוד שמעדכן את הלוח."""
+    c = _login(make_client, "board@agency.co")
+    assert c.post("/api/pulse/demo?size=40").status_code == 200
+    b = c.get("/api/pulse/board").json()
+    assert sum(g["clients"] for g in b["groups"]) == b["clients"] == 40
+    for g in b["groups"]:
+        assert sum(g["counts"].values()) == g["clients"]
+        for x in g["rows"]:
+            assert x["status"] in ("red", "yellow", "green", "nodata") and x["why"] and x["rec"]
+            assert "every" in x["check"] and "every" in x["contact"]
+    assert all(x["status"] == "red" for x in b["urgent"])
+    late = next(x for g in b["groups"] for x in g["rows"] if x["check"]["late"])  # בדמו קמפיינר אחד מפגר בבדיקות
+    assert c.post(f"/api/pulse/clients/{late['id']}/touch", json={"kind": "check"}).json()["ok"]
+    after = next(x for g in c.get("/api/pulse/board").json()["groups"] for x in g["rows"] if x["id"] == late["id"])
+    assert after["check"]["ago"] == 0 and not after["check"]["late"]
+    before_contact = after["contact"]["ago"]
+    c.post(f"/api/pulse/clients/{late['id']}/touch", json={"kind": "call", "text": "שיחה"})
+    again = next(x for g in c.get("/api/pulse/board").json()["groups"] for x in g["rows"] if x["id"] == late["id"])
+    assert again["contact"]["ago"] == 0 and again["check"]["n"] == after["check"]["n"]  # שיחה לא נספרת כבדיקת קמפיין
+    assert before_contact != 0 or before_contact == 0
+    i = c.get(f"/api/pulse/clients/{late['id']}/insight").json()
+    caps = {x["id"]: x["status"] for x in i["capabilities"]}
+    assert caps["task"] == "available" and caps["budget"] == "not_connected"  # לא מציגים יכולת שלא מחוברת
+    assert c.post("/api/pulse/clients/nope/touch", json={"kind": "check"}).status_code == 404
