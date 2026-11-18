@@ -84,7 +84,7 @@ V.home = async (view, p = {}) => {
   ab.cards.forEach((x) => { if (!byClient[x.client_id]) byClient[x.client_id] = x; });
   const who = p.m || '', me_ = perf.find((x) => x.id === who);
   const rows = ab.board.filter((x) => !who || x.owner === who).map((x) => ({ ...x, card: byClient[x.id], st: x.status === 'nodata' ? 'green' : x.status }));
-  const q = (extra) => `home?${new URLSearchParams({ ...(who ? { m: who } : {}), ...extra }).toString()}`;
+  const q = (extra) => `home?${new URLSearchParams({ ...(who ? { m: who } : {}), ...(p.vt && !('vt' in extra) ? { vt: p.vt } : {}), ...extra }).toString()}`;
   const keyOf = (x) => (x.st === 'green' ? (x.status === 'nodata' ? 'data_missing' : x.suggest?.kind || 'keep') : x.card ? x.card.key.split(':')[1] : 'keep');
   const groupsOf = (k) => {
     const g = {};
@@ -94,7 +94,7 @@ V.home = async (view, p = {}) => {
       .sort((a1, z) => (a1.gk === 'keep') - (z.gk === 'keep') || (z.pot - a1.pot) || (z.items.length - a1.items.length));
   };
   const n = { red: rows.filter((x) => x.st === 'red').length, yellow: rows.filter((x) => x.st === 'yellow').length, green: rows.filter((x) => x.st === 'green').length };
-  const sel = p.c || 'red', og = p.g || '';
+  const sel = p.c || 'red', og = p.g || '', vt = p.vt || 'light';
   const how = (k, g) => k === 'green' ? (g.gk === 'keep' ? 'לשמור על הקיים' : g.items[0].suggest?.action || '') : k === 'red' ? g.items[0].card?.next : (g.items[0].card?.check?.[0] || g.items[0].card?.next);
   const best = groupsOf('red')[0];
   const w = t.weeks, last = w[w.length - 1], prev = w[w.length - 2];
@@ -103,17 +103,19 @@ V.home = async (view, p = {}) => {
   const gs = groupsOf(sel);
   view.innerHTML = `<div class="pro">
   <div class="phead"><div class="row"><h2 style="flex:1">${greet} ${esc(st.me.user.name)}</h2><button class="psearch" data-act="palette">${ic('search', 15)} חיפוש לקוח מתוך ${N(rows.length)}</button></div>
-    <p>${me_ ? `הלקוחות של ${esc(me_.name)}: ` : ''}${n.red ? `יש היום <b>${N(n.red)}</b> לקוחות שאפשר לשפר, <b>${N(n.yellow)}</b> לבדוק, ו-<b>${N(n.green)}</b> שאפשר לעזור להם לגדול.` : 'כל הלקוחות במצב טוב היום.'}</p></div>
-  <div class="who"><a class="${!who ? 'on' : ''}" href="#/home">כל המשרד</a>${perf.map((x) => `<a class="${who === x.id ? 'on' : ''}" href="#/home?m=${x.id}">${esc(x.name)} <span class="note">${N(x.clients)}</span></a>`).join('')}</div>
+    <p>${me_ ? `הלקוחות של ${esc(me_.name)}: ` : ''}${n.red ? `<b>${N(n.red)}</b> לשפר · <b>${N(n.yellow)}</b> לבדוק · <b>${N(n.green)}</b> לעזור לגדול.` : 'כל הלקוחות במצב טוב היום.'}
+      ${!me_ && lchg != null ? ` השבוע נכנסו ${N(last.leads.toLocaleString())} לידים (${lchg >= 0 ? '▲' : '▼'}${Math.abs(lchg)}%).` : ''}${best ? ` הכי ישפר: <b>${esc(GROUP[best.gk] || best.gk)}</b> אצל ${N(best.items.length)} לקוחות.` : ''}</p></div>
+  <div class="row" style="gap:14px"><div class="seg vt">${[['light', 'רמזור'], ['team', 'קמפיינרים'], ['trend', 'מגמה']].map(([k, t_]) => `<button class="${vt === k ? 'on' : ''}" data-act="go" data-arg="${q({ vt: k })}">${t_}</button>`).join('')}</div>
+  <div class="who"><a class="${!who ? 'on' : ''}" href="#/home${vt !== 'light' ? '?vt=' + vt : ''}">כל המשרד</a>${perf.map((x) => `<a class="${who === x.id ? 'on' : ''}" href="#/home?m=${x.id}${vt !== 'light' ? '&vt=' + vt : ''}">${esc(x.name)}</a>`).join('')}</div></div>
   ${me_ ? `<div class="card mcard"><div><b>${esc(me_.name)}</b> <span class="note">${esc(me_.role || '')} · ${N(me_.clients)} לקוחות</span></div>
     <div class="mstats"><span><b>${N(me_.handled)}</b> טופלו השבוע</span><span><b>${N(me_.improved)}</b> השתפרו</span><span class="${me_.late ? 'bad' : ''}"><b>${N(me_.late)}</b> באיחור</span><span><b>${N(me_.leads.toLocaleString())}</b> לידים השבוע</span></div>
     <button class="btn sec sm" data-act="handover" data-arg="${me_.id}">מסירה (חופשה / מחלה)</button></div>` : ''}
-  <div class="card pchart" ${me_ ? 'hidden' : ''}><div class="pc-l"><div class="note">לידים בשבוע · כל המשרד</div><div id="pChart"></div></div>
+  <div class="card pchart" ${vt !== 'trend' ? 'hidden' : ''}><div class="pc-l"><div class="note">לידים בשבוע · כל המשרד</div><div id="pChart"></div></div>
     <div class="pc-r"><div class="note">מה רואים</div><p>${lchg == null ? 'אין עדיין מספיק שבועות.' : lchg < 0 ? `השבוע נכנסו ${N(last.leads.toLocaleString())} לידים, ${Math.abs(lchg)}% פחות משבוע שעבר.` : `השבוע נכנסו ${N(last.leads.toLocaleString())} לידים, ${lchg}% יותר משבוע שעבר.`}</p>
       ${best ? `<div class="note">מה הכי ישפר</div><p><b>${esc(GROUP[best.gk] || best.gk)}</b> אצל ${N(best.items.length)} לקוחות${best.pot ? ` — כ-<b>${N(best.pot)}</b> לידים נוספים בשבוע` : ''}.</p>
       <button class="btn pri sm" data-act="go" data-arg="${q({ c: 'red', g: best.gk })}">לשיפור ←</button>` : '<p>אין כרגע משהו דחוף לשפר.</p>'}</div></div>
-  <div class="lights4">${['red', 'yellow', 'green'].map((k) => `<button class="lc lc-${k} ${sel === k ? 'on' : ''}" data-act="go" data-arg="${q({ c: k })}"><span class="bulb b-${k}"></span><span class="lcn">${N(n[k])}</span><span class="lct"><b>${LIGHT[k].t}</b><span>${ROLE[k]}</span></span></button>`).join('')}</div>
-  <div class="card gtable"><div class="gt-h"><span class="bulb b-${sel}"></span><b>${LIGHT[sel].t}</b><span class="note">${ROLE[sel]}</span></div>
+  <div class="lights4" ${vt !== 'light' ? 'hidden' : ''}>${['red', 'yellow', 'green'].map((k) => `<button class="lc lc-${k} ${sel === k ? 'on' : ''}" data-act="go" data-arg="${q({ c: k })}"><span class="bulb b-${k}"></span><span class="lcn">${N(n[k])}</span><span class="lct"><b>${LIGHT[k].t}</b><span>${ROLE[k]}</span></span></button>`).join('')}</div>
+  <div class="card gtable" ${vt !== 'light' ? 'hidden' : ''}><div class="gt-h"><span class="bulb b-${sel}"></span><b>${LIGHT[sel].t}</b><span class="note">${ROLE[sel]}</span></div>
     <div class="gtr gth"><span>${sel === 'green' ? 'הזדמנות' : 'נושא'}</span><span>לקוחות</span><span>${sel === 'green' ? 'איך עוזרים' : sel === 'red' ? 'איך משפרים' : 'מה בודקים'}</span><span>${sel === 'green' ? '' : 'פוטנציאל'}</span><span></span></div>
     ${gs.map((g) => { const id = g.gk, open = og === id, bulk = sel === 'green' ? g.items.filter((x) => x.suggest?.action).length : 0;
       return `<button class="gtr ${open ? 'on' : ''}" data-act="go" data-arg="${open ? q({ c: sel }) : q({ c: sel, g: id })}"><span><b>${esc(GROUP[g.gk] || g.gk)}</b></span><span>${N(g.items.length)}</span><span class="tx2">${esc(how(sel, g) || '—')}</span><span class="ok">${g.pot ? `+${N(g.pot)} לידים/שבוע` : ''}</span><span class="chev">${open ? '−' : '‹'}</span></button>
@@ -121,10 +123,11 @@ V.home = async (view, p = {}) => {
         ${sel === 'green' ? '' : !x.card ? '' : x.card.task_id && !['new', 'in_progress'].includes(x.card.task_status) ? '<span class="note ok">טופל ✓</span>' : `<button class="btn sec sm" data-act="handle" data-arg="${esc(x.card.key)}|done">טיפלתי</button>`}</div>`).join('')}
         ${g.items.length > 10 && p.all !== '1' ? `<a class="quiet" href="#/${q({ c: sel, g: id, all: '1' })}">ועוד ${N(g.items.length - 10)} לקוחות</a>` : ''}
         ${bulk > 1 ? `<button class="btn sec sm" style="margin-top:8px" data-act="offerGroup" data-arg="${esc(g.gk)}">הכן הצעה לכל ה-${N(bulk)}</button>` : ''}</div>` : ''}`; }).join('') || '<div class="empty">אין לקוחות כאן</div>'}</div>
-  ${!who && perf.length ? `<div class="card gtable"><div class="gt-h"><b>הקמפיינרים</b><span class="note">ביצועים השבוע · לחיצה פותחת את הלוח של הקמפיינר</span></div>
-    <div class="gtr gth tp"><span>קמפיינר</span><span>לקוחות</span><span>מצב הלקוחות</span><span>טופלו / השתפרו</span><span>באיחור</span></div>
-    ${perf.map((x) => `<a class="gtr tp" href="#/home?m=${x.id}"><span><b>${esc(x.name)}</b></span><span>${N(x.clients)}</span><span class="tri"><i class="dot d-red"></i>${N(x.red)} <i class="dot d-yellow"></i>${N(x.yellow)} <i class="dot d-green"></i>${N(x.green)}</span><span>${N(x.handled)} / <span class="ok">${N(x.improved)}</span></span><span class="${x.late ? 'bad' : 'note'}">${N(x.late)}</span></a>`).join('')}</div>` : ''}
-  <p class="note" style="text-align:center">נבדקו ${N(ab.board.length)} לקוחות אוטומטית · <a href="#/home?v=today">פירוט מלא</a></p></div>`;
+  ${vt === 'team' ? `<div class="card gtable"><div class="gt-h"><b>הקמפיינרים</b><span class="note">השבוע · לחיצה פותחת את הלוח של הקמפיינר</span></div>
+    <div class="gtr gth tp"><span>קמפיינר</span><span>לקוחות</span><span>מצב הלקוחות</span><span>לידים השבוע</span><span>טופלו / השתפרו</span></div>
+    ${perf.filter((x) => !who || x.id === who).map((x) => { const ch = x.leads_prev ? Math.round((x.leads / x.leads_prev - 1) * 100) : null;
+      return `<a class="gtr tp" href="#/home?m=${x.id}"><span><b>${esc(x.name)}</b></span><span>${N(x.clients)}</span><span class="tri"><i class="dot d-red"></i>${N(x.red)} <i class="dot d-yellow"></i>${N(x.yellow)} <i class="dot d-green"></i>${N(x.green)}</span>
+      <span>${N(x.leads.toLocaleString())} ${ch == null ? '' : `<span class="${ch >= 0 ? 'ok' : 'bad'}">${ch >= 0 ? '▲' : '▼'}${Math.abs(ch)}%</span>`}</span><span>${N(x.handled)} / <span class="ok">${N(x.improved)}</span>${x.late ? ` <span class="note">· ${N(x.late)} באיחור</span>` : ''}</span></a>`; }).join('')}</div>` : ''}</div>`;
   chart($('#pChart'), { labels: w.map((x) => x.label), h: 170, fmt: (v) => Math.round(v).toLocaleString(), series: [{ name: 'לידים', color: 'var(--acc)', w: 2.6, vals: w.map((x) => x.leads) }] });
   st._rows = rows; st._keyOf = keyOf;
 };

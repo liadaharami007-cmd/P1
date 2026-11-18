@@ -1520,8 +1520,9 @@ def team_perf(db: Database, acc: str) -> list[dict]:
                               WHERE v.account_id=? AND t.assignee=? AND v.day>=?""", (acc, m["id"], ref - 6))["n"]
         late = sum(1 for t in open_tasks(db, acc) if t["assignee"] == m["id"] and t["due_day"] is not None and t["due_day"] < ref
                    and t["status"] in ("new", "in_progress", "awaiting_approval"))
+        prev = sum(d["leads"] for r in mine for d in r["days"] if 7 <= ref - d["_i"] < 14)
         out.append({"id": m["id"], "name": m["name"], "role": m["role"], "clients": len(mine), **cnt, "handled": handled, "improved": improved, "late": late,
-                    "leads": sum(r["rec"]["leads"] for r in mine)})
+                    "leads": sum(r["rec"]["leads"] for r in mine), "leads_prev": prev})
     return out
 
 
