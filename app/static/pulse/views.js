@@ -167,7 +167,7 @@ const bRow = (x, gc, gid) => {
     <span class="m-n ${x.check.late ? 'bad' : ''}">${ago(x.check.ago)}</span>
     <span class="m-n ${x.contact.late ? 'bad' : ''}">${ago(x.contact.ago)}</span>
     <span class="m-tx m-rec" title="${esc(x.rec)}">${esc(x.rec)}</span>
-    <span class="m-go"><button class="m-help" data-act="bdDeep" data-arg="${x.id}|${gid}">איך לעזור ←</button></span>
+    <span class="m-go"><button class="m-help ${x.status === 'red' ? 'hot' : ''}" data-act="bdDeep" data-arg="${x.id}|${gid}">איך לעזור ←</button></span>
   </div>`;
 };
 const bdExp = (x) => `<div class="hp" id="bd-${x.id}"><div class="sk" style="height:140px"></div></div>`;
@@ -252,7 +252,15 @@ V.home = async (view, p = {}) => {
   const urgentRows = bd.urgent.filter(match);
   const sel = (id, label, opts, val) => `<label class="mtool">${label}<select id="${id}">${opts.map(([v, t]) => `<option value="${v}" ${val === v ? 'selected' : ''}>${t}</option>`).join('')}</select></label>`;
   view.innerHTML = `<div class="mb2">
-  <header class="mb2-h"><h1>${greet}, ${esc(st.me.user.name)}</h1><p>${C_.red ? `אלה הלקוחות שדורשים את תשומת הלב שלך היום · ${N(bd.tasks_today)} משימות להיום${bd.approvals ? ` · ${N(bd.approvals)} ממתינות לאישורך` : ''}` : 'אין היום לקוחות שדורשים התערבות.'}</p></header>
+  <header class="mb2-h"><h1>${greet}, ${esc(st.me.user.name)}</h1><p>${C_.red ? 'אלה הלקוחות שדורשים את תשומת הלב שלך היום' : 'אין היום לקוחות שדורשים התערבות'}</p></header>
+  <section class="kp">
+    <a class="kp-i kp-r ${f === 'red' ? 'on' : ''}" href="${bdLink(p, { f: f === 'red' ? '' : 'red' })}"><span>לטיפול</span><b>${N(C_.red)}</b><small>בעיה משמעותית שצריך לטפל בה</small></a>
+    <a class="kp-i kp-y ${f === 'yellow' ? 'on' : ''}" href="${bdLink(p, { f: f === 'yellow' ? '' : 'yellow' })}"><span>לבדיקה</span><b>${N(C_.yellow + C_.nodata)}</b><small>לבדוק ולעקוב</small></a>
+    <a class="kp-i kp-g ${f === 'green' ? 'on' : ''}" href="${bdLink(p, { f: f === 'green' ? '' : 'green' })}"><span>תקינים</span><b>${N(C_.green)}</b><small>אפשר להציע שיפור</small></a>
+    <a class="kp-i" href="#/tasks"><span>משימות להיום</span><b>${N(bd.tasks_today)}</b><small>${bd.approvals ? `${N(bd.approvals)} ממתינות לאישורך` : 'פתוחות ובאיחור'}</small></a>
+    <div class="kp-bar">${['red', 'yellow', 'green'].map((k) => { const n = k === 'yellow' ? C_.yellow + C_.nodata : C_[k]; return n ? `<i class="st-${k}" style="flex:${n}"></i>` : ''; }).join('')}</div>
+    ${bd.urgent[0] ? `<button class="kp-go" data-act="bdJump" data-arg="${bd.urgent[0].id}">התחל טיפול מהדחוף ביותר ←</button>` : ''}
+  </section>
   <div class="mtools">
     <form id="bdQ" class="mtool"><span aria-hidden="true">⌕</span><input name="q" value="${esc(q)}" placeholder="חיפוש" aria-label="חיפוש לקוח"></form>
     ${sel('bdM', 'קמפיינר', [['', 'כולם'], ...bd.groups.map((g) => [g.id, g.name])], p.m || '')}
@@ -281,7 +289,7 @@ A.sdClose = () => { BD.exp = null; render(); };
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && BD.exp && document.querySelector('.sd')) { BD.exp = null; render(); } });
 A.bdDeep = (b, arg) => { const [cid, gid] = arg.split('|'); const same = BD.exp === cid && (!gid || BD.expG === gid); BD.exp = same ? null : cid; if (gid) BD.expG = gid; render(); };
 A.bdGroup = (b, gid) => { const S_ = gid === '__urgent' ? BD.closed : BD.openG; S_.has(gid) ? S_.delete(gid) : S_.add(gid); try { localStorage.setItem('cp.closed', JSON.stringify([...BD.closed])); localStorage.setItem('cp.open', JSON.stringify([...BD.openG])); } catch { /* */ } render(); };
-A.bdJump = (b, cid) => { BD.exp = cid; BD.deep = cid; const x = st._bd?.groups.find((g) => g.rows.some((r) => r.id === cid)); if (x) { BD.openG.add(x.id); BD.expG = x.id; } render(); setTimeout(() => document.getElementById('bx-' + cid)?.scrollIntoView({ block: 'center', behavior: 'smooth' }), 120); };
+A.bdJump = (b, cid) => { BD.exp = cid; BD.expG = '__urgent'; render(); };
 A.bdTouch = async (b, arg) => { const [cid, kind] = arg.split('|'); b.disabled = true; const r = await api(`/api/pulse/clients/${cid}/touch`, { method: 'POST', body: { kind } }); toast(r.msg); render(); };
 
 // ================================================================ תיק לקוח — ארבעה אזורים בלבד
