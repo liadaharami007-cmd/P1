@@ -74,59 +74,72 @@ const GROUP = { cpl: 'עלות לליד זינקה', no_leads: 'אין לידי�
   keep: 'יציבים — לשמור', data_missing: 'חסרים נתונים' };
 // ================================================================ פתיחה רגועה: שלום, ושני כפתורים
 const kfmt = (x) => (x >= 1000 ? `כ-₪${Math.round(x / 1000).toLocaleString()} אלף` : `₪${Math.round(x)}`);
+// ================================================================ מסך הבית — עיצוב מוצר: מד רמזור, מגמות, משימות היום, רשימת לקוחות
+const AVC = ['#0E7C86', '#5B5BD6', '#C2410C', '#0F766E', '#7C3AED', '#B45309', '#2563EB', '#BE185D'];
+const avatar = (name, i) => `<span class="av2" style="background:${AVC[i % AVC.length]}">${esc((name || '?').trim()[0])}</span>`;
+const spark = (vals, color) => {
+  const v = (vals || []).filter((x) => x != null); if (v.length < 2) return '';
+  const lo = Math.min(...v), hi = Math.max(...v), r_ = hi - lo || 1, W = 84, H = 26;
+  const pts = v.map((x, i) => `${(i * W / (v.length - 1)).toFixed(1)},${(H - 3 - (x - lo) / r_ * (H - 6)).toFixed(1)}`).join(' ');
+  return `<svg class="spk" viewBox="0 0 ${W} ${H}" aria-hidden="true"><polyline points="${pts}" fill="none" stroke="${color}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+};
+const gauge = (c) => {
+  const tot = c.red + c.yellow + c.green || 1, R = 64, C = 2 * Math.PI * R; let off = 0;
+  const seg = (n, col) => { const len = n / tot * C; const s_ = `<circle r="${R}" cx="80" cy="80" fill="none" stroke="${col}" stroke-width="16" stroke-dasharray="${Math.max(0, len - 3)} ${C}" stroke-dashoffset="${-off}" transform="rotate(-90 80 80)"/>`; off += len; return s_; };
+  return `<svg class="gauge" viewBox="0 0 160 160" role="img" aria-label="מצב המשרד"><circle r="${R}" cx="80" cy="80" fill="none" stroke="var(--line)" stroke-width="16"/>${seg(c.red, 'var(--r)')}${seg(c.yellow, 'var(--y)')}${seg(c.green, 'var(--g)')}</svg>`;
+};
 V.home = async (view, p = {}) => {
   if (p.v === 'big' || p.v === 'today') return V.today(view);
   if (p.v === 'plan') return V.plan(view, p);
   if (p.v === 'focus') return V.focus(view);
   const [ab, o, t, perf] = await Promise.all([api('/api/pulse/alerts'), api('/api/pulse/overview'), api('/api/pulse/trend'), api('/api/pulse/team/perf')]);
   const hour = new Date().getHours(), greet = hour < 12 ? 'בוקר טוב' : hour < 18 ? 'צהריים טובים' : 'ערב טוב';
+  const who = p.m || '', me_ = perf.find((x) => x.id === who), names = Object.fromEntries(perf.map((x, i) => [x.id, { ...x, i }]));
   const byClient = {};
   ab.cards.forEach((x) => { if (!byClient[x.client_id]) byClient[x.client_id] = x; });
-  const who = p.m || '', me_ = perf.find((x) => x.id === who);
   const rows = ab.board.filter((x) => !who || x.owner === who).map((x) => ({ ...x, card: byClient[x.id], st: x.status === 'nodata' ? 'green' : x.status }));
-  const q = (extra) => `home?${new URLSearchParams({ ...(who ? { m: who } : {}), ...extra }).toString()}`;
-  const keyOf = (x) => (x.st === 'green' ? (x.status === 'nodata' ? 'data_missing' : x.suggest?.kind || 'keep') : x.card ? x.card.key.split(':')[1] : 'keep');
-  const groupsOf = (k) => {
-    const g = {};
-    rows.filter((x) => x.st === k).forEach((x) => { (g[keyOf(x)] = g[keyOf(x)] || []).push(x); });
-    return Object.entries(g).map(([gk, items]) => ({ gk, items, pot: items.reduce((s_, x) => s_ + (x.card?.potential_leads || 0), 0),
-      open: items.filter((x) => x.card && (!x.card.task_id || x.card.task_status === 'new')).length }))
-      .sort((a1, z) => (a1.gk === 'keep') - (z.gk === 'keep') || (z.pot - a1.pot) || (z.items.length - a1.items.length));
-  };
-  const n = { red: rows.filter((x) => x.st === 'red').length, yellow: rows.filter((x) => x.st === 'yellow').length, green: rows.filter((x) => x.st === 'green').length };
-  const sel = p.c || 'red', og = p.g || '';
-  const how = (k, g) => k === 'green' ? (g.gk === 'keep' ? 'לשמור על הקיים' : g.items[0].suggest?.action || '') : k === 'red' ? g.items[0].card?.next : (g.items[0].card?.check?.[0] || g.items[0].card?.next);
-  const best = groupsOf('red')[0];
-  const w = t.weeks, last = w[w.length - 1], prev = w[w.length - 2];
-  const lchg = last && prev && prev.leads ? Math.round((last.leads / prev.leads - 1) * 100) : null;
-  const ROLE = { red: 'לטפל עכשיו — איך משפרים', yellow: 'לבדוק לפני שזה מחמיר', green: 'הכול טוב — איך עוזרים להם לגדול' };
-  const gs = groupsOf(sel);
-  view.innerHTML = `<div class="pro">
-  <div class="phead"><div class="row"><h2 style="flex:1">${greet} ${esc(st.me.user.name)}</h2><button class="psearch" data-act="palette">${ic('search', 15)} חיפוש לקוח מתוך ${N(rows.length)}</button></div>
-    <p>${me_ ? `הלקוחות של ${esc(me_.name)}: ` : ''}${n.red ? `יש היום <b>${N(n.red)}</b> לקוחות שאפשר לשפר, <b>${N(n.yellow)}</b> לבדוק, ו-<b>${N(n.green)}</b> שאפשר לעזור להם לגדול.` : 'כל הלקוחות במצב טוב היום.'}</p></div>
-  <div class="who"><a class="${!who ? 'on' : ''}" href="#/home">כל המשרד</a>${perf.map((x) => `<a class="${who === x.id ? 'on' : ''}" href="#/home?m=${x.id}">${esc(x.name)} <span class="note">${N(x.clients)}</span></a>`).join('')}</div>
-  ${me_ ? `<div class="card mcard"><div><b>${esc(me_.name)}</b> <span class="note">${esc(me_.role || '')} · ${N(me_.clients)} לקוחות</span></div>
-    <div class="mstats"><span><b>${N(me_.handled)}</b> טופלו השבוע</span><span><b>${N(me_.improved)}</b> השתפרו</span><span class="${me_.late ? 'bad' : ''}"><b>${N(me_.late)}</b> באיחור</span><span><b>${N(me_.leads.toLocaleString())}</b> לידים השבוע</span></div>
-    <button class="btn sec sm" data-act="handover" data-arg="${me_.id}">מסירה (חופשה / מחלה)</button></div>` : ''}
-  <div class="card pchart" ${me_ ? 'hidden' : ''}><div class="pc-l"><div class="note">לידים בשבוע · כל המשרד</div><div id="pChart"></div></div>
-    <div class="pc-r"><div class="note">מה רואים</div><p>${lchg == null ? 'אין עדיין מספיק שבועות.' : lchg < 0 ? `השבוע נכנסו ${N(last.leads.toLocaleString())} לידים, ${Math.abs(lchg)}% פחות משבוע שעבר.` : `השבוע נכנסו ${N(last.leads.toLocaleString())} לידים, ${lchg}% יותר משבוע שעבר.`}</p>
-      ${best ? `<div class="note">מה הכי ישפר</div><p><b>${esc(GROUP[best.gk] || best.gk)}</b> אצל ${N(best.items.length)} לקוחות${best.pot ? ` — כ-<b>${N(best.pot)}</b> לידים נוספים בשבוע` : ''}.</p>
-      <button class="btn pri sm" data-act="go" data-arg="${q({ c: 'red', g: best.gk })}">לשיפור ←</button>` : '<p>אין כרגע משהו דחוף לשפר.</p>'}</div></div>
-  <div class="lights4">${['red', 'yellow', 'green'].map((k) => `<button class="lc lc-${k} ${sel === k ? 'on' : ''}" data-act="go" data-arg="${q({ c: k })}"><span class="bulb b-${k}"></span><span class="lcn">${N(n[k])}</span><span class="lct"><b>${LIGHT[k].t}</b><span>${ROLE[k]}</span></span></button>`).join('')}</div>
-  <div class="card gtable"><div class="gt-h"><span class="bulb b-${sel}"></span><b>${LIGHT[sel].t}</b><span class="note">${ROLE[sel]}</span></div>
-    <div class="gtr gth"><span>${sel === 'green' ? 'הזדמנות' : 'נושא'}</span><span>לקוחות</span><span>${sel === 'green' ? 'איך עוזרים' : sel === 'red' ? 'איך משפרים' : 'מה בודקים'}</span><span>${sel === 'green' ? '' : 'פוטנציאל'}</span><span></span></div>
-    ${gs.map((g) => { const id = g.gk, open = og === id, bulk = sel === 'green' ? g.items.filter((x) => x.suggest?.action).length : 0;
-      return `<button class="gtr ${open ? 'on' : ''}" data-act="go" data-arg="${open ? q({ c: sel }) : q({ c: sel, g: id })}"><span><b>${esc(GROUP[g.gk] || g.gk)}</b></span><span>${N(g.items.length)}</span><span class="tx2">${esc(how(sel, g) || '—')}</span><span class="ok">${g.pot ? `+${N(g.pot)} לידים/שבוע` : ''}</span><span class="chev">${open ? '−' : '‹'}</span></button>
-      ${open ? `<div class="gtc">${(p.all === '1' ? g.items : g.items.slice(0, 10)).map((x) => `<div class="cgi"><i class="dot d-${x.status}"></i><a href="#/client/${x.id}">${esc(x.name)}</a><span class="note">${x.card?.potential_leads ? `+${x.card.potential_leads} לידים/שבוע` : sel === 'green' && x.cpl ? `${x.leads} לידים · עלות לליד ${money(x.cpl)}` : ''}</span><span class="sp"></span>
-        ${sel === 'green' ? '' : !x.card ? '' : x.card.task_id && !['new', 'in_progress'].includes(x.card.task_status) ? '<span class="note ok">טופל ✓</span>' : `<button class="btn sec sm" data-act="handle" data-arg="${esc(x.card.key)}|done">טיפלתי</button>`}</div>`).join('')}
-        ${g.items.length > 10 && p.all !== '1' ? `<a class="quiet" href="#/${q({ c: sel, g: id, all: '1' })}">ועוד ${N(g.items.length - 10)} לקוחות</a>` : ''}
-        ${bulk > 1 ? `<button class="btn sec sm" style="margin-top:8px" data-act="offerGroup" data-arg="${esc(g.gk)}">הכן הצעה לכל ה-${N(bulk)}</button>` : ''}</div>` : ''}`; }).join('') || '<div class="empty">אין לקוחות כאן</div>'}</div>
-  ${!who && perf.length ? `<div class="card gtable"><div class="gt-h"><b>הקמפיינרים</b><span class="note">ביצועים השבוע · לחיצה פותחת את הלוח של הקמפיינר</span></div>
-    <div class="gtr gth tp"><span>קמפיינר</span><span>לקוחות</span><span>מצב הלקוחות</span><span>טופלו / השתפרו</span><span>באיחור</span></div>
-    ${perf.map((x) => `<a class="gtr tp" href="#/home?m=${x.id}"><span><b>${esc(x.name)}</b></span><span>${N(x.clients)}</span><span class="tri"><i class="dot d-red"></i>${N(x.red)} <i class="dot d-yellow"></i>${N(x.yellow)} <i class="dot d-green"></i>${N(x.green)}</span><span>${N(x.handled)} / <span class="ok">${N(x.improved)}</span></span><span class="${x.late ? 'bad' : 'note'}">${N(x.late)}</span></a>`).join('')}</div>` : ''}
-  <p class="note" style="text-align:center">נבדקו ${N(ab.board.length)} לקוחות אוטומטית · <a href="#/home?v=today">פירוט מלא</a></p></div>`;
-  chart($('#pChart'), { labels: w.map((x) => x.label), h: 170, fmt: (v) => Math.round(v).toLocaleString(), series: [{ name: 'לידים', color: 'var(--acc)', w: 2.6, vals: w.map((x) => x.leads) }] });
-  st._rows = rows; st._keyOf = keyOf;
+  const c = { red: rows.filter((x) => x.st === 'red').length, yellow: rows.filter((x) => x.st === 'yellow').length, green: rows.filter((x) => x.st === 'green').length };
+  const sc = Math.round((c.green * 100 + c.yellow * 50) / Math.max(1, c.red + c.yellow + c.green));
+  const sel = p.c || 'red', q = (x) => `home?${new URLSearchParams({ ...(who ? { m: who } : {}), ...x }).toString()}`;
+  const g = {};
+  rows.filter((x) => x.st === 'red').forEach((x) => { const k = x.card ? x.card.key.split(':')[1] : 'keep'; (g[k] = g[k] || []).push(x); });
+  const tasks = Object.entries(g).map(([k, items]) => ({ k, items, pot: items.reduce((s_, x) => s_ + (x.card?.potential_leads || 0), 0) })).sort((a1, z) => z.pot - a1.pot || z.items.length - a1.items.length).slice(0, 3);
+  const w = t.weeks, lw = w.map((x) => x.leads), cw = w.map((x) => x.cpl);
+  const pct = (a1, z) => (a1 != null && z ? Math.round((a1 / z - 1) * 100) : null);
+  const lch = pct(lw[lw.length - 1], lw[lw.length - 2]), cch = pct(cw[cw.length - 1], cw[cw.length - 2]);
+  const trendTag = (x, goodUp) => x == null ? '' : `<span class="tg ${(x >= 0) === goodUp ? 'up' : 'down'}">${x >= 0 ? '▲' : '▼'} ${Math.abs(x)}%</span>`;
+  const list = rows.filter((x) => x.st === sel).sort((a1, z) => (z.card?.potential_leads || 0) - (a1.card?.potential_leads || 0));
+  const shown = p.all === '1' ? list : list.slice(0, 8);
+  const act = (x) => sel === 'green' ? (x.suggest?.action ? `<button class="btn sec sm" data-act="oppTask" data-arg="${x.id}|${esc(x.suggest.action)}">הצע</button>` : '')
+    : !x.card ? '' : x.card.task_id && !['new', 'in_progress'].includes(x.card.task_status) ? '<span class="donechip">טופל ✓</span>' : `<button class="btn sec sm" data-act="handle" data-arg="${esc(x.card.key)}|done">טיפלתי</button>`;
+  view.innerHTML = `<div class="hm">
+  <section class="band">
+    <div class="band-l"><div class="date">${new Date().toLocaleDateString('he-IL', { weekday: 'long', day: 'numeric', month: 'long' })}</div>
+      <h1>${greet}, ${esc(st.me.user.name)}</h1>
+      <p>${me_ ? `הלקוחות של ${esc(me_.name)}. ` : ''}${c.red ? `<b>${N(c.red)}</b> לקוחות צריכים טיפול היום${tasks[0]?.pot ? `, וטיפול בהם יכול להחזיר כ-<b>${N(tasks.reduce((s_, x) => s_ + x.pot, 0))}</b> לידים בשבוע` : ''}.` : 'כל הלקוחות במצב טוב היום.'}</p>
+      <div class="who2"><a class="${!who ? 'on' : ''}" href="#/home">כל המשרד</a>${perf.map((x, i) => `<a class="${who === x.id ? 'on' : ''}" href="#/home?m=${x.id}">${avatar(x.name, i)}${esc(x.name)}</a>`).join('')}</div></div>
+    <div class="band-r"><div class="gwrap">${gauge(c)}<div class="gin"><b>${N(sc)}</b><span>ציון</span></div></div>
+      <div class="glegend">${[['red', 'דחוף'], ['yellow', 'במעקב'], ['green', 'תקין']].map(([k, t_]) => `<a href="#/${q({ c: k })}" class="${sel === k ? 'on' : ''}"><i class="dot d-${k}"></i><b>${N(c[k])}</b>${t_}</a>`).join('')}</div></div>
+  </section>
+  ${me_ ? `<div class="mrow"><span>${avatar(me_.name, names[me_.id].i)}<b>${esc(me_.name)}</b> · ${N(me_.clients)} לקוחות · ${N(me_.handled)} טופלו השבוע · ${N(me_.improved)} השתפרו</span><button class="btn sec sm" data-act="handover" data-arg="${me_.id}">מסירה (חופשה / מחלה)</button></div>` : ''}
+  <section class="tiles3">
+    <div class="tile3"><span class="tl">לידים השבוע</span><div class="tv"><b>${N((lw[lw.length - 1] || 0).toLocaleString())}</b>${trendTag(lch, true)}</div>${spark(lw, 'var(--acc)')}</div>
+    <div class="tile3"><span class="tl">עלות לליד</span><div class="tv"><b>${N(money(cw[cw.length - 1]))}</b>${trendTag(cch, false)}</div>${spark(cw, '#8A93A3')}</div>
+    <div class="tile3"><span class="tl">טופלו השבוע</span><div class="tv"><b>${N(perf.reduce((s_, x) => s_ + (who && x.id !== who ? 0 : x.handled), 0))}</b><span class="tg up">${N(perf.reduce((s_, x) => s_ + (who && x.id !== who ? 0 : x.improved), 0))} השתפרו</span></div><span class="note">בדיקה אוטומטית אחרי כל טיפול</span></div>
+  </section>
+  ${tasks.length ? `<section><h2 class="sh">המשימות של היום</h2><div class="tcards">${tasks.map((x) => `<div class="tcard"><span class="tbar"></span><div class="tct">${esc(GROUP[x.k] || x.k)}</div><div class="tcn">${N(x.items.length)} לקוחות${x.pot ? ` · <span class="ok">+${N(x.pot)} לידים בשבוע</span>` : ''}</div>
+    <p>${esc(x.items[0].card?.next || '')}</p><a class="btn pri sm" href="#/${q({ c: 'red', k: x.k })}">לטיפול ←</a></div>`).join('')}</div></section>` : ''}
+  <section class="card clist"><div class="cl-h"><h2 class="sh" style="margin:0">${sel === 'red' ? 'לקוחות שצריכים טיפול' : sel === 'yellow' ? 'לקוחות במעקב' : 'לקוחות תקינים · מה אפשר להציע'}</h2>
+      <div class="seg">${[['red', 'דחוף'], ['yellow', 'במעקב'], ['green', 'תקין']].map(([k, t_]) => `<button class="${sel === k ? 'on' : ''}" data-act="go" data-arg="${q({ c: k })}">${t_} ${N(c[k])}</button>`).join('')}</div></div>
+    ${(p.k ? shown.filter((x) => x.card && x.card.key.split(':')[1] === p.k) : shown).map((x) => `<div class="crow"><a class="cname" href="#/client/${x.id}">${avatar(x.name, x.name.length)}<span><b>${esc(x.name)}</b><small>${names[x.owner] ? esc(names[x.owner].name) : ''}</small></span></a>
+      <span class="chip2 ch-${x.st}">${esc(sel === 'green' ? (x.suggest?.kind === 'keep' ? 'יציב' : (GROUP[x.suggest?.kind] || 'יציב').split(' — ')[0]) : x.card ? x.card.title : x.title)}</span>
+      <span class="cpot">${x.card?.potential_leads ? `+${N(x.card.potential_leads)} לידים/שבוע` : ''}</span>${spark(x.wk, sel === 'red' ? 'var(--r)' : sel === 'yellow' ? 'var(--y)' : 'var(--g)')}<span class="cact">${act(x)}</span></div>`).join('') || '<div class="empty">אין כאן לקוחות</div>'}
+    ${list.length > 8 && p.all !== '1' && !p.k ? `<a class="tmore" href="#/${q({ c: sel, all: '1' })}">הצג את כל ${N(list.length)} הלקוחות</a>` : ''}${p.k ? `<a class="tmore" href="#/${q({ c: sel })}">הצג את כל הדחופים</a>` : ''}</section>
+  ${!who ? `<section class="card clist"><div class="cl-h"><h2 class="sh" style="margin:0">הקמפיינרים</h2><span class="note">השבוע</span></div>
+    ${perf.map((x, i) => { const ch = x.leads_prev ? Math.round((x.leads / x.leads_prev - 1) * 100) : null; return `<a class="crow" href="#/home?m=${x.id}"><span class="cname">${avatar(x.name, i)}<span><b>${esc(x.name)}</b><small>${N(x.clients)} לקוחות</small></span></span>
+      <span class="tri"><i class="dot d-red"></i>${N(x.red)} <i class="dot d-yellow"></i>${N(x.yellow)} <i class="dot d-green"></i>${N(x.green)}</span><span class="cpot">${N(x.leads.toLocaleString())} לידים ${ch == null ? '' : `<span class="tg ${ch >= 0 ? 'up' : 'down'}">${ch >= 0 ? '▲' : '▼'}${Math.abs(ch)}%</span>`}</span><span class="note">${N(x.handled)} טופלו · ${N(x.improved)} השתפרו</span><span class="cact chev">‹</span></a>`; }).join('')}</section>` : ''}
+  </div>`;
+  st._rows = rows; st._keyOf = (x) => (x.st === 'green' ? x.suggest?.kind || 'keep' : x.card ? x.card.key.split(':')[1] : 'keep');
 };
 A.handover = async (b, frm) => {
   const perf = await api('/api/pulse/team/perf');

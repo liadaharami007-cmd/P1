@@ -1021,6 +1021,7 @@ def alert_board(db: Database, acc: str) -> dict:
             "board": [{"id": r["id"], "name": r["name"], "status": r["status"], "improved": bool(r["improved"]), "cpl": r["rec"]["cpl"],
                        "leads": r["rec"]["leads"], "base_cpl": r["base"]["cpl"], "suggest": suggestion(r, run["clients"][r["id"]]),
                        "excess": round(r["excess"]), "spend7": round(r["rec"]["spend"]), "owner": r["owner"],
+                       "wk": [round(w["leads"]) for w in r["weeks"]],
                        "title": r["alerts"][0]["title"] if r["alerts"] else ("השתפר" if r["improved"] else "תקין")} for r in run["results"]]}
 
 
