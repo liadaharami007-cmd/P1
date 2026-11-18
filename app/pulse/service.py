@@ -243,7 +243,7 @@ def _seed_demo_ops(db: Database, acc: str, T0: int) -> None:
         exe(db, "UPDATE pulse_clients SET contact_every_days=? WHERE account_id=? AND id=?", (14 if i % 4 == 0 else None, acc, c["id"]))
         # בדיקות קמפיין מתועדות (נפרד מתקשורת עם הלקוח). קמפיינר אחד מפגר — כדי שהמעקב יראה משהו אמיתי.
         every = 2 if i % 3 == 0 else 3
-        lag = (6 + i % 4) if c["owner"] == "avi" else (i * 7) % 4
+        lag = (6 + i % 4) if c["owner"] == "nevo" else (i * 7) % 4
         exe(db, "UPDATE pulse_clients SET check_every_days=? WHERE account_id=? AND id=?", (every, acc, c["id"]))
         for k, back in enumerate((lag, lag + every, lag + 2 * every)):
             day = T0 - back

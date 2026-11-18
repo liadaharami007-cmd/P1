@@ -250,8 +250,8 @@ def test_ads_analysis_my_view_and_brief(make_client):
     assert areas & {"הצעה", "קופי", "קריאייטיב"}
     ad = d["analysis"]["ads"][0]
     assert c.post(f"/api/pulse/ads/{ad['id']}/rewrite").status_code == 409  # בלי Gemini: לא ממציאים קופי
-    my = c.get("/api/pulse/my?member=dana").json()
-    assert my["member"] == "dana" and my["clients"] > 0
+    my = c.get("/api/pulse/my?member=yuval").json()
+    assert my["member"] == "yuval" and my["clients"] > 0
     b = c.get("/api/pulse/brief").json()
     assert 0 < len(b["items"]) <= 8 and all(i["action"]["label"] for i in b["items"])
 
@@ -262,7 +262,7 @@ def test_member_role_cannot_approve_or_change_settings(make_client, tmp_path):
     owner = make_client(db=db)
     register(owner, "owner@a.co")
     owner.post("/api/pulse/demo")
-    assert owner.post("/api/pulse/team/login", json={"name": "דנה", "email": "dana@a.co", "password": "dana-password-123"}).status_code == 201
+    assert owner.post("/api/pulse/team/login", json={"name": "יובל", "email": "dana@a.co", "password": "dana-password-123"}).status_code == 201
     worker = make_client(db=db)
     assert worker.post("/api/auth/login", json={"email": "dana@a.co", "password": "dana-password-123"}).status_code == 200
     assert worker.get("/api/pulse/clients").json()["clients"]  # רואה את נתוני הסוכנות
@@ -352,11 +352,11 @@ def test_campaigner_perf_and_handover(make_client):
     c = _login(make_client)
     c.post("/api/pulse/demo")
     perf = c.get("/api/pulse/team/perf").json()
-    assert {p["id"] for p in perf} >= {"dana", "omer"} and sum(p["clients"] for p in perf) == 50
-    dana_open = [t for t in c.get("/api/pulse/tasks").json()["tasks"] if t["assignee"] == "dana" and t["status"] != "closed"]
-    r = c.post("/api/pulse/team/handover", json={"frm": "dana", "to": "omer"}).json()
+    assert {p["id"] for p in perf} >= {"yuval", "liad"} and sum(p["clients"] for p in perf) == 50
+    dana_open = [t for t in c.get("/api/pulse/tasks").json()["tasks"] if t["assignee"] == "yuval" and t["status"] != "closed"]
+    r = c.post("/api/pulse/team/handover", json={"frm": "yuval", "to": "liad"}).json()
     assert r["ok"] and r["moved"] == len(dana_open)
-    assert not [t for t in c.get("/api/pulse/tasks").json()["tasks"] if t["assignee"] == "dana" and t["status"] != "closed"]
+    assert not [t for t in c.get("/api/pulse/tasks").json()["tasks"] if t["assignee"] == "yuval" and t["status"] != "closed"]
 
 
 def test_agents_team_brief_insight_and_act(make_client):

@@ -136,7 +136,8 @@ export const insightChart = async (cid) => {
     series: [{ name: 'לידים', color: 'var(--acc)', w: 2.2, vals: ser.map((x) => x.leads) }, ...(base ? [{ name: 'רמה רגילה', color: 'var(--g)', w: 1.4, dash: true, vals: ser.map(() => Math.round(base * 10) / 10) }] : [])] });
 };
 // ================================================================ הלוח הראשי בשיטת Monday: קבוצה לכל קמפיינר, שורה לכל לקוח
-const ST3 = { red: 'לטיפול', yellow: 'לבדיקה', green: 'תקין', nodata: 'חסרים נתונים' };
+const ST3 = { red: 'לטיפול', yellow: 'לבדיקה', green: 'תקין', nodata: 'לבדיקה' };
+const LT = (s_) => (s_ === 'nodata' ? 'yellow' : s_);
 const ago = (n) => (n == null ? 'אין תיעוד' : n === 0 ? 'היום' : n === 1 ? 'אתמול' : `לפני ${n} ימים`);
 const openSet = () => { try { return new Set(JSON.parse(localStorage.getItem('cp.closed') || '[]')); } catch { return new Set(); } };
 const BD = { closed: openSet(), openG: new Set((() => { try { return JSON.parse(localStorage.getItem('cp.open') || '[]'); } catch { return []; } })()), exp: null, deep: null };
@@ -157,41 +158,57 @@ const bRow = (x, gc, gid) => {
   return `<div class="mr ${on ? 'open' : ''}" style="--gc:${gc}" data-act="bdRow" data-arg="${x.id}|${gid}" role="button" tabindex="0" aria-expanded="${on}">
     <span class="m-name" title="${esc(x.name)}"><a href="#/client/${x.id}">${esc(x.name)}</a></span>
     <span class="m-own">${m ? `<i class="m-av" style="background:${MCOL[(st._bd.groups.indexOf(m)) % MCOL.length]}">${esc(m.name[0])}</i>` : ''}</span>
-    <span class="m-st"><em class="st-${x.status}">${ST3[x.status]}</em></span>
+    <span class="m-st"><em class="st-${LT(x.status)}">${ST3[x.status]}</em></span>
     <span class="m-tx" title="${esc(x.why)}">${esc(x.why)}</span>
     <span class="m-n ${x.leads_norm != null && x.leads < x.leads_norm * 0.7 ? 'bad' : ''}">${N(x.leads)}${x.leads_norm != null ? `<i>/${N(x.leads_norm)}</i>` : ''}</span>
     <span class="m-n ${x.cpl && x.cpl_norm && x.cpl > x.cpl_norm * 1.2 ? 'bad' : ''}">${x.cpl == null ? '—' : money(x.cpl)}</span>
     <span class="m-n ${x.check.late ? 'bad' : ''}">${ago(x.check.ago)}</span>
     <span class="m-n ${x.contact.late ? 'bad' : ''}">${ago(x.contact.ago)}</span>
     <span class="m-tx m-rec" title="${esc(x.rec)}">${esc(x.rec)}</span>
-    <span class="m-go"><button class="m-help" data-act="bdDeep" data-arg="${x.id}|${gid}">איך לעזור ←</button></span>
+    <span class="m-go"><button class="m-help" data-act="bdDeep" data-arg="${x.id}|${gid}">${on ? 'סגור' : 'איך לעזור ←'}</button></span>
   </div>${on ? `<div class="mx-x" id="bx-${x.id}" style="--gc:${gc}">${bdExp(x)}</div>` : ''}`;
 };
-const bdExp = (x) => `<div class="bx-line"><b>${esc(x.headline)}</b> — ${esc(x.rec)}</div>
-  <div class="bx-acts">
-    <button data-act="bdTouch" data-arg="${x.id}|check">✓ בדקתי את הקמפיין</button>
-    <button data-act="bdTouch" data-arg="${x.id}|call">☎ תיעדתי שיחה עם הלקוח</button>
-    ${x.task_id ? `<a href="#/tasks?hl=${x.task_id}">משימה פתוחה · ${esc(STATUS[x.task_status] || '')}</a>` : x.alert_key || x.status !== 'green' ? `<button data-act="agentAct" data-arg="${x.id}|${esc(x.alert_key || '')}|${x.alert_key ? '' : esc(x.rec)}">פתח משימה לקמפיינר</button>` : ''}
-    <a href="#/client/${x.id}">תיק לקוח</a>
-    <button data-act="bdDeep" data-arg="${x.id}">${BD.deep === x.id ? 'סגור בדיקה מעמיקה' : 'בדיקה מעמיקה'}</button></div>
-  ${BD.deep === x.id ? `<div class="bx-deep" id="bd-${x.id}"><div class="sk" style="height:120px"></div></div>` : ''}`;
-const deepHTML = (i) => {
-  const L = i.leads, M = i.monitor, C = i.campaigns, cap = i.capabilities || [], tf = C.top_fix;
-  const capTxt = { available: 'זמין', not_configured: 'לא מחובר', not_connected: 'לא מחובר', 'n/a': '' };
-  return `<div class="dp">
-    <div><h4>מצב נוכחי</h4><p>${esc(L.state)}</p>${M.what && M.status !== 'green' ? `<p class="cpm">${esc(M.what)}</p>` : ''}</div>
-    <div><h4>${L.kind === 'opportunity' ? 'הזדמנות' : L.kind === 'stable' ? 'מצב' : 'הבעיה והסיבה האפשרית'}</h4><p>${esc(L.cause)}</p></div>
-    <div><h4>נתונים תומכים</h4>${(L.data.length ? L.data : M.evidence).map((d) => `<p class="cpm">${esc(d)}</p>`).join('') || '<p class="cpm">—</p>'}</div>
-    <div><h4>מה לשפר</h4><p>${esc(L.kind === 'stable' ? (i.strategy.recommendation || L.improve) : L.improve)}</p>${i.strategy.adapt ? `<p class="mem">${esc(i.strategy.adapt)}</p>` : ''}</div>
-    <div><h4>איך לבצע</h4>${M.todo.length ? `<ol>${M.todo.map((t) => `<li>${esc(t)}</li>`).join('')}</ol>` : '<p class="cpm">אין צורך בפעולה כרגע</p>'}</div>
-    <div><h4>איך מודדים הצלחה</h4><p>${esc(L.kind === 'stable' ? 'הרמה נשמרת בבדיקה הבאה' : L.measure)}</p>${M.recheck ? `<p class="cpm">בדיקה חוזרת אוטומטית: ${esc(M.recheck)}</p>` : ''}</div>
-    ${tf ? `<div class="wide"><h4>המודעה החלשה: ${esc(tf.name)}</h4><p>${esc(tf.issue)} — ${esc(tf.why)}</p>
-      <table class="dt"><tr><td>קריאייטיב חלופי</td><td>${esc(tf.alt_creative)}</td></tr><tr><td>קהל חלופי</td><td>${esc(tf.alt_audience)}</td></tr><tr><td>קופי</td><td>${esc(tf.do)}</td></tr></table>
-      <div class="bx-acts"><button data-act="agentAct" data-arg="${i.client.id}||${esc(tf.name + ': ' + tf.do + ' · ' + tf.alt_creative)}">הכן משימה לקמפיינר</button>
-      ${cap.find((c) => c.id === 'copy')?.status === 'available' ? `<button data-act="adRewrite" data-arg="${esc(tf.id)}">כתוב קופי חלופי</button>` : ''}</div></div>` : C.connected === false ? `<div class="wide"><h4>מודעות</h4><p class="cpm">${esc(C.missing)}</p></div>` : ''}
-    <div class="wide"><h4>מה ה-AI עושה כאן</h4><table class="dt cap">${cap.filter((c) => c.status !== 'n/a').map((c) => `<tr class="${c.status}"><td>${esc(c.label)}</td><td>${capTxt[c.status]}${c.needs ? ` · ${esc(c.needs)}` : ''}</td></tr>`).join('')}</table>
-      <p class="cpm">דורש אישור מנהל: שינוי תקציב, עצירת קמפיין והודעה ללקוח${i.execution.needs_approval ? ' — והמשימה הפתוחה כאן' : ''}.</p></div>
-  </div>`;
+const bdExp = (x) => `<div class="hp" id="bd-${x.id}"><div class="sk" style="height:140px"></div></div>`;
+const deepHTML = (i, x) => {
+  const L = i.leads, M = i.monitor, C = i.campaigns, cap = i.capabilities || [], tf = C.top_fix, E = i.execution;
+  const steps = M.todo.length ? M.todo : [];
+  const capOn = (id) => cap.find((c) => c.id === id)?.status === 'available';
+  const stable = L.kind === 'stable' && M.status === 'green';
+  const what = stable ? (i.strategy.opportunities[0]?.action || 'הלקוח יציב — אין צורך בפעולה. לבדוק שוב לפי התדירות.') : L.kind === 'stable' ? (i.strategy.recommendation || M.what) : L.improve;
+  const taskBtn = E.task_id ? `<a class="hp-b" href="#/tasks?hl=${E.task_id}">משימה פתוחה · ${esc(STATUS[E.task_status] || '')}</a>`
+    : (M.status !== 'green' || i.strategy.opportunities.length) ? `<button class="hp-b pri" data-act="agentAct" data-arg="${i.client.id}|${esc(E.key || '')}|${E.key ? '' : esc(i.strategy.opportunities[0]?.action || L.improve)}">פתח משימה עם הצעדים</button>` : '';
+  return `
+  <div class="hp-short">
+    <div class="hp-k">בקצרה</div>
+    <p class="hp-what"><b>${esc(L.headline)}.</b> ${esc(what)}</p>
+    ${steps.length ? `<ol class="hp-steps">${steps.map((t) => `<li>${esc(t)}</li>`).join('')}</ol>` : ''}
+    <p class="hp-meas">✓ איך נדע שהצליח: ${esc(stable ? 'הרמה נשמרת בבדיקה הבאה' : L.kind === 'stable' ? 'החריגה נסגרת בבדיקה החוזרת' : L.measure)}${M.recheck && !stable ? ` · המערכת תבדוק שוב ב-${esc(M.recheck)}` : ''}</p>
+    ${i.strategy.adapt ? `<p class="hp-mem">${esc(i.strategy.adapt)}</p>` : ''}
+    <div class="hp-acts">${taskBtn}
+      <button class="hp-b" data-act="bdTouch" data-arg="${i.client.id}|check">✓ בדקתי את הקמפיין</button>
+      <button class="hp-b" data-act="bdTouch" data-arg="${i.client.id}|call">☎ דיברתי עם הלקוח</button>
+      <a class="hp-b" href="#/client/${i.client.id}">תיק לקוח</a></div>
+  </div>
+  <div class="hp-ai">
+    <div class="hp-k">ה-AI יכול לעזור</div>
+    <div class="hp-ai-l">
+      <button class="hp-ai-i" data-act="agentAct" data-arg="${i.client.id}|${esc(E.key || '')}|${E.key ? '' : esc(what)}" ${E.task_id ? 'disabled' : ''}><b>להכין משימה לקמפיינר</b><small>${E.task_id ? 'כבר נפתחה' : 'עם הצעדים, אחראי ותאריך בדיקה'}</small></button>
+      <button class="hp-ai-i" data-act="updDraft" data-arg="${i.client.id}"><b>לנסח עדכון ללקוח</b><small>טיוטה להעתקה — לא נשלח</small></button>
+      ${tf ? (capOn('copy') ? `<button class="hp-ai-i" data-act="adRewrite" data-arg="${esc(tf.id)}"><b>לכתוב קופי חלופי</b><small>ל${esc(tf.name)}</small></button>`
+        : `<div class="hp-ai-i off"><b>לכתוב קופי חלופי</b><small>לא מחובר · צריך מפתח Gemini בשרת</small></div>`) : ''}
+      <div class="hp-ai-i off"><b>לשנות תקציב / לעצור מודעה</b><small>לא מחובר · צריך Meta Ads · תמיד באישור מנהל</small></div>
+    </div>
+  </div>
+  <details class="hp-more"><summary>בהרחבה — נתונים, סיבה, מודעות</summary>
+    <div class="dp">
+      <div><h4>מצב נוכחי</h4><p>${esc(L.state)}</p>${M.what && M.status !== 'green' ? `<p class="cpm">${esc(M.what)}</p>` : ''}</div>
+      <div><h4>${L.kind === 'opportunity' ? 'ההזדמנות' : 'למה זה קורה'}</h4><p>${esc(L.cause)}</p></div>
+      <div><h4>נתונים תומכים</h4>${(L.data.length ? L.data : M.evidence).map((d) => `<p class="cpm">${esc(d)}</p>`).join('') || '<p class="cpm">—</p>'}</div>
+      ${tf ? `<div class="wide"><h4>המודעה החלשה: ${esc(tf.name)}</h4><p>${esc(tf.issue)} — ${esc(tf.why)}</p>
+        <table class="dt"><tr><td>קופי</td><td>${esc(tf.do)}</td></tr><tr><td>קריאייטיב חלופי</td><td>${esc(tf.alt_creative)}</td></tr><tr><td>קהל חלופי</td><td>${esc(tf.alt_audience)}</td></tr></table></div>` : C.connected === false ? `<div class="wide"><h4>מודעות</h4><p class="cpm">${esc(C.missing)}</p></div>` : ''}
+      ${C.budget.monthly ? `<div><h4>ניצול תקציב</h4><p>${N(C.budget.use)}% <span class="cpm">· קצב ${money(C.budget.pace)} מתוך ${money(C.budget.monthly)}</span></p></div>` : ''}
+      <div><h4>אחראי ומעקב</h4><p>${esc(M.owner)}${x ? ` · בדיקת קמפיין ${esc(ago(x.check.ago))} · קשר ${esc(ago(x.contact.ago))}` : ''}</p></div>
+    </div></details>`;
 };
 V.home = async (view, p = {}) => {
   if (p.v === 'big' || p.v === 'today') return V.today(view);
@@ -201,14 +218,14 @@ V.home = async (view, p = {}) => {
   st._bd = bd;
   const hour = new Date().getHours(), greet = hour < 12 ? 'בוקר טוב' : hour < 18 ? 'צהריים טובים' : 'ערב טוב';
   const q = (p.q || '').trim(), f = p.f || '', s_ = p.s || '';
-  const match = (x) => (!q || x.name.includes(q)) && (!f || (f === 'green' ? ['green', 'nodata'].includes(x.status) : x.status === f));
+  const match = (x) => (!q || x.name.includes(q)) && (!f || LT(x.status) === f);
   const C_ = bd.counts;
   const groups = bd.groups.filter((g) => !p.m || g.id === p.m).map((g) => ({ ...g, rows: sortRows(g.rows.filter(match), s_) }));
   const hdr = `<div class="mr mh"><span>לקוח</span><span>קמפיינר</span><span>סטטוס</span><span>למה</span><span>לידים</span><span>עלות לליד</span><span>בדיקת קמפיין</span><span>קשר עם הלקוח</span><span>המלצה</span><span></span></div>`;
-  const bat = (rs) => { const n = rs.length || 1; return `<div class="mbat">${['red', 'yellow', 'green', 'nodata'].map((k) => { const c = rs.filter((x) => x.status === k).length; return c ? `<i class="st-${k}" style="flex:${c}" title="${ST3[k]}: ${c}"></i>` : ''; }).join('')}</div>`; };
+  const bat = (rs) => { const n = rs.length || 1; return `<div class="mbat">${['red', 'yellow', 'green'].map((k) => { const c = rs.filter((x) => LT(x.status) === k).length; return c ? `<i class="st-${k}" style="flex:${c}" title="${ST3[k]}: ${c}"></i>` : ''; }).join('')}</div>`; };
   const grp = (id, name, color, rs, extra, open) => `<section class="mg" style="--gc:${color}">
     <div class="mg-h" data-act="bdGroup" data-arg="${id}" role="button" tabindex="0" aria-expanded="${open}"><span class="car">${open ? '▾' : '◂'}</span><b>${esc(name)}</b><span class="mg-c">${N(rs.length)} לקוחות</span>${extra || ''}
-      ${open ? '' : `<span class="mg-sum"><em class="r">${N(rs.filter((x) => x.status === 'red').length)}</em><em class="y">${N(rs.filter((x) => x.status === 'yellow').length)}</em><em class="g">${N(rs.filter((x) => ['green', 'nodata'].includes(x.status)).length)}</em>${bat(rs)}</span>`}</div>
+      ${open ? '' : `<span class="mg-sum"><em class="r">${N(rs.filter((x) => x.status === 'red').length)}</em><em class="y">${N(rs.filter((x) => LT(x.status) === 'yellow').length)}</em><em class="g">${N(rs.filter((x) => x.status === 'green').length)}</em>${bat(rs)}</span>`}</div>
     ${open ? `<div class="mt">${hdr}${rs.map((x) => bRow(x, color, id)).join('') || '<div class="mr-empty">אין לקוחות שמתאימים לסינון</div>'}<div class="mr mf"><span></span><span></span><span>${bat(rs)}</span><span></span><span class="m-n">${N(rs.reduce((t, x) => t + x.leads, 0))}</span><span></span><span class="m-n">${rs.filter((x) => x.check.late).length} באיחור</span><span class="m-n">${rs.filter((x) => x.contact.late).length} באיחור</span><span></span><span></span></div></div>` : ''}</section>`;
   const urgentRows = bd.urgent.filter(match);
   const sel = (id, label, opts, val) => `<label class="mtool">${label}<select id="${id}">${opts.map(([v, t]) => `<option value="${v}" ${val === v ? 'selected' : ''}>${t}</option>`).join('')}</select></label>`;
@@ -217,7 +234,7 @@ V.home = async (view, p = {}) => {
   <div class="mtools">
     <form id="bdQ" class="mtool"><span aria-hidden="true">⌕</span><input name="q" value="${esc(q)}" placeholder="חיפוש" aria-label="חיפוש לקוח"></form>
     ${sel('bdM', 'קמפיינר', [['', 'כולם'], ...bd.groups.map((g) => [g.id, g.name])], p.m || '')}
-    ${sel('bdF', 'סטטוס', [['', 'הכול'], ['red', `לטיפול (${C_.red})`], ['yellow', `לבדיקה (${C_.yellow})`], ['green', `תקין (${C_.green + C_.nodata})`]], f)}
+    ${sel('bdF', 'סטטוס', [['', 'הכול'], ['red', `לטיפול (${C_.red})`], ['yellow', `לבדיקה (${C_.yellow + C_.nodata})`], ['green', `תקין (${C_.green})`]], f)}
     ${sel('bdS', 'מיון', [['', 'דחוף קודם'], ['leads', 'ירידה בלידים'], ['check', 'לא נבדק הכי הרבה'], ['name', 'שם']], s_)}
     ${q || f || p.m || s_ ? '<a class="mtool" href="#/home">ניקוי</a>' : ''}</div>
   ${!p.m && urgentRows.length ? grp('__urgent', 'דורשים תשומת לב היום', '#676879', urgentRows, '', !BD.closed.has('__urgent')) : ''}
@@ -229,15 +246,15 @@ V.home = async (view, p = {}) => {
   $('#bdQ').addEventListener('submit', (e) => { e.preventDefault(); location.hash = bdLink(p, { q: new FormData(e.target).get('q') || '' }); });
   $('#bdM').addEventListener('change', (e) => { location.hash = bdLink(p, { m: e.target.value }); });
   $('#bdS').addEventListener('change', (e) => { location.hash = bdLink(p, { s: e.target.value }); });
-  if (BD.deep) loadDeep(BD.deep);
+  if (BD.exp) loadDeep(BD.exp);
 };
 const loadDeep = async (cid) => {
   const el = document.getElementById('bd-' + cid); if (!el) return;
   const i = await api(`/api/pulse/clients/${encodeURIComponent(cid)}/insight`);
-  el.innerHTML = deepHTML(i);
+  el.innerHTML = deepHTML(i, (st._bd?.groups || []).flatMap((g) => g.rows).find((r) => r.id === cid));
 };
 A.bdRow = (el, arg, ev) => { const ln = ev && ev.target.closest('a[href]'); if (ln) { location.hash = ln.getAttribute('href'); return; } const [cid, gid] = arg.split('|'); const same = BD.exp === cid && BD.expG === gid; BD.exp = same ? null : cid; BD.expG = gid; if (same) BD.deep = null; render(); };
-A.bdDeep = (b, arg) => { const [cid, gid] = arg.split('|'); BD.exp = cid; if (gid) BD.expG = gid; BD.deep = BD.deep === cid ? null : cid; render(); setTimeout(() => document.getElementById('bx-' + cid)?.scrollIntoView({ block: 'nearest', behavior: 'smooth' }), 80); };
+A.bdDeep = (b, arg) => { const [cid, gid] = arg.split('|'); const same = BD.exp === cid && (!gid || BD.expG === gid); BD.exp = same ? null : cid; if (gid) BD.expG = gid; render(); setTimeout(() => document.getElementById('bx-' + cid)?.scrollIntoView({ block: 'nearest', behavior: 'smooth' }), 80); };
 A.bdGroup = (b, gid) => { const S_ = gid === '__urgent' ? BD.closed : BD.openG; S_.has(gid) ? S_.delete(gid) : S_.add(gid); try { localStorage.setItem('cp.closed', JSON.stringify([...BD.closed])); localStorage.setItem('cp.open', JSON.stringify([...BD.openG])); } catch { /* */ } render(); };
 A.bdJump = (b, cid) => { BD.exp = cid; BD.deep = cid; const x = st._bd?.groups.find((g) => g.rows.some((r) => r.id === cid)); if (x) { BD.openG.add(x.id); BD.expG = x.id; } render(); setTimeout(() => document.getElementById('bx-' + cid)?.scrollIntoView({ block: 'center', behavior: 'smooth' }), 120); };
 A.bdTouch = async (b, arg) => { const [cid, kind] = arg.split('|'); b.disabled = true; const r = await api(`/api/pulse/clients/${cid}/touch`, { method: 'POST', body: { kind } }); toast(r.msg); render(); };
@@ -279,7 +296,7 @@ V.client = async (view, p) => {
   insightChart(c.id);
 };
 A.cfTouch = async (b, arg) => { const [cid, kind] = arg.split('|'); b.disabled = true; const r = await api(`/api/pulse/clients/${cid}/touch`, { method: 'POST', body: { kind } }); toast(r.msg); st._bd = null; render(); };
-A.bdDeepC = async (b, cid) => { const el = document.getElementById('bd-' + cid); if (el.innerHTML) { el.innerHTML = ''; return; } el.innerHTML = '<div class="sk" style="height:100px"></div>'; el.classList.add('bx-deep'); el.innerHTML = deepHTML(await api(`/api/pulse/clients/${encodeURIComponent(cid)}/insight`)); };
+A.bdDeepC = async (b, cid) => { const el = document.getElementById('bd-' + cid); if (el.innerHTML) { el.innerHTML = ''; return; } el.innerHTML = '<div class="sk" style="height:100px"></div>'; el.classList.add('bx-deep'); el.innerHTML = deepHTML(await api(`/api/pulse/clients/${encodeURIComponent(cid)}/insight`), (st._bd?.groups || []).flatMap((g) => g.rows).find((r) => r.id === cid)); };
 A.agentAct = async (b, arg) => {
   const [client_id, key, title] = arg.split('|');
   b.disabled = true;
