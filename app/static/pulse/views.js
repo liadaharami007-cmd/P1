@@ -165,8 +165,8 @@ const bRow = (x, gc, gid) => {
     <span class="m-n ${x.check.late ? 'bad' : ''}">${ago(x.check.ago)}</span>
     <span class="m-n ${x.contact.late ? 'bad' : ''}">${ago(x.contact.ago)}</span>
     <span class="m-tx m-rec" title="${esc(x.rec)}">${esc(x.rec)}</span>
-    <span class="m-go"><button class="m-help" data-act="bdDeep" data-arg="${x.id}|${gid}">${on ? 'סגור' : 'איך לעזור ←'}</button></span>
-  </div>${on ? `<div class="mx-x" id="bx-${x.id}" style="--gc:${gc}">${bdExp(x)}</div>` : ''}`;
+    <span class="m-go"><button class="m-help" data-act="bdDeep" data-arg="${x.id}|${gid}">איך לעזור ←</button></span>
+  </div>`;
 };
 const bdExp = (x) => `<div class="hp" id="bd-${x.id}"><div class="sk" style="height:140px"></div></div>`;
 const deepHTML = (i, x) => {
@@ -246,7 +246,16 @@ V.home = async (view, p = {}) => {
   $('#bdQ').addEventListener('submit', (e) => { e.preventDefault(); location.hash = bdLink(p, { q: new FormData(e.target).get('q') || '' }); });
   $('#bdM').addEventListener('change', (e) => { location.hash = bdLink(p, { m: e.target.value }); });
   $('#bdS').addEventListener('change', (e) => { location.hash = bdLink(p, { s: e.target.value }); });
-  if (BD.exp) loadDeep(BD.exp);
+  const sx = BD.exp && bd.groups.flatMap((g) => g.rows).find((r) => r.id === BD.exp);
+  if (sx) {
+    const m = bd.groups.find((g) => g.id === sx.owner);
+    view.insertAdjacentHTML('beforeend', `<aside class="sd" role="dialog" aria-label="${esc(sx.name)}">
+      <header class="sd-h"><div><h2><a href="#/client/${sx.id}">${esc(sx.name)}</a></h2>
+        <p><em class="sdt st-${LT(sx.status)}">${ST3[sx.status]}</em>${m ? `<span>${esc(m.name)}</span>` : ''}<span>${esc(sx.why)}</span></p></div>
+        <button class="sd-x" data-act="sdClose" aria-label="סגירה">✕</button></header>
+      <div class="sd-b">${bdExp(sx)}</div></aside>`);
+    loadDeep(sx.id);
+  }
 };
 const loadDeep = async (cid) => {
   const el = document.getElementById('bd-' + cid); if (!el) return;
@@ -254,7 +263,9 @@ const loadDeep = async (cid) => {
   el.innerHTML = deepHTML(i, (st._bd?.groups || []).flatMap((g) => g.rows).find((r) => r.id === cid));
 };
 A.bdRow = (el, arg, ev) => { const ln = ev && ev.target.closest('a[href]'); if (ln) { location.hash = ln.getAttribute('href'); return; } const [cid, gid] = arg.split('|'); const same = BD.exp === cid && BD.expG === gid; BD.exp = same ? null : cid; BD.expG = gid; if (same) BD.deep = null; render(); };
-A.bdDeep = (b, arg) => { const [cid, gid] = arg.split('|'); const same = BD.exp === cid && (!gid || BD.expG === gid); BD.exp = same ? null : cid; if (gid) BD.expG = gid; render(); setTimeout(() => document.getElementById('bx-' + cid)?.scrollIntoView({ block: 'nearest', behavior: 'smooth' }), 80); };
+A.sdClose = () => { BD.exp = null; render(); };
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && BD.exp && document.querySelector('.sd')) { BD.exp = null; render(); } });
+A.bdDeep = (b, arg) => { const [cid, gid] = arg.split('|'); const same = BD.exp === cid && (!gid || BD.expG === gid); BD.exp = same ? null : cid; if (gid) BD.expG = gid; render(); };
 A.bdGroup = (b, gid) => { const S_ = gid === '__urgent' ? BD.closed : BD.openG; S_.has(gid) ? S_.delete(gid) : S_.add(gid); try { localStorage.setItem('cp.closed', JSON.stringify([...BD.closed])); localStorage.setItem('cp.open', JSON.stringify([...BD.openG])); } catch { /* */ } render(); };
 A.bdJump = (b, cid) => { BD.exp = cid; BD.deep = cid; const x = st._bd?.groups.find((g) => g.rows.some((r) => r.id === cid)); if (x) { BD.openG.add(x.id); BD.expG = x.id; } render(); setTimeout(() => document.getElementById('bx-' + cid)?.scrollIntoView({ block: 'center', behavior: 'smooth' }), 120); };
 A.bdTouch = async (b, arg) => { const [cid, kind] = arg.split('|'); b.disabled = true; const r = await api(`/api/pulse/clients/${cid}/touch`, { method: 'POST', body: { kind } }); toast(r.msg); render(); };
