@@ -88,66 +88,79 @@ const gauge = (c) => {
   const seg = (n, col) => { const len = n / tot * C; const s_ = `<circle r="${R}" cx="80" cy="80" fill="none" stroke="${col}" stroke-width="16" stroke-dasharray="${Math.max(0, len - 3)} ${C}" stroke-dashoffset="${-off}" transform="rotate(-90 80 80)"/>`; off += len; return s_; };
   return `<svg class="gauge" viewBox="0 0 160 160" role="img" aria-label="מצב המשרד"><circle r="${R}" cx="80" cy="80" fill="none" stroke="var(--line)" stroke-width="16"/>${seg(c.red, 'var(--r)')}${seg(c.yellow, 'var(--y)')}${seg(c.green, 'var(--g)')}</svg>`;
 };
-// מסך הבית בסגנון לוח סטטוסים: שלוש קבוצות (דחוף / במעקב / תקין), שורה לכל לקוח, תא סטטוס צבעוני שמתקדם בלחיצה
-const HS = { new: ['צריך טיפול', 'st-new'], check: ['לבדוק', 'st-work'], in_progress: ['בטיפול', 'st-prog'], done: ['טופל', 'st-done'] };
-const hstate = (c) => (!c ? null : c.task_id && !['new', 'in_progress'].includes(c.task_status) ? 'done' : c.task_status === 'in_progress' ? 'in_progress' : 'new');
-const battery = (parts) => { const t = parts.reduce((s_, x) => s_ + x[0], 0) || 1; return `<div class="mb-bat">${parts.filter((x) => x[0]).map(([n, cls, lab]) => `<span class="${cls}" style="flex:${n}" aria-label="${esc(lab)}: ${n}"></span>`).join('')}</div>`; };
+// מסך הבית: רמזור בשלושה ריבועים (דחוף · במעקב · תקין). לכל לקוח — מה אפשר לשפר ואיך, לא "טיפלתי".
+const IMPROVE = { cpl: 'להוריד את העלות לליד', no_leads: 'להחזיר את זרימת הלידים', spend_up: 'לכוון את התקציב ללידים', ctr: 'לרענן את המודעות',
+  cvr: 'לשפר את ההמרה בדף', trend: 'לעצור את הירידה ולחזור לקצב', goal: 'לחזור ליעד', data: 'לחבר מחדש את הנתונים', no_sales: 'להפוך לידים למכירות',
+  commitment: 'לסגור את מה שהובטח ללקוח', contact: 'לחדש קשר עם הלקוח', satisfaction: 'לחזק את הקשר עם הלקוח' };
+const better = (x) => {
+  if (x.st === 'green') return { head: x.status === 'nodata' ? 'להשלים נתונים' : x.suggest?.action ? 'הזדמנות לגדול' : 'לשמור על הקיים', how: x.status === 'nodata' ? 'לחבר את מקור הנתונים כדי לדעת איך הוא עומד' : x.suggest?.action || 'יציב — אין צורך לגעת' };
+  const c = x.card; if (!c) return { head: 'לבדוק', how: '' };
+  return { head: IMPROVE[c.key.split(':')[1]] || c.title, how: x.st === 'red' ? c.next : c.check?.[0] || c.next };
+};
+// מסך הבית: עוזר שמכוון. למעלה — כמה זמן נחסך ושאלה פתוחה. מימין — רשימה שקטה לפי רמזור. משמאל — הלקוח שנבחר:
+// מה קורה, גרף מול הרמה הרגילה, מה אפשר לעשות, איך לשדרג, ומה סוכני ה-AI יכולים להכין.
+const dm = (d) => `${Number(d.slice(8, 10))}.${Number(d.slice(5, 7))}`;
 V.home = async (view, p = {}) => {
   if (p.v === 'big' || p.v === 'today') return V.today(view);
   if (p.v === 'plan') return V.plan(view, p);
   if (p.v === 'focus') return V.focus(view);
-  const [ab, perf] = await Promise.all([api('/api/pulse/alerts'), api('/api/pulse/team/perf')]);
+  const [ab, perf, ov] = await Promise.all([api('/api/pulse/alerts'), api('/api/pulse/team/perf'), api('/api/pulse/overview')]);
   const hour = new Date().getHours(), greet = hour < 12 ? 'בוקר טוב' : hour < 18 ? 'צהריים טובים' : 'ערב טוב';
   const byClient = {};
   ab.cards.forEach((x) => { if (!byClient[x.client_id]) byClient[x.client_id] = x; });
   const pi = Object.fromEntries(perf.map((x, i) => [x.id, i]));
-  const selM = p.m || '', q = (p.q || '').trim();
-  const all = ab.board.map((x) => ({ ...x, card: byClient[x.id], st: x.status === 'nodata' ? 'green' : x.status }));
-  const rows = all.filter((x) => (!selM || x.owner === selM) && (!q || x.name.includes(q)));
-  const pot = rows.filter((x) => x.st === 'red').reduce((s_, x) => s_ + (x.card?.potential_leads || 0), 0);
-  const nRed = rows.filter((x) => x.st === 'red').length;
-  const who = perf.find((x) => x.id === selM);
-  const link = (o) => `#/home?${new URLSearchParams(Object.fromEntries(Object.entries({ m: selM, q, ...o }).filter(([, v]) => v))).toString()}`;
-  const owner = (x) => { const m = perf[pi[x.owner]]; return m ? `${avatar(m.name, pi[x.owner])}<span class="mb-on">${esc(m.name)}</span>` : ''; };
-  const row = (x, k) => {
-    const c = x.card, hs = hstate(c);
-    const status = k === 'green'
-      ? `<span class="mb-st st-ok">${x.status === 'nodata' ? 'חסרים נתונים' : 'תקין'}</span>`
-      : hs === 'done' ? `<span class="mb-st st-done">טופל ✓</span>`
-      : `<button class="mb-st ${HS[k === 'yellow' && hs === 'new' ? 'check' : hs][1]}" data-act="handle" data-arg="${esc(c.key)}|${hs === 'new' ? 'start' : 'done'}" title="${hs === 'new' ? 'לחץ: התחלתי לטפל' : 'לחץ: סיימתי'}">${HS[k === 'yellow' && hs === 'new' ? 'check' : hs][0]}</button>`;
-    const what = k === 'green' ? (x.suggest?.action ? `אפשר להציע: ${x.suggest.action}` : 'יציב — לשמור על הקיים') : c ? c.title : '';
-    const todo = k === 'green' ? '' : c ? (k === 'red' ? c.next : c.check?.[0] || c.next) : '';
-    const act = k === 'green' && x.suggest?.action ? `<button class="mb-btn" data-act="oppTask" data-arg="${x.id}|${esc(x.suggest.action)}">הצע ללקוח</button>`
-      : c?.potential_leads && hs !== 'done' ? `<span class="mb-pot">+${N(c.potential_leads)} לידים</span>` : '';
-    return `<div class="mb-r g-${k}"><a class="mb-name" href="#/client/${x.id}">${esc(x.name)}</a><span class="mb-own">${owner(x)}</span>${status}
-      <span class="mb-what" title="${esc(todo)}">${esc(what)}</span><span class="mb-act">${act}</span></div>`;
-  };
-  const group = (k) => {
-    const list = rows.filter((x) => x.st === k);
-    const open = k !== 'green' || p.open === 'green';
-    const lim = p.more === k ? 9999 : 5;
-    const hsCount = (s_) => list.filter((x) => hstate(x.card) === s_).length;
-    const bat = k === 'green' ? battery([[list.filter((x) => x.status !== 'nodata').length, 'st-ok', 'תקין'], [list.filter((x) => x.status === 'nodata').length, 'st-mute', 'חסרים נתונים']])
-      : battery([[hsCount('new'), k === 'red' ? 'st-new' : 'st-work', k === 'red' ? 'צריך טיפול' : 'לבדוק'], [hsCount('in_progress'), 'st-prog', 'בטיפול'], [hsCount('done'), 'st-done', 'טופל']]);
-    return `<section class="mb-g g-${k}">
-      <a class="mb-gh" href="${link(k === 'green' ? { open: open ? '' : 'green' } : {})}"><span class="mb-car">${open ? '▾' : '◂'}</span><h2>${LIGHT[k].t}</h2><span class="mb-cnt">${N(list.length)}</span></a>
-      ${open && list.length ? `<div class="mb-t"><div class="mb-r mb-hd"><span>לקוח</span><span>קמפיינר</span><span>סטטוס</span><span>${k === 'green' ? 'מה אפשר לשפר' : 'מה קרה'}</span><span></span></div>
-        ${list.slice(0, lim).map((x) => row(x, k)).join('')}
-        ${list.length > lim ? `<a class="mb-more" href="${link({ more: k, open: k === 'green' ? 'green' : '' })}">+ עוד ${N(list.length - lim)} לקוחות</a>` : ''}</div>` : ''}
-      <div class="mb-foot">${bat}</div></section>`;
-  };
-  view.innerHTML = `<div class="mb">
-  <header class="mb-h"><h1>${greet}, ${esc(st.me.user.name)}</h1><p>${nRed ? 'הנה מה שכדאי לטפל בו היום' : 'הכול רגוע היום'}</p></header>
-  <div class="mb-bar">
-    <a class="mb-chip ${selM ? '' : 'on'}" href="#/home${q ? `?q=${encodeURIComponent(q)}` : ''}">כל המשרד</a>
-    ${perf.map((x, i) => `<a class="mb-chip ${selM === x.id ? 'on' : ''}" href="#/home?${new URLSearchParams({ m: x.id }).toString()}">${avatar(x.name, i)}${esc(x.name)}</a>`).join('')}
-    <span class="sp"></span>
-    <form class="mb-q" id="mbQ"><input class="inp" name="q" value="${esc(q)}" placeholder="חיפוש לקוח" aria-label="חיפוש לקוח"></form>
-    ${who ? `<button class="mb-btn" data-act="handover" data-arg="${who.id}">מסירה (חופשה / מחלה)</button>` : ''}
-  </div>
-  ${group('red')}${group('yellow')}${group('green')}
-  </div>`;
-  $('#mbQ').addEventListener('submit', (e) => { e.preventDefault(); location.hash = link({ q: new FormData(e.target).get('q') || '' }); });
+  const selM = p.m || '';
+  const rows = ab.board.map((x) => ({ ...x, card: byClient[x.id], st: x.status === 'nodata' ? 'green' : x.status })).filter((x) => !selM || x.owner === selM);
+  const by = (k) => rows.filter((x) => x.st === k);
+  const sel = rows.find((x) => x.id === p.c) || by('red')[0] || by('yellow')[0] || rows[0];
+  const link = (o) => `#/home?${new URLSearchParams(Object.fromEntries(Object.entries({ m: selM, c: sel?.id, ...o }).filter(([, v]) => v))).toString()}`;
+  const tm = ov.time || {}, hrs = Math.round((tm.saved_min || 0) / 60);
+  const ready = rows.filter((x) => x.st !== 'green' || x.suggest?.action).length;
+  const improved = (ov.week_counts || {}).improved ?? perf.reduce((s_, x) => s_ + (x.improved || 0), 0);
+  const item = (x) => `<a class="hm-i ${x.id === sel?.id ? 'on' : ''}" href="${link({ c: x.id })}"><i class="dot d-${x.st}"></i><span class="hm-in">${esc(x.name)}<small>${esc(better(x).head)}</small></span>${perf[pi[x.owner]] ? avatar(perf[pi[x.owner]].name, pi[x.owner]) : ''}</a>`;
+  const grp = (k) => { const l = by(k); const open = k !== 'green' || p.g === 'green'; const lim = p.more === k ? 999 : 5;
+    return `<div class="hm-g"><a class="hm-gh" href="${link(k === 'green' ? { g: open ? '' : 'green' } : {})}"><i class="dot d-${k}"></i>${LIGHT[k].t}<span>${N(l.length)}</span></a>
+      ${open ? l.slice(0, lim).map(item).join('') + (l.length > lim ? `<a class="hm-more" href="${link({ more: k, g: k === 'green' ? 'green' : '' })}">עוד ${N(l.length - lim)}</a>` : '') : ''}</div>`; };
+  view.innerHTML = `<div class="hm">
+  <header class="hm-top">
+    <div><h1>${greet}, ${esc(st.me.user.name)}</h1>
+    <p class="hm-sub">בדקתי הבוקר את כל ${N(tm.clients || rows.length)} הלקוחות. הנה מה שאפשר לשפר.</p></div>
+    <form class="hm-ask" id="hmAsk"><input name="q" placeholder="מה תרצה לשפר היום? למשל: איך מעלים לידים לנעמה" autocomplete="off" aria-label="שאלה"><button>${ic('spark', 15)}</button></form>
+  </header>
+  <section class="hm-val">
+    <div><b>${N(hrs)} שעות</b><span>נחסכו היום בבדיקה ידנית<small>${N(tm.clients || 0)} לקוחות × ${N(tm.per_client || 0)} דק' · נבדק ב-${N(Math.round(tm.scan_ms || 0))} מ"ש</small></span></div>
+    <div><b>${N(ready)}</b><span>הצעות שיפור מוכנות<small>כל אחת עם הסבר וצעד הבא</small></span></div>
+    <div><b>${N(improved)}</b><span>לקוחות השתפרו השבוע<small>מאומת בנתונים אחרי טיפול</small></span></div>
+  </section>
+  <div class="hm-team"><a class="${selM ? '' : 'on'}" href="#/home">כל המשרד</a>${perf.map((x, i) => `<a class="${selM === x.id ? 'on' : ''}" href="#/home?m=${x.id}">${avatar(x.name, i)}${esc(x.name)}</a>`).join('')}
+    ${selM ? `<button class="hm-link" data-act="handover" data-arg="${selM}">מסירה זמנית</button>` : ''}</div>
+  <div class="hm-main">
+    <aside class="hm-list">${grp('red')}${grp('yellow')}${grp('green')}</aside>
+    <section class="hm-d" id="hmD"><div class="sk" style="height:300px"></div></section>
+  </div></div>`;
+  $('#hmAsk').addEventListener('submit', (e) => { e.preventDefault(); const q = new FormData(e.target).get('q'); if (q) go('ask?q=' + encodeURIComponent(q)); });
+  if (!sel) { $('#hmD').innerHTML = empty('אין לקוחות'); return; }
+  const d = await api(`/api/pulse/clients/${encodeURIComponent(sel.id)}?days=30`);
+  const c = sel.card, b_ = better(sel), m = perf[pi[sel.owner]];
+  const ser = d.series || [], wk = ser.slice(-7).reduce((s_, x) => s_ + (x.leads || 0), 0), prev = ser.slice(-14, -7).reduce((s_, x) => s_ + (x.leads || 0), 0);
+  const base = ser.length > 14 ? ser.slice(0, -7).reduce((s_, x) => s_ + (x.leads || 0), 0) / (ser.length - 7) : null;
+  const steps = c ? [c.next, ...(c.check || [])].filter(Boolean).filter((v, i, a) => a.indexOf(v) === i).slice(0, 3) : [];
+  const opp = d.opportunities?.[0];
+  $('#hmD').innerHTML = `
+    <div class="hm-dh"><div><h2><a href="#/client/${sel.id}">${esc(sel.name)}</a></h2><p>${m ? `${avatar(m.name, pi[sel.owner])}${esc(m.name)} · ` : ''}${esc(d.client.industry || '')}</p></div>
+      ${sel.st === 'green' ? '' : c?.task_id ? '<span class="hm-tag">אצל הקמפיינר ✓</span>' : `<button class="hm-pri" data-act="handle" data-arg="${esc(c.key)}|start">שלח ל${esc(m?.name || 'קמפיינר')}</button>`}</div>
+    <div class="hm-goal"><span class="hm-k">מה אפשר לשפר</span><b>${esc(b_.head)}</b>${c?.potential_leads ? `<span class="hm-gain">עד +${N(c.potential_leads)} לידים בשבוע</span>` : ''}</div>
+    <div class="hm-kpis"><div><span>לידים השבוע</span><b>${N(wk)}</b></div><div><span>שבוע קודם</span><b>${N(prev)}</b></div>${base != null ? `<div><span>רמה רגילה</span><b>${N(Math.round(base * 7))}</b></div>` : ''}</div>
+    <div class="hm-ch"><div class="hm-chl"><span><i style="background:var(--acc)"></i>לידים ביום</span>${base != null ? '<span><i class="ds"></i>הרמה הרגילה — לשם אפשר לחזור</span>' : ''}</div><div id="hmChart"></div></div>
+    ${steps.length || b_.how ? `<div class="hm-sec"><h3>מה אפשר לעשות</h3><ol>${(steps.length ? steps : [b_.how]).map((s_) => `<li>${esc(s_)}</li>`).join('')}</ol></div>` : ''}
+    ${opp || sel.suggest?.action ? `<div class="hm-sec"><h3>איך לשדרג</h3><p>${esc(opp?.title || sel.suggest.action)}${opp?.action ? `<small>${esc(opp.action)}</small>` : ''}</p></div>` : ''}
+    <div class="hm-sec"><h3>מה עוד אפשר</h3><div class="hm-ai">
+      <button data-act="updDraft" data-arg="${sel.id}">${ic('spark', 14)}<span>לנסח עדכון ללקוח<small>טיוטה בלבד — לא נשלח</small></span></button>
+      ${d.client.is_demo ? `<a href="#/ads?client=${sel.id}">${ic('spark', 14)}<span>לנתח את המודעות<small>הצעות להצעה, קופי וקריאייטיב</small></span></a>` : ''}
+      <a href="#/ask?q=${encodeURIComponent('למה ' + sel.name + ' במצב הזה?')}">${ic('chat', 14)}<span>לשאול את העוזר<small>תשובה מתוך הנתונים</small></span></a>
+      <a href="#/client/${sel.id}">${ic('users', 14)}<span>תיק הלקוח המלא<small>היסטוריה, משימות, התחייבויות</small></span></a></div></div>`;
+  chart($('#hmChart'), { labels: ser.map((x) => dm(x.date)), h: 170, fmt: (v) => Math.round(v).toLocaleString(),
+    series: [{ name: 'לידים', color: 'var(--acc)', w: 2.4, vals: ser.map((x) => x.leads) }, ...(base != null ? [{ name: 'רמה רגילה', color: 'var(--g)', w: 1.6, dash: true, vals: ser.map(() => Math.round(base * 10) / 10) }] : [])] });
 };
 A.handover = async (b, frm) => {
   const perf = await api('/api/pulse/team/perf');
