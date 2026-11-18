@@ -92,52 +92,42 @@ V.home = async (view, p = {}) => {
   if (p.v === 'big' || p.v === 'today') return V.today(view);
   if (p.v === 'plan') return V.plan(view, p);
   if (p.v === 'focus') return V.focus(view);
-  const [ab, o, t, perf] = await Promise.all([api('/api/pulse/alerts'), api('/api/pulse/overview'), api('/api/pulse/trend'), api('/api/pulse/team/perf')]);
+  const [ab, perf] = await Promise.all([api('/api/pulse/alerts'), api('/api/pulse/team/perf')]);
   const hour = new Date().getHours(), greet = hour < 12 ? 'בוקר טוב' : hour < 18 ? 'צהריים טובים' : 'ערב טוב';
-  const who = p.m || '', me_ = perf.find((x) => x.id === who), names = Object.fromEntries(perf.map((x, i) => [x.id, { ...x, i }]));
   const byClient = {};
   ab.cards.forEach((x) => { if (!byClient[x.client_id]) byClient[x.client_id] = x; });
-  const rows = ab.board.filter((x) => !who || x.owner === who).map((x) => ({ ...x, card: byClient[x.id], st: x.status === 'nodata' ? 'green' : x.status }));
-  const c = { red: rows.filter((x) => x.st === 'red').length, yellow: rows.filter((x) => x.st === 'yellow').length, green: rows.filter((x) => x.st === 'green').length };
-  const sc = Math.round((c.green * 100 + c.yellow * 50) / Math.max(1, c.red + c.yellow + c.green));
-  const sel = p.c || 'red', q = (x) => `home?${new URLSearchParams({ ...(who ? { m: who } : {}), ...x }).toString()}`;
-  const g = {};
-  rows.filter((x) => x.st === 'red').forEach((x) => { const k = x.card ? x.card.key.split(':')[1] : 'keep'; (g[k] = g[k] || []).push(x); });
-  const tasks = Object.entries(g).map(([k, items]) => ({ k, items, pot: items.reduce((s_, x) => s_ + (x.card?.potential_leads || 0), 0) })).sort((a1, z) => z.pot - a1.pot || z.items.length - a1.items.length).slice(0, 3);
-  const w = t.weeks, lw = w.map((x) => x.leads), cw = w.map((x) => x.cpl);
-  const pct = (a1, z) => (a1 != null && z ? Math.round((a1 / z - 1) * 100) : null);
-  const lch = pct(lw[lw.length - 1], lw[lw.length - 2]), cch = pct(cw[cw.length - 1], cw[cw.length - 2]);
-  const trendTag = (x, goodUp) => x == null ? '' : `<span class="tg ${(x >= 0) === goodUp ? 'up' : 'down'}">${x >= 0 ? '▲' : '▼'} ${Math.abs(x)}%</span>`;
-  const list = rows.filter((x) => x.st === sel).sort((a1, z) => (z.card?.potential_leads || 0) - (a1.card?.potential_leads || 0));
-  const shown = p.all === '1' ? list : list.slice(0, 8);
-  const act = (x) => sel === 'green' ? (x.suggest?.action ? `<button class="btn sec sm" data-act="oppTask" data-arg="${x.id}|${esc(x.suggest.action)}">הצע</button>` : '')
-    : !x.card ? '' : x.card.task_id && !['new', 'in_progress'].includes(x.card.task_status) ? '<span class="donechip">טופל ✓</span>' : `<button class="btn sec sm" data-act="handle" data-arg="${esc(x.card.key)}|done">טיפלתי</button>`;
-  view.innerHTML = `<div class="hm">
-  <section class="band">
-    <div class="band-l"><div class="date">${new Date().toLocaleDateString('he-IL', { weekday: 'long', day: 'numeric', month: 'long' })}</div>
-      <h1>${greet}, ${esc(st.me.user.name)}</h1>
-      <p>${me_ ? `הלקוחות של ${esc(me_.name)}. ` : ''}${c.red ? `<b>${N(c.red)}</b> לקוחות צריכים טיפול היום${tasks[0]?.pot ? `, וטיפול בהם יכול להחזיר כ-<b>${N(tasks.reduce((s_, x) => s_ + x.pot, 0))}</b> לידים בשבוע` : ''}.` : 'כל הלקוחות במצב טוב היום.'}</p>
-      <div class="who2"><a class="${!who ? 'on' : ''}" href="#/home">כל המשרד</a>${perf.map((x, i) => `<a class="${who === x.id ? 'on' : ''}" href="#/home?m=${x.id}">${avatar(x.name, i)}${esc(x.name)}</a>`).join('')}</div></div>
-    <div class="band-r"><div class="gwrap">${gauge(c)}<div class="gin"><b>${N(sc)}</b><span>ציון</span></div></div>
-      <div class="glegend">${[['red', 'דחוף'], ['yellow', 'במעקב'], ['green', 'תקין']].map(([k, t_]) => `<a href="#/${q({ c: k })}" class="${sel === k ? 'on' : ''}"><i class="dot d-${k}"></i><b>${N(c[k])}</b>${t_}</a>`).join('')}</div></div>
+  const rows = ab.board.map((x) => ({ ...x, card: byClient[x.id], st: x.status === 'nodata' ? 'green' : x.status }));
+  const cnt = (m, k) => rows.filter((x) => (!m || x.owner === m) && x.st === k).length;
+  const tot = { red: cnt('', 'red'), yellow: cnt('', 'yellow'), green: cnt('', 'green') };
+  const pot = rows.filter((x) => x.st === 'red').reduce((s_, x) => s_ + (x.card?.potential_leads || 0), 0);
+  const selM = p.m || '', selK = p.k || '';
+  const cell = (m, k) => { const n = cnt(m, k), on = selM === m && selK === k; return `<a class="mx-c mx-${k} ${on ? 'on' : ''} ${n ? '' : 'zero'}" href="#/home?${new URLSearchParams({ ...(m ? { m } : {}), k }).toString()}"><b>${N(n)}</b></a>`; };
+  let detail = '';
+  if (selK) {
+    const list = rows.filter((x) => (!selM || x.owner === selM) && x.st === selK);
+    const g = {};
+    list.forEach((x) => { const gk = selK === 'green' ? (x.status === 'nodata' ? 'data_missing' : x.suggest?.kind || 'keep') : x.card ? x.card.key.split(':')[1] : 'keep'; (g[gk] = g[gk] || []).push(x); });
+    const groups = Object.entries(g).sort((a1, z) => (a1[0] === 'keep') - (z[0] === 'keep') || z[1].length - a1[1].length);
+    const og = p.g || groups[0]?.[0];
+    const who = perf.find((x) => x.id === selM);
+    const act = (x) => selK === 'green' ? (x.suggest?.action ? `<button class="btn sec sm" data-act="oppTask" data-arg="${x.id}|${esc(x.suggest.action)}">הצע</button>` : '')
+      : !x.card ? '' : x.card.task_id && !['new', 'in_progress'].includes(x.card.task_status) ? '<span class="note ok">טופל ✓</span>' : `<button class="btn sec sm" data-act="handle" data-arg="${esc(x.card.key)}|done">טיפלתי</button>`;
+    detail = `<section class="mx-d"><div class="mx-dh"><span class="bulb b-${selK}"></span><h2>${LIGHT[selK].t} · ${who ? esc(who.name) : 'כל המשרד'} · ${N(list.length)}</h2><a class="note" href="#/home">סגור ✕</a>
+        ${who ? `<button class="btn sec sm" data-act="handover" data-arg="${who.id}">מסירה (חופשה / מחלה)</button>` : ''}</div>
+      <div class="mx-g">${groups.map(([gk, items]) => `<a class="mx-gb ${og === gk ? 'on' : ''}" href="#/home?${new URLSearchParams({ ...(selM ? { m: selM } : {}), k: selK, g: gk }).toString()}">${esc(GROUP[gk] || gk)} <b>${N(items.length)}</b></a>`).join('')}</div>
+      ${(g[og] || []).length ? `<div class="mx-do">${selK === 'green' ? 'מה אפשר להציע' : selK === 'red' ? 'מה עושים' : 'מה בודקים'}: <b>${esc(selK === 'green' ? (g[og][0].suggest?.action || 'לשמור על הקיים') : selK === 'red' ? g[og][0].card?.next : (g[og][0].card?.check?.[0] || g[og][0].card?.next))}</b></div>` : ''}
+      <div class="mx-l">${(g[og] || []).slice(0, p.all === '1' ? 999 : 12).map((x) => `<div class="mx-r"><i class="dot d-${x.status}"></i><a href="#/client/${x.id}">${esc(x.name)}</a><span class="note">${!selM ? esc((perf.find((y) => y.id === x.owner) || {}).name || '') + ' · ' : ''}${x.card?.potential_leads ? `+${x.card.potential_leads} לידים/שבוע` : selK === 'green' && x.cpl ? `${x.leads} לידים בשבוע` : ''}</span><span class="sp"></span>${act(x)}</div>`).join('')}</div>
+      ${(g[og] || []).length > 12 && p.all !== '1' ? `<a class="quiet" href="#/home?${new URLSearchParams({ ...(selM ? { m: selM } : {}), k: selK, g: og, all: '1' }).toString()}">ועוד ${N(g[og].length - 12)}</a>` : ''}</section>`;
+  }
+  view.innerHTML = `<div class="mx">
+  <header class="mx-h"><h1>${greet}, ${esc(st.me.user.name)}</h1>
+    <p>${tot.red ? `<b>${N(tot.red)}</b> לקוחות צריכים טיפול היום${pot ? ` — טיפול בהם יכול להחזיר כ-<b>${N(pot)}</b> לידים בשבוע` : ''}. לחץ על מספר כדי לראות מי.` : 'כל הלקוחות במצב טוב היום.'}</p></header>
+  <section class="mx-t">
+    <div class="mx-row mx-head"><span></span><span><i class="dot d-red"></i>דחוף</span><span><i class="dot d-yellow"></i>במעקב</span><span><i class="dot d-green"></i>תקין</span></div>
+    ${perf.map((x) => `<div class="mx-row ${selM === x.id ? 'sel' : ''}"><span class="mx-n">${esc(x.name)}<small>${N(x.clients)} לקוחות</small></span>${cell(x.id, 'red')}${cell(x.id, 'yellow')}${cell(x.id, 'green')}</div>`).join('')}
+    <div class="mx-row mx-tot"><span class="mx-n">כל המשרד<small>${N(rows.length)} לקוחות</small></span>${cell('', 'red')}${cell('', 'yellow')}${cell('', 'green')}</div>
   </section>
-  ${me_ ? `<div class="mrow"><span>${avatar(me_.name, names[me_.id].i)}<b>${esc(me_.name)}</b> · ${N(me_.clients)} לקוחות · ${N(me_.handled)} טופלו השבוע · ${N(me_.improved)} השתפרו</span><button class="btn sec sm" data-act="handover" data-arg="${me_.id}">מסירה (חופשה / מחלה)</button></div>` : ''}
-  <section class="tiles3">
-    <div class="tile3"><span class="tl">לידים השבוע</span><div class="tv"><b>${N((lw[lw.length - 1] || 0).toLocaleString())}</b>${trendTag(lch, true)}</div>${spark(lw, 'var(--acc)')}</div>
-    <div class="tile3"><span class="tl">עלות לליד</span><div class="tv"><b>${N(money(cw[cw.length - 1]))}</b>${trendTag(cch, false)}</div>${spark(cw, '#8A93A3')}</div>
-    <div class="tile3"><span class="tl">טופלו השבוע</span><div class="tv"><b>${N(perf.reduce((s_, x) => s_ + (who && x.id !== who ? 0 : x.handled), 0))}</b><span class="tg up">${N(perf.reduce((s_, x) => s_ + (who && x.id !== who ? 0 : x.improved), 0))} השתפרו</span></div><span class="note">בדיקה אוטומטית אחרי כל טיפול</span></div>
-  </section>
-  ${tasks.length ? `<section><h2 class="sh">המשימות של היום</h2><div class="tcards">${tasks.map((x) => `<div class="tcard"><span class="tbar"></span><div class="tct">${esc(GROUP[x.k] || x.k)}</div><div class="tcn">${N(x.items.length)} לקוחות${x.pot ? ` · <span class="ok">+${N(x.pot)} לידים בשבוע</span>` : ''}</div>
-    <p>${esc(x.items[0].card?.next || '')}</p><a class="btn pri sm" href="#/${q({ c: 'red', k: x.k })}">לטיפול ←</a></div>`).join('')}</div></section>` : ''}
-  <section class="card clist"><div class="cl-h"><h2 class="sh" style="margin:0">${sel === 'red' ? 'לקוחות שצריכים טיפול' : sel === 'yellow' ? 'לקוחות במעקב' : 'לקוחות תקינים · מה אפשר להציע'}</h2>
-      <div class="seg">${[['red', 'דחוף'], ['yellow', 'במעקב'], ['green', 'תקין']].map(([k, t_]) => `<button class="${sel === k ? 'on' : ''}" data-act="go" data-arg="${q({ c: k })}">${t_} ${N(c[k])}</button>`).join('')}</div></div>
-    ${(p.k ? shown.filter((x) => x.card && x.card.key.split(':')[1] === p.k) : shown).map((x) => `<div class="crow"><a class="cname" href="#/client/${x.id}">${avatar(x.name, x.name.length)}<span><b>${esc(x.name)}</b><small>${names[x.owner] ? esc(names[x.owner].name) : ''}</small></span></a>
-      <span class="chip2 ch-${x.st}">${esc(sel === 'green' ? (x.suggest?.kind === 'keep' ? 'יציב' : (GROUP[x.suggest?.kind] || 'יציב').split(' — ')[0]) : x.card ? x.card.title : x.title)}</span>
-      <span class="cpot">${x.card?.potential_leads ? `+${N(x.card.potential_leads)} לידים/שבוע` : ''}</span>${spark(x.wk, sel === 'red' ? 'var(--r)' : sel === 'yellow' ? 'var(--y)' : 'var(--g)')}<span class="cact">${act(x)}</span></div>`).join('') || '<div class="empty">אין כאן לקוחות</div>'}
-    ${list.length > 8 && p.all !== '1' && !p.k ? `<a class="tmore" href="#/${q({ c: sel, all: '1' })}">הצג את כל ${N(list.length)} הלקוחות</a>` : ''}${p.k ? `<a class="tmore" href="#/${q({ c: sel })}">הצג את כל הדחופים</a>` : ''}</section>
-  ${!who ? `<section class="card clist"><div class="cl-h"><h2 class="sh" style="margin:0">הקמפיינרים</h2><span class="note">השבוע</span></div>
-    ${perf.map((x, i) => { const ch = x.leads_prev ? Math.round((x.leads / x.leads_prev - 1) * 100) : null; return `<a class="crow" href="#/home?m=${x.id}"><span class="cname">${avatar(x.name, i)}<span><b>${esc(x.name)}</b><small>${N(x.clients)} לקוחות</small></span></span>
-      <span class="tri"><i class="dot d-red"></i>${N(x.red)} <i class="dot d-yellow"></i>${N(x.yellow)} <i class="dot d-green"></i>${N(x.green)}</span><span class="cpot">${N(x.leads.toLocaleString())} לידים ${ch == null ? '' : `<span class="tg ${ch >= 0 ? 'up' : 'down'}">${ch >= 0 ? '▲' : '▼'}${Math.abs(ch)}%</span>`}</span><span class="note">${N(x.handled)} טופלו · ${N(x.improved)} השתפרו</span><span class="cact chev">‹</span></a>`; }).join('')}</section>` : ''}
+  ${detail}
   </div>`;
   st._rows = rows; st._keyOf = (x) => (x.st === 'green' ? x.suggest?.kind || 'keep' : x.card ? x.card.key.split(':')[1] : 'keep');
 };
